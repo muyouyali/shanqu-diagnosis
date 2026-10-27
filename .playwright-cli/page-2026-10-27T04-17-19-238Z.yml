@@ -1,0 +1,191 @@
+- generic [ref=f9e1]:
+  - generic [ref=f9e3]:
+    - banner [ref=f9e4]:
+      - generic [ref=f9e5]:
+        - link [ref=f9e6] [cursor=pointer]:
+          - /url: /
+          - strong [ref=f9e11]: 云岭农诊
+        - navigation [ref=f9e12]:
+          - link "首页" [ref=f9e13] [cursor=pointer]:
+            - /url: /
+          - link "智能诊断" [ref=f9e16] [cursor=pointer]:
+            - /url: /diagnose
+          - link "病害图谱" [ref=f9e20] [cursor=pointer]:
+            - /url: /knowledge
+          - link "农技问答" [ref=f9e24] [cursor=pointer]:
+            - /url: /qa
+          - link "我的档案" [ref=f9e27] [cursor=pointer]:
+            - /url: /archive
+        - link "农技站后台" [ref=f9e31] [cursor=pointer]:
+          - /url: /admin
+    - main [ref=f9e34]:
+      - generic [ref=f9e35]:
+        - generic [ref=f9e40]:
+          - generic [ref=f9e41]:
+            - generic [ref=f9e42]: 云岭农诊
+            - button "伊春市" [active] [ref=f9e49] [cursor=pointer]
+            - button "农技站" [ref=f9e55] [cursor=pointer]
+          - heading "中午好， 给作物看看病吧" [level=1] [ref=f9e61]: 中午好，给作物看看病吧
+          - paragraph [ref=f9e62]: 拍张照片，AI 农技员帮您判断病虫害 针对云南山地作物专门优化
+          - button "拍照诊断 上传病叶照片，30 秒出结果" [ref=f9e63] [cursor=pointer]:
+            - generic [ref=f9e68]:
+              - strong [ref=f9e69]: 拍照诊断
+              - generic [ref=f9e70]: 上传病叶照片，30 秒出结果
+          - generic [ref=f9e73]:
+            - generic [ref=f9e74]: 多模态识图
+            - generic [ref=f9e75]: RAG 检索增强
+            - generic [ref=f9e76]: 双 Agent 协作
+            - generic [ref=f9e77]: 流式输出
+            - generic [ref=f9e78]: 天气工具联动
+        - generic [ref=f9e80]:
+          - generic [ref=f9e81]:
+            - generic [ref=f9e82]: 伊春市 · 未来 7 天
+            - generic [ref=f9e86]: 病害风险 偏高 · 89
+          - generic [ref=f9e87]:
+            - generic [ref=f9e88]:
+              - generic [ref=f9e89]: 今天
+              - generic [ref=f9e90]: 阵雨
+              - generic [ref=f9e91]: 14~25°
+              - generic [ref=f9e92]: 💧98%
+            - generic [ref=f9e93]:
+              - generic [ref=f9e94]: 明天
+              - generic [ref=f9e95]: 晴
+              - generic [ref=f9e96]: 13~23°
+              - generic [ref=f9e97]: 💧12%
+            - generic [ref=f9e98]:
+              - generic [ref=f9e99]: 后天
+              - generic [ref=f9e100]: 中雨
+              - generic [ref=f9e101]: 12~21°
+              - generic [ref=f9e102]: 💧96%
+            - generic [ref=f9e103]:
+              - generic [ref=f9e104]: 第4天
+              - generic [ref=f9e105]: 多云
+              - generic [ref=f9e106]: 17~25°
+              - generic [ref=f9e107]: 💧10%
+            - generic [ref=f9e108]:
+              - generic [ref=f9e109]: 第5天
+              - generic [ref=f9e110]: 小雨
+              - generic [ref=f9e111]: 16~30°
+              - generic [ref=f9e112]: 💧94%
+          - paragraph [ref=f9e113]: 三七根腐病在连续降雨+高湿条件下风险显著升高，注意深沟排水
+        - generic [ref=f9e115]:
+          - generic [ref=f9e116]:
+            - generic [ref=f9e117]: 区域预警 · 关注
+            - generic [ref=f9e121]: 近 14 天
+          - heading "三七疫病占比偏高，需重点关注" [level=3] [ref=f9e122]
+          - paragraph [ref=f9e123]: 近 14 天累计诊断 109 次，其中 「三七疫病」出现 16 次，占比 14.7%。需人工复核比例 6.4%，整体可控。
+          - list [ref=f9e124]:
+            - listitem [ref=f9e125]: 针对「三七疫病」发布专项防控提示，重点覆盖石屏县
+            - listitem [ref=f9e127]: 雨季前完成田间排水沟疏通，降低根腐类病害风险
+        - generic [ref=f9e129]:
+          - generic [ref=f9e130]:
+            - heading "选择作物开始诊断" [level=2] [ref=f9e131]
+            - generic [ref=f9e132]: 病害图谱
+          - generic [ref=f9e135]:
+            - button "🍃 普洱茶树 4 种病害" [ref=f9e136] [cursor=pointer]:
+              - generic [ref=f9e137]: 🍃
+              - generic [ref=f9e138]: 普洱茶树
+              - generic [ref=f9e139]: 4 种病害
+            - button "🌱 昭通天麻 3 种病害" [ref=f9e143] [cursor=pointer]:
+              - generic [ref=f9e144]: 🌱
+              - generic [ref=f9e145]: 昭通天麻
+              - generic [ref=f9e146]: 3 种病害
+            - button "🌰 云南核桃 4 种病害" [ref=f9e150] [cursor=pointer]:
+              - generic [ref=f9e151]: 🌰
+              - generic [ref=f9e152]: 云南核桃
+              - generic [ref=f9e153]: 4 种病害
+            - button "🌿 文山三七 5 种病害" [ref=f9e157] [cursor=pointer]:
+              - generic [ref=f9e158]: 🌿
+              - generic [ref=f9e159]: 文山三七
+              - generic [ref=f9e160]: 5 种病害
+            - button "🫐 高原蓝莓 5 种病害" [ref=f9e164] [cursor=pointer]:
+              - generic [ref=f9e165]: 🫐
+              - generic [ref=f9e166]: 高原蓝莓
+              - generic [ref=f9e167]: 5 种病害
+            - button "🍊 柑橘 5 种病害" [ref=f9e171] [cursor=pointer]:
+              - generic [ref=f9e172]: 🍊
+              - generic [ref=f9e173]: 柑橘
+              - generic [ref=f9e174]: 5 种病害
+        - generic [ref=f9e178]:
+          - heading "常用功能" [level=2] [ref=f9e179]
+          - generic [ref=f9e180]:
+            - button "农技问答 用大白话问，AI 从植保手册里找答案" [ref=f9e181] [cursor=pointer]:
+              - generic [ref=f9e185]:
+                - strong [ref=f9e186]: 农技问答
+                - generic [ref=f9e187]: 用大白话问，AI 从植保手册里找答案
+            - button "我的种植档案 记录每次诊断，AI 帮您复盘规律" [ref=f9e190] [cursor=pointer]:
+              - generic [ref=f9e195]:
+                - strong [ref=f9e196]: 我的种植档案
+                - generic [ref=f9e197]: 记录每次诊断，AI 帮您复盘规律
+            - button "病害图谱 26 种云南特色作物病害，图文对照" [ref=f9e200] [cursor=pointer]:
+              - generic [ref=f9e205]:
+                - strong [ref=f9e206]: 病害图谱
+                - generic [ref=f9e207]: 26 种云南特色作物病害，图文对照
+        - generic [ref=f9e210]:
+          - generic [ref=f9e211]: AI 诊断仅供参考，不替代专业农技人员指导
+          - paragraph [ref=f9e214]: 全国高校 AI Web 开发挑战赛 · 云南赛区
+  - generic [ref=f9e216]:
+    - generic [ref=f9e217]:
+      - heading "选择您的种植区域" [level=3] [ref=f9e218]
+      - paragraph [ref=f9e219]: 天气与病害风险将按所选区域计算
+    - textbox "搜索地区，如：毕节、凉山、普洱…" [ref=f9e224]
+    - generic [ref=f9e225]:
+      - button "云南 主产区" [ref=f9e226] [cursor=pointer]:
+        - text: 云南
+        - generic [ref=f9e227]: 主产区
+      - button "贵州" [ref=f9e228] [cursor=pointer]
+      - button "四川" [ref=f9e229] [cursor=pointer]
+      - button "重庆" [ref=f9e230] [cursor=pointer]
+      - button "广西" [ref=f9e231] [cursor=pointer]
+      - button "西藏" [ref=f9e232] [cursor=pointer]
+      - button "湖南" [ref=f9e233] [cursor=pointer]
+      - button "湖北" [ref=f9e234] [cursor=pointer]
+      - combobox [ref=f9e235] [cursor=pointer]:
+        - option "更多省份…" [disabled]
+        - option "广东"
+        - option "福建"
+        - option "浙江"
+        - option "江西"
+        - option "陕西"
+        - option "甘肃"
+        - option "海南"
+        - option "安徽"
+        - option "河南"
+        - option "山西"
+        - option "山东"
+        - option "河北"
+        - option "辽宁"
+        - option "吉林"
+        - option "黑龙江"
+        - option "江苏"
+        - option "内蒙古"
+        - option "宁夏"
+        - option "青海"
+        - option "新疆"
+        - option "北京"
+        - option "天津"
+        - option "上海"
+        - option "台湾"
+    - generic [ref=f9e236]:
+      - paragraph [ref=f9e237]: 主产区 · 全部州市
+      - paragraph [ref=f9e238]: 重点产区
+      - generic [ref=f9e239]:
+        - button "文山市" [ref=f9e240] [cursor=pointer]
+        - button "昭通市" [ref=f9e244] [cursor=pointer]
+        - button "普洱市" [ref=f9e248] [cursor=pointer]
+        - button "大理白族自治州" [ref=f9e252] [cursor=pointer]
+        - button "红河州" [ref=f9e256] [cursor=pointer]
+        - button "曲靖市" [ref=f9e260] [cursor=pointer]
+      - paragraph [ref=f9e264]: 其他州市
+      - generic [ref=f9e265]:
+        - button "昆明市" [ref=f9e266] [cursor=pointer]
+        - button "丽江市" [ref=f9e270] [cursor=pointer]
+        - button "临沧市" [ref=f9e274] [cursor=pointer]
+        - button "保山市" [ref=f9e278] [cursor=pointer]
+        - button "西双版纳州" [ref=f9e282] [cursor=pointer]
+        - button "楚雄州" [ref=f9e286] [cursor=pointer]
+        - button "玉溪市" [ref=f9e290] [cursor=pointer]
+        - button "德宏州" [ref=f9e294] [cursor=pointer]
+        - button "怒江州" [ref=f9e298] [cursor=pointer]
+        - button "迪庆州" [ref=f9e302] [cursor=pointer]
+    - button "取消" [ref=f9e306] [cursor=pointer]

@@ -6,6 +6,7 @@ import AppIcon from '@/components/AppIcon.vue'
 const store = useAppStore()
 const open = ref(false)
 const activeProvince = ref('云南')
+const keyword = ref('')
 
 /** 全国省级行政区（云南为主产区置顶，山地特色省份次之，其余省份均可查询使用） */
 const provinces: { name: string; note: string; groups: { group: string; items: string[] }[] }[] = [
@@ -212,6 +213,18 @@ const currentProvince = computed(
   () => provinces.find((p) => p.name === activeProvince.value) || provinces[0]
 )
 
+/** 全部地区扁平化（用于搜索） */
+const allRegions = provinces.flatMap((p) =>
+  p.groups.flatMap((g) => g.items.map((name) => ({ name, province: p.name })))
+)
+
+/** 搜索结果：同时匹配地区名与省份名 */
+const searchResults = computed(() => {
+  const k = keyword.value.trim()
+  if (!k) return []
+  return allRegions.filter((r) => r.name.includes(k) || r.province.includes(k)).slice(0, 12)
+})
+
 const pick = (r: string) => {
   store.setRegion(r)
   open.value = false
@@ -236,38 +249,82 @@ const pick = (r: string) => {
               <p>天气与病害风险将按所选区域计算</p>
             </div>
 
-            <!-- 省份 Tab -->
-            <div class="prov-tabs">
-              <button
-                v-for="p in provinces"
-                :key="p.name"
-                class="prov-tab"
-                :class="{ 'is-active': activeProvince === p.name }"
-                @click="activeProvince = p.name"
-              >
-                {{ p.name }}
-                <i v-if="p.name === '云南'" class="prov-tab__badge">主产区</i>
+            <!-- 搜索框 -->
+            <div class="search-box">
+              <AppIcon name="search" :size="15" class="search-box__icon" />
+              <input
+                v-model="keyword"
+                class="search-box__input"
+                placeholder="搜索地区，如：毕节、凉山、普洱…"
+                maxlength="12"
+              />
+              <button v-if="keyword" class="search-box__clear" @click="keyword = ''">
+                <AppIcon name="x" :size="13" />
               </button>
             </div>
 
-            <div class="sheet__body">
-              <p class="sheet__note">{{ currentProvince.note }}</p>
-              <template v-for="g in currentProvince.groups" :key="g.group">
-                <p class="sheet__group">{{ g.group }}</p>
-                <div class="sheet__grid">
-                  <button
-                    v-for="r in g.items"
-                    :key="r"
-                    class="sheet__item"
-                    :class="{ 'is-active': store.region === r }"
-                    @click="pick(r)"
-                  >
-                    <AppIcon name="map-pin" :size="12" />
-                    {{ r }}
-                  </button>
-                </div>
+            <!-- 搜索结果 -->
+            <div v-if="keyword.trim()" class="search-results">
+              <template v-if="searchResults.length">
+                <button
+                  v-for="r in searchResults"
+                  :key="r.province + r.name"
+                  class="search-item"
+                  :class="{ 'is-active': store.region === r.name }"
+                  @click="pick(r.name)"
+                >
+                  <AppIcon name="map-pin" :size="13" />
+                  <span class="search-item__name">{{ r.name }}</span>
+                  <span class="search-item__prov">{{ r.province }}</span>
+                </button>
               </template>
+              <p v-else class="search-empty">未找到匹配的地区，试试输入省份名或市/州名</p>
             </div>
+
+            <!-- 默认：热门省份 + 当前省列表 -->
+            <template v-else>
+              <div class="prov-tabs">
+                <button
+                  v-for="p in provinces.slice(0, 8)"
+                  :key="p.name"
+                  class="prov-tab"
+                  :class="{ 'is-active': activeProvince === p.name }"
+                  @click="activeProvince = p.name"
+                >
+                  {{ p.name }}
+                  <i v-if="p.name === '云南'" class="prov-tab__badge">主产区</i>
+                </button>
+                <select
+                  class="prov-more"
+                  :value="activeProvince"
+                  @change="activeProvince = ($event.target as HTMLSelectElement).value"
+                >
+                  <option value="" disabled>更多省份…</option>
+                  <option v-for="p in provinces.slice(8)" :key="p.name" :value="p.name">
+                    {{ p.name }}
+                  </option>
+                </select>
+              </div>
+
+              <div class="sheet__body">
+                <p class="sheet__note">{{ currentProvince.note }}</p>
+                <template v-for="g in currentProvince.groups" :key="g.group">
+                  <p class="sheet__group">{{ g.group }}</p>
+                  <div class="sheet__grid">
+                    <button
+                      v-for="r in g.items"
+                      :key="r"
+                      class="sheet__item"
+                      :class="{ 'is-active': store.region === r }"
+                      @click="pick(r)"
+                    >
+                      <AppIcon name="map-pin" :size="12" />
+                      {{ r }}
+                    </button>
+                  </div>
+                </template>
+              </div>
+            </template>
             <button class="sheet__cancel" @click="open = false">取消</button>
           </div>
         </div>
@@ -346,10 +403,93 @@ const pick = (r: string) => {
   padding: 14px 20px 20px;
 }
 
-/* 省份网格（换行展示全部，避免横向滚动看不到） */
-.prov-tabs {
+/* 搜索框 */
+.search-box {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 12px 20px 0;
+  padding: 0 14px;
+  height: 42px;
+  border-radius: var(--r-full);
+  background: var(--c-bg-muted);
+  border: 1.5px solid var(--c-line);
+  transition: border-color var(--dur-fast);
+  flex-shrink: 0;
+}
+
+.search-box:focus-within {
+  border-color: var(--c-primary-300);
+  background: #fff;
+}
+
+.search-box__icon {
+  color: var(--c-text-4);
+  flex-shrink: 0;
+}
+
+.search-box__input {
+  flex: 1;
+  min-width: 0;
+  font-size: 13.5px;
+}
+
+.search-box__clear {
+  color: var(--c-text-4);
   display: grid;
-  grid-template-columns: repeat(4, 1fr);
+  place-items: center;
+  padding: 4px;
+}
+
+/* 搜索结果 */
+.search-results {
+  flex: 1;
+  overflow-y: auto;
+  padding: 10px 20px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+}
+
+.search-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 14px;
+  border-radius: var(--r-md);
+  background: var(--c-bg-muted);
+  border: 1.5px solid var(--c-line-soft);
+  font-size: 13.5px;
+  color: var(--c-text-1);
+  text-align: left;
+}
+
+.search-item.is-active {
+  border-color: var(--c-primary-500);
+  background: var(--c-primary-50);
+}
+
+.search-item__name {
+  font-weight: 700;
+}
+
+.search-item__prov {
+  margin-left: auto;
+  font-size: 11px;
+  color: var(--c-text-4);
+}
+
+.search-empty {
+  text-align: center;
+  font-size: 12.5px;
+  color: var(--c-text-4);
+  padding: 24px 0;
+}
+
+/* 省份快捷行（8 个 + 更多下拉） */
+.prov-tabs {
+  display: flex;
+  flex-wrap: wrap;
   gap: 6px;
   padding: 10px 20px 0;
 }
@@ -357,10 +497,9 @@ const pick = (r: string) => {
 .prov-tab {
   display: inline-flex;
   align-items: center;
-  justify-content: center;
   gap: 4px;
-  padding: 8px 4px;
-  border-radius: var(--r-sm);
+  padding: 7px 12px;
+  border-radius: var(--r-full);
   background: var(--c-bg-muted);
   border: 1.5px solid var(--c-line-soft);
   font-size: 12px;
@@ -368,6 +507,18 @@ const pick = (r: string) => {
   color: var(--c-text-3);
   white-space: nowrap;
   transition: all var(--dur-fast);
+}
+
+.prov-more {
+  padding: 7px 12px;
+  border-radius: var(--r-full);
+  background: var(--c-bg-muted);
+  border: 1.5px dashed var(--c-line);
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--c-text-3);
+  cursor: pointer;
+  outline: none;
 }
 
 .prov-tab.is-active {
