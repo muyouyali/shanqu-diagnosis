@@ -1,0 +1,35 @@
+{
+  "name": "shanqu-diagnosis",
+  "private": true,
+  "version": "1.0.0",
+  "type": "module",
+  "description": "山地特色经济作物病虫害多Agent诊断系统 - 全国高校AI Web开发挑战赛",
+  "scripts": {
+    "dev": "concurrently -n \"WEB,API\" -c \"cyan,magenta\" \"vite\" \"node --watch server/index.js\"",
+    "dev:web": "vite",
+    "dev:api": "node --watch server/index.js",
+    "build": "vue-tsc --noEmit && vite build",
+    "preview": "vite preview",
+    "start": "NODE_ENV=production node server/index.js",
+    "kb:build": "node server/kb/build-index.js",
+    "typecheck": "vue-tsc --noEmit"
+  },
+  "dependencies": {
+    "axios": "^1.7.7",
+    "dayjs": "^1.11.13",
+    "echarts": "^5.5.1",
+    "express": "^4.21.1",
+    "cors": "^2.8.5",
+    "dotenv": "^16.4.5",
+    "pinia": "^2.2.6",
+    "vue": "^3.5.13",
+    "vue-router": "^4.4.5"
+  },
+  "devDependencies": {
+    "@vitejs/plugin-vue": "^5.2.0",
+    "concurrently": "^9.1.0",
+    "typescript": "^5.6.3",
+    "vite": "^5.4.11",
+    "vue-tsc": "^2.1.10"
+  }
+}
