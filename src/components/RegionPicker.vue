@@ -346,29 +346,24 @@ const pick = (r: string) => {
   padding: 14px 20px 20px;
 }
 
-/* 省份 Tab */
+/* 省份网格（换行展示全部，避免横向滚动看不到） */
 .prov-tabs {
-  display: flex;
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
   gap: 6px;
   padding: 10px 20px 0;
-  overflow-x: auto;
-  scrollbar-width: none;
-  flex-shrink: 0;
-}
-
-.prov-tabs::-webkit-scrollbar {
-  display: none;
 }
 
 .prov-tab {
   display: inline-flex;
   align-items: center;
+  justify-content: center;
   gap: 4px;
-  padding: 7px 14px;
-  border-radius: var(--r-full);
+  padding: 8px 4px;
+  border-radius: var(--r-sm);
   background: var(--c-bg-muted);
   border: 1.5px solid var(--c-line-soft);
-  font-size: 12.5px;
+  font-size: 12px;
   font-weight: 600;
   color: var(--c-text-3);
   white-space: nowrap;
