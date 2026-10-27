@@ -1,0 +1,175 @@
+- generic [ref=f7e1]:
+  - generic [ref=f7e3]:
+    - banner [ref=f7e4]:
+      - generic [ref=f7e5]:
+        - link [ref=f7e6] [cursor=pointer]:
+          - /url: /
+          - strong [ref=f7e11]: 云岭农诊
+        - navigation [ref=f7e12]:
+          - link "首页" [ref=f7e13] [cursor=pointer]:
+            - /url: /
+          - link "智能诊断" [ref=f7e16] [cursor=pointer]:
+            - /url: /diagnose
+          - link "病害图谱" [ref=f7e20] [cursor=pointer]:
+            - /url: /knowledge
+          - link "农技问答" [ref=f7e24] [cursor=pointer]:
+            - /url: /qa
+          - link "我的档案" [ref=f7e27] [cursor=pointer]:
+            - /url: /archive
+        - link "农技站后台" [ref=f7e31] [cursor=pointer]:
+          - /url: /admin
+    - main [ref=f7e34]:
+      - generic [ref=f7e35]:
+        - generic [ref=f7e40]:
+          - generic [ref=f7e41]:
+            - generic [ref=f7e42]: 云岭农诊
+            - button "遵义市" [ref=f7e49] [cursor=pointer]
+            - button "农技站" [ref=f7e55] [cursor=pointer]
+          - heading "中午好， 给作物看看病吧" [level=1] [ref=f7e61]: 中午好，给作物看看病吧
+          - paragraph [ref=f7e62]: 拍张照片，AI 农技员帮您判断病虫害 针对云南山地作物专门优化
+          - button "拍照诊断 上传病叶照片，30 秒出结果" [ref=f7e63] [cursor=pointer]:
+            - generic [ref=f7e68]:
+              - strong [ref=f7e69]: 拍照诊断
+              - generic [ref=f7e70]: 上传病叶照片，30 秒出结果
+          - generic [ref=f7e73]:
+            - generic [ref=f7e74]: 多模态识图
+            - generic [ref=f7e75]: RAG 检索增强
+            - generic [ref=f7e76]: 双 Agent 协作
+            - generic [ref=f7e77]: 流式输出
+            - generic [ref=f7e78]: 天气工具联动
+        - generic [ref=f7e80]:
+          - generic [ref=f7e81]:
+            - generic [ref=f7e82]: 遵义市 · 未来 7 天
+            - generic [ref=f7e86]: 病害风险 偏高 · 89
+          - generic [ref=f7e87]:
+            - generic [ref=f7e88]:
+              - generic [ref=f7e89]: 今天
+              - generic [ref=f7e90]: 晴
+              - generic [ref=f7e91]: 15~28°
+              - generic [ref=f7e92]: 💧8%
+            - generic [ref=f7e93]:
+              - generic [ref=f7e94]: 明天
+              - generic [ref=f7e95]: 中雨
+              - generic [ref=f7e96]: 16~30°
+              - generic [ref=f7e97]: 💧94%
+            - generic [ref=f7e98]:
+              - generic [ref=f7e99]: 后天
+              - generic [ref=f7e100]: 多云
+              - generic [ref=f7e101]: 17~25°
+              - generic [ref=f7e102]: 💧10%
+            - generic [ref=f7e103]:
+              - generic [ref=f7e104]: 第4天
+              - generic [ref=f7e105]: 小雨
+              - generic [ref=f7e106]: 12~21°
+              - generic [ref=f7e107]: 💧96%
+            - generic [ref=f7e108]:
+              - generic [ref=f7e109]: 第5天
+              - generic [ref=f7e110]: 阴
+              - generic [ref=f7e111]: 13~23°
+              - generic [ref=f7e112]: 💧12%
+          - paragraph [ref=f7e113]: 三七根腐病在连续降雨+高湿条件下风险显著升高，注意深沟排水
+        - generic [ref=f7e204]:
+          - generic [ref=f7e205]:
+            - generic [ref=f7e206]: 区域预警 · 关注
+            - generic [ref=f7e210]: 近 14 天
+          - heading "三七疫病占比偏高，需重点关注" [level=3] [ref=f7e211]
+          - paragraph [ref=f7e212]: 近 14 天累计诊断 109 次，其中 「三七疫病」出现 16 次，占比 14.7%。需人工复核比例 6.4%，整体可控。
+          - list [ref=f7e213]:
+            - listitem [ref=f7e214]: 针对「三七疫病」发布专项防控提示，重点覆盖石屏县
+            - listitem [ref=f7e216]: 雨季前完成田间排水沟疏通，降低根腐类病害风险
+        - generic [ref=f7e118]:
+          - generic [ref=f7e119]:
+            - heading "选择作物开始诊断" [level=2] [ref=f7e120]
+            - generic [ref=f7e121]: 病害图谱
+          - generic [ref=f7e124]:
+            - button "🍃 普洱茶树 4 种病害" [ref=f7e125] [cursor=pointer]:
+              - generic [ref=f7e126]: 🍃
+              - generic [ref=f7e127]: 普洱茶树
+              - generic [ref=f7e128]: 4 种病害
+            - button "🌱 昭通天麻 3 种病害" [ref=f7e132] [cursor=pointer]:
+              - generic [ref=f7e133]: 🌱
+              - generic [ref=f7e134]: 昭通天麻
+              - generic [ref=f7e135]: 3 种病害
+            - button "🌰 云南核桃 4 种病害" [ref=f7e139] [cursor=pointer]:
+              - generic [ref=f7e140]: 🌰
+              - generic [ref=f7e141]: 云南核桃
+              - generic [ref=f7e142]: 4 种病害
+            - button "🌿 文山三七 5 种病害" [ref=f7e146] [cursor=pointer]:
+              - generic [ref=f7e147]: 🌿
+              - generic [ref=f7e148]: 文山三七
+              - generic [ref=f7e149]: 5 种病害
+            - button "🫐 高原蓝莓 5 种病害" [ref=f7e153] [cursor=pointer]:
+              - generic [ref=f7e154]: 🫐
+              - generic [ref=f7e155]: 高原蓝莓
+              - generic [ref=f7e156]: 5 种病害
+            - button "🍊 柑橘 5 种病害" [ref=f7e160] [cursor=pointer]:
+              - generic [ref=f7e161]: 🍊
+              - generic [ref=f7e162]: 柑橘
+              - generic [ref=f7e163]: 5 种病害
+        - generic [ref=f7e167]:
+          - heading "常用功能" [level=2] [ref=f7e168]
+          - generic [ref=f7e169]:
+            - button "农技问答 用大白话问，AI 从植保手册里找答案" [ref=f7e170] [cursor=pointer]:
+              - generic [ref=f7e174]:
+                - strong [ref=f7e175]: 农技问答
+                - generic [ref=f7e176]: 用大白话问，AI 从植保手册里找答案
+            - button "我的种植档案 记录每次诊断，AI 帮您复盘规律" [ref=f7e179] [cursor=pointer]:
+              - generic [ref=f7e184]:
+                - strong [ref=f7e185]: 我的种植档案
+                - generic [ref=f7e186]: 记录每次诊断，AI 帮您复盘规律
+            - button "病害图谱 26 种云南特色作物病害，图文对照" [ref=f7e189] [cursor=pointer]:
+              - generic [ref=f7e194]:
+                - strong [ref=f7e195]: 病害图谱
+                - generic [ref=f7e196]: 26 种云南特色作物病害，图文对照
+        - generic [ref=f7e199]:
+          - generic [ref=f7e200]: AI 诊断仅供参考，不替代专业农技人员指导
+          - paragraph [ref=f7e203]: 全国高校 AI Web 开发挑战赛 · 云南赛区
+  - generic [ref=f7e219]:
+    - generic [ref=f7e220]:
+      - heading "选择您的种植区域" [level=3] [ref=f7e221]
+      - paragraph [ref=f7e222]: 天气与病害风险将按所选区域计算
+    - generic [ref=f7e223]:
+      - button "云南 主产区" [ref=f7e224] [cursor=pointer]:
+        - text: 云南
+        - generic [ref=f7e225]: 主产区
+      - button "贵州" [ref=f7e226] [cursor=pointer]
+      - button "四川" [ref=f7e227] [cursor=pointer]
+      - button "重庆" [ref=f7e228] [cursor=pointer]
+      - button "广西" [ref=f7e229] [cursor=pointer]
+      - button "西藏" [ref=f7e230] [cursor=pointer]
+      - button "湖南" [ref=f7e231] [cursor=pointer]
+      - button "湖北" [ref=f7e232] [cursor=pointer]
+      - button "广东" [ref=f7e233] [cursor=pointer]
+      - button "福建" [ref=f7e234] [cursor=pointer]
+      - button "浙江" [ref=f7e235] [cursor=pointer]
+      - button "江西" [ref=f7e236] [cursor=pointer]
+      - button "陕西" [ref=f7e237] [cursor=pointer]
+      - button "甘肃" [ref=f7e238] [cursor=pointer]
+      - button "海南" [ref=f7e239] [cursor=pointer]
+      - button "安徽" [ref=f7e240] [cursor=pointer]
+      - button "河南" [ref=f7e241] [cursor=pointer]
+      - button "山西" [ref=f7e242] [cursor=pointer]
+      - button "山东" [ref=f7e243] [cursor=pointer]
+      - button "河北" [ref=f7e244] [cursor=pointer]
+      - button "辽宁" [ref=f7e245] [cursor=pointer]
+      - button "吉林" [ref=f7e246] [cursor=pointer]
+      - button "黑龙江" [active] [ref=f7e247] [cursor=pointer]
+      - button "江苏" [ref=f7e248] [cursor=pointer]
+      - button "内蒙古" [ref=f7e249] [cursor=pointer]
+      - button "宁夏" [ref=f7e250] [cursor=pointer]
+      - button "青海" [ref=f7e251] [cursor=pointer]
+      - button "新疆" [ref=f7e252] [cursor=pointer]
+      - button "北京" [ref=f7e253] [cursor=pointer]
+      - button "天津" [ref=f7e254] [cursor=pointer]
+      - button "上海" [ref=f7e255] [cursor=pointer]
+      - button "台湾" [ref=f7e256] [cursor=pointer]
+    - generic [ref=f7e257]:
+      - paragraph [ref=f7e258]: 大小兴安岭
+      - paragraph [ref=f7e328]: 主要区域
+      - generic [ref=f7e329]:
+        - button "黑河市" [ref=f7e330] [cursor=pointer]
+        - button "伊春市" [ref=f7e334] [cursor=pointer]
+        - button "牡丹江市" [ref=f7e338] [cursor=pointer]
+        - button "大兴安岭地区" [ref=f7e342] [cursor=pointer]
+        - button "哈尔滨市" [ref=f7e346] [cursor=pointer]
+    - button "取消" [ref=f7e327] [cursor=pointer]
