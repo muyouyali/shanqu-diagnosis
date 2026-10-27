@@ -4,6 +4,7 @@ import { useRouter } from 'vue-router'
 import { useAppStore } from '@/stores/app'
 import AppIcon from '@/components/AppIcon.vue'
 import WeatherWidget from '@/components/WeatherWidget.vue'
+import RegionPicker from '@/components/RegionPicker.vue'
 import api from '@/api'
 import type { AlertResponse } from '@/types'
 
@@ -70,9 +71,10 @@ const badges = ['多模态识图', 'RAG 检索增强', '双 Agent 协作', '流�
             </div>
             <span class="hero__name">云岭农诊</span>
           </div>
+          <RegionPicker />
           <button class="hero__region" @click="router.push('/admin')">
-            <AppIcon name="map-pin" :size="13" />
-            {{ store.region }}
+            <AppIcon name="dashboard" :size="13" />
+            农技站
           </button>
         </div>
 

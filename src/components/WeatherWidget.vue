@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, watch, onMounted } from 'vue'
 import AppIcon from '@/components/AppIcon.vue'
 import api from '@/api'
 
@@ -31,7 +31,8 @@ const riskTone = computed(() => {
   return { color: '#10b981', bg: '#ecfdf5', text: '较低' }
 })
 
-onMounted(async () => {
+const load = async () => {
+  loading.value = true
   try {
     weather.value = await api.weather(props.region, props.cropId)
   } catch {
@@ -39,7 +40,15 @@ onMounted(async () => {
   } finally {
     loading.value = false
   }
-})
+}
+
+// 区域或作物切换时自动刷新
+watch(
+  () => [props.region, props.cropId],
+  () => load()
+)
+
+onMounted(load)
 </script>
 
 <template>

@@ -229,6 +229,19 @@ defineProps<{
       <path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5" />
     </template>
 
+    <!-- 下箭头 -->
+    <template v-else-if="name === 'chevron-down'">
+      <polyline points="6 9 12 15 18 9" />
+    </template>
+
+    <!-- 后台面板 -->
+    <template v-else-if="name === 'dashboard'">
+      <rect x="3" y="3" width="7" height="9" rx="1" />
+      <rect x="14" y="3" width="7" height="5" rx="1" />
+      <rect x="14" y="12" width="7" height="9" rx="1" />
+      <rect x="3" y="16" width="7" height="5" rx="1" />
+    </template>
+
     <!-- 默认圆点 -->
     <template v-else>
       <circle cx="12" cy="12" r="9" />
