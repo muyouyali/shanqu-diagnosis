@@ -476,12 +476,21 @@ const showAlertDetail = ref(false)
 }
 
 .alert-card {
+  width: 100%;
+  display: block;
+  text-align: left;
   padding: 16px 17px 15px;
   border-radius: var(--r-lg);
   background: var(--c-bg-card);
   border: 1px solid var(--c-line-soft);
   border-left: 3px solid var(--tone);
   box-shadow: var(--sh-sm);
+  transition: transform var(--dur-base) var(--ease-out), box-shadow var(--dur-base) var(--ease-out);
+}
+
+.alert-card:hover {
+  transform: translateY(-2px);
+  box-shadow: var(--sh-md);
 }
 
 .alert-card__head {
