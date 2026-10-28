@@ -1,7 +1,7 @@
 import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
 import api from '@/api'
-import type { Crop, RecordItem, DiagnoseResponse } from '@/types'
+import type { Crop, RecordItem, DiagnoseResponse, User, Message } from '@/types'
 import { provinceOfRegion } from '@/data/regions'
 
 const USER_KEY = 'ylnz_user_id'
@@ -51,6 +51,57 @@ export const useAppStore = defineStore('app', () => {
   const setCrop = (id: string) => {
     selectedCropId.value = id
     localStorage.setItem('ylnz_crop', id)
+  }
+
+  // ---------- 用户登录态 ----------
+  const user = ref<User | null>(null)
+  const userLoaded = ref(false)
+  const unread = ref(0)
+
+  const isExpert = computed(() => user.value?.role === 'expert')
+
+  /** 应用启动时恢复登录态（token 失效则静默清掉） */
+  const restoreUser = async () => {
+    if (userLoaded.value) return
+    userLoaded.value = true
+    if (!localStorage.getItem('ylnz_token')) return
+    try {
+      user.value = await api.me()
+      await loadUnread()
+    } catch {
+      localStorage.removeItem('ylnz_token')
+      user.value = null
+    }
+  }
+
+  const setAuth = (token: string, u: User) => {
+    localStorage.setItem('ylnz_token', token)
+    user.value = u
+    loadUnread().catch(() => {})
+  }
+
+  const updateUser = (u: User) => {
+    user.value = u
+  }
+
+  const logout = async () => {
+    try {
+      await api.logout()
+    } catch {
+      /* 忽略登出接口异常 */
+    }
+    localStorage.removeItem('ylnz_token')
+    user.value = null
+    unread.value = 0
+  }
+
+  const loadUnread = async () => {
+    if (!user.value) return
+    try {
+      unread.value = (await api.messages()).unread
+    } catch {
+      /* 静默 */
+    }
   }
 
   // ---------- 最近一次诊断结果（避免刷新丢失） ----------
@@ -114,6 +165,14 @@ export const useAppStore = defineStore('app', () => {
     selectedCropId,
     selectedCrop,
     setCrop,
+    user,
+    isExpert,
+    unread,
+    restoreUser,
+    setAuth,
+    updateUser,
+    logout,
+    loadUnread,
     lastResult,
     lastImage,
     setLastResult,

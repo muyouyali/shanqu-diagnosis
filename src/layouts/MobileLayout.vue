@@ -2,6 +2,12 @@
 import { computed } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import AppIcon from '@/components/AppIcon.vue'
+import UserMenu from '@/components/UserMenu.vue'
+import { useAppStore } from '@/stores/app'
+import { onMounted } from 'vue'
+
+const store = useAppStore()
+onMounted(() => store.restoreUser())
 
 const route = useRoute()
 const router = useRouter()
@@ -55,9 +61,8 @@ const go = (path: string) => {
             <AppIcon name="archive" :size="16" /> 我的档案
           </router-link>
         </nav>
-        <router-link to="/admin" class="topnav__cta">
-          <AppIcon name="chart" :size="15" /> 农技站后台
-        </router-link>
+        <!-- 用户区：消息 + 头像/登录（专家才显示后台入口） -->
+        <UserMenu />
       </div>
     </header>
 

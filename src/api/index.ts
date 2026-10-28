@@ -3,6 +3,8 @@ import type {
   Crop,
   CropSubmission,
   Disease,
+  User,
+  Message,
   DiagnoseResponse,
   QAResponse,
   RecordItem,
@@ -16,6 +18,12 @@ import type {
 const http = axios.create({
   baseURL: '/api',
   timeout: 90000
+})
+
+http.interceptors.request.use((cfg) => {
+  const token = localStorage.getItem('ylnz_token')
+  if (token) cfg.headers.Authorization = `Bearer ${token}`
+  return cfg
 })
 
 http.interceptors.response.use(
@@ -55,6 +63,34 @@ export const api = {
 
   deleteCropSubmission: (id: number) =>
     http.delete(`/crops/submissions/${id}`).then((r) => r.data),
+
+  // ==================== 用户认证 ====================
+  register: (payload: { account: string; password: string; nickname?: string; method?: string }) =>
+    http.post<{ ok: boolean; token: string; user: User }>('/auth/register', payload).then((r) => r.data),
+
+  login: (payload: { account: string; password: string; method?: string }) =>
+    http.post<{ ok: boolean; token: string; user: User }>('/auth/login', payload).then((r) => r.data),
+
+  me: () => http.get<{ user: User }>('/auth/me').then((r) => r.data.user),
+
+  updateProfile: (payload: Partial<User> & { password?: string }) =>
+    http.put<{ ok: boolean; user: User }>('/auth/profile', payload).then((r) => r.data.user),
+
+  logout: () => http.post('/auth/logout').then((r) => r.data),
+
+  deleteAccount: () => http.delete('/auth/account').then((r) => r.data),
+
+  // ==================== 消息 ====================
+  messages: () =>
+    http
+      .get<{ total: number; unread: number; items: Message[] }>('/messages')
+      .then((r) => r.data),
+
+  readMessage: (id: number) =>
+    http.post<{ ok: boolean; unread: number }>(`/messages/${id}/read`).then((r) => r.data),
+
+  sendMessage: (payload: { userId?: number | 'all'; title: string; content: string }) =>
+    http.post<{ ok: boolean; item: Message }>('/messages', payload).then((r) => r.data),
 
   diseases: (cropId: string) =>
     http.get<{ items: Disease[] }>(`/crops/${cropId}/diseases`).then((r) => r.data.items),

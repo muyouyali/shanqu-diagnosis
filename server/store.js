@@ -8,6 +8,7 @@
 
 import fs from 'node:fs'
 import path from 'node:path'
+import crypto from 'node:crypto'
 import { fileURLToPath } from 'node:url'
 import { seedRecords } from './seed.js'
 
@@ -40,10 +41,236 @@ const load = () => {
   if (!Array.isArray(cache.cropSubmissions)) cache.cropSubmissions = seedCropSubmissions()
   if (!Array.isArray(cache.records)) cache.records = []
   if (!Array.isArray(cache.consultations)) cache.consultations = []
+  if (!Array.isArray(cache.users)) cache.users = seedUsers()
+  if (!Array.isArray(cache.messages)) cache.messages = seedMessages()
+  if (!cache.sessions) cache.sessions = {}
   if (typeof cache.nextId !== 'number') cache.nextId = 1
   return cache
 }
 
+// ==================== 用户与认证 ====================
+
+export const hashPassword = (pwd, salt) =>
+  crypto.scryptSync(String(pwd), salt, 32).toString('hex')
+
+export const findUserByAccount = (account) => {
+  const db = load()
+  const a = String(account || '').trim().toLowerCase()
+  if (!a) return null
+  return (
+    db.users.find(
+      (u) =>
+        u.phone === a ||
+        u.email === a ||
+        u.wechatId === a ||
+        u.account === a
+    ) || null
+  )
+}
+
+export const findUserById = (id) => {
+  const db = load()
+  return db.users.find((u) => u.id === Number(id)) || null
+}
+
+export const createUser = ({ account, password, nickname, role = 'user', phone = '', email = '', wechatId = '' }) => {
+  const db = load()
+  if (findUserByAccount(account)) throw new Error('该账号已注册，请直接登录')
+  const salt = crypto.randomBytes(8).toString('hex')
+  const user = {
+    id: nextId(),
+    account: String(account).trim().toLowerCase(),
+    salt,
+    passwordHash: hashPassword(password, salt),
+    nickname: String(nickname || '新农友').trim() || '新农友',
+    role,
+    phone: String(phone).trim(),
+    email: String(email).trim(),
+    wechatId: String(wechatId).trim(),
+    avatar: '',
+    region: '',
+    createdAt: new Date().toISOString()
+  }
+  db.users.push(user)
+  persist()
+  return user
+}
+
+export const verifyPassword = (user, password) =>
+  user && hashPassword(password, user.salt) === user.passwordHash
+
+export const createSession = (userId) => {
+  const db = load()
+  const token = crypto.randomBytes(24).toString('hex')
+  db.sessions[token] = { userId: Number(userId), createdAt: new Date().toISOString() }
+  // 会话上限保护
+  const keys = Object.keys(db.sessions)
+  if (keys.length > 2000) delete db.sessions[keys[0]]
+  persist()
+  return token
+}
+
+export const getUserByToken = (token) => {
+  if (!token) return null
+  const db = load()
+  const s = db.sessions[token]
+  if (!s) return null
+  return findUserById(s.userId)
+}
+
+export const destroySession = (token) => {
+  const db = load()
+  if (db.sessions[token]) {
+    delete db.sessions[token]
+    persist()
+  }
+}
+
+export const updateUser = (id, patch) => {
+  const db = load()
+  const idx = db.users.findIndex((u) => u.id === Number(id))
+  if (idx === -1) return null
+  // 密码与角色不允许通过资料修改接口变更
+  const safe = { ...patch }
+  delete safe.passwordHash
+  delete safe.salt
+  delete safe.role
+  delete safe.account
+  if (safe.password) {
+    safe.salt = crypto.randomBytes(8).toString('hex')
+    safe.passwordHash = hashPassword(safe.password, safe.salt)
+    delete safe.password
+  }
+  db.users[idx] = { ...db.users[idx], ...safe, updatedAt: new Date().toISOString() }
+  persist()
+  return publicUser(db.users[idx])
+}
+
+export const deleteUser = (id) => {
+  const db = load()
+  const idx = db.users.findIndex((u) => u.id === Number(id))
+  if (idx === -1) return false
+  // 注销用户：保留记录审计字段，但抹去个人资料
+  db.users.splice(idx, 1)
+  // 同步清理其消息与会话
+  db.messages = db.messages.filter((m) => m.userId !== Number(id))
+  for (const [t, s] of Object.entries(db.sessions)) {
+    if (s.userId === Number(id)) delete db.sessions[t]
+  }
+  persist()
+  return true
+}
+
+/** 对外暴露的用户信息（去除敏感字段） */
+export const publicUser = (u) =>
+  u && {
+    id: u.id,
+    account: u.account,
+    nickname: u.nickname,
+    role: u.role,
+    phone: u.phone,
+    email: u.email,
+    wechatId: u.wechatId,
+    avatar: u.avatar,
+    region: u.region,
+    createdAt: u.createdAt
+  }
+
+/** 演示账号：答辩时专家/农户双角色一键可演示 */
+const seedUsers = () => {
+  const mk = (id, account, password, nickname, role, extra = {}) => {
+    const salt = crypto.randomBytes(8).toString('hex')
+    return {
+      id,
+      account,
+      salt,
+      passwordHash: hashPassword(password, salt),
+      nickname,
+      role,
+      phone: account,
+      email: '',
+      wechatId: '',
+      avatar: '',
+      region: '文山市',
+      createdAt: '2026-10-01T08:00:00.000Z',
+      ...extra
+    }
+  }
+  return [
+    mk(9001, '13800000001', 'demo123', '张专家', 'expert', { email: 'expert@shanqu.ai', region: '昭通市' }),
+    mk(9002, '13800000002', 'demo123', '李农户', 'user')
+  ]
+}
+
+// ==================== 站内消息 ====================
+export const createMessage = (item) => {
+  const db = load()
+  const full = {
+    id: nextId(),
+    read: false,
+    createdAt: new Date().toISOString(),
+    ...item
+  }
+  db.messages.unshift(full)
+  if (db.messages.length > 1000) db.messages.length = 1000
+  persist()
+  return full
+}
+
+export const listMessages = ({ userId, limit = 50 } = {}) => {
+  const db = load()
+  let list = db.messages
+  if (userId) list = list.filter((m) => m.userId === Number(userId) || m.userId === 'all')
+  return { total: list.length, items: list.slice(0, limit) }
+}
+
+export const markMessageRead = (id, userId) => {
+  const db = load()
+  const m = db.messages.find((x) => x.id === Number(id) && (x.userId === Number(userId) || x.userId === 'all'))
+  if (!m) return null
+  m.read = true
+  persist()
+  return m
+}
+
+export const unreadCount = (userId) => {
+  const db = load()
+  return db.messages.filter((m) => !m.read && (m.userId === Number(userId) || m.userId === 'all')).length
+}
+
+const seedMessages = () => [
+  {
+    id: 9101,
+    userId: 9002,
+    from: 'expert',
+    fromName: '张专家',
+    title: '关于您提交的三七根腐病问诊',
+    content:
+      '您上周上传的病株照片我已复核：根部分泌物呈褐色、须根腐烂程度判断准确。补充两点：① 高温高湿期建议增施枯草芽孢杆菌进行生物防治；② 若雨季持续，雨后 48 小时内再补喷一次氢氧化铜。如有新症状随时拍照给我。',
+    read: false,
+    createdAt: '2026-10-24T09:30:00.000Z'
+  },
+  {
+    id: 9102,
+    userId: 9002,
+    from: 'expert',
+    fromName: '张专家',
+    title: '审核结果：鲁甸青花椒已收录',
+    content: '您所在合作社提交的「鲁甸青花椒」已通过资料核验，正式并入云南地区作物图谱，感谢共建！',
+    read: true,
+    createdAt: '2026-10-13T10:06:00.000Z'
+  },
+  {
+    id: 9103,
+    userId: 'all',
+    from: 'system',
+    fromName: '平台公告',
+    title: '寒潮预警：未来一周注意防冻',
+    content: '气象台发布寒潮蓝色预警，滇东北高海拔茶区、苹果园需提前熏烟防霜、培土护根。',
+    read: false,
+    createdAt: '2026-10-26T18:00:00.000Z'
+  }
+]
 const persist = (immediate = false) => {
   if (writeTimer) clearTimeout(writeTimer)
   const write = () => {
@@ -331,6 +558,9 @@ export const listApprovedCrops = (province) => {
 export const resetDemoData = () => {
   cache = seedRecords()
   cache.cropSubmissions = seedCropSubmissions()
+  cache.users = seedUsers()
+  cache.messages = seedMessages()
+  cache.sessions = {}
   persist(true)
   return true
 }

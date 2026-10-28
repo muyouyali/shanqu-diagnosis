@@ -8,6 +8,7 @@ import RegionPicker from '@/components/RegionPicker.vue'
 import AlertDetailModal from '@/components/AlertDetailModal.vue'
 import CropDetailSheet from '@/components/CropDetailSheet.vue'
 import CropSubmitSheet from '@/components/CropSubmitSheet.vue'
+import UserMenu from '@/components/UserMenu.vue'
 import { provinceOfRegion } from '@/data/regions'
 import api from '@/api'
 import type { AlertResponse } from '@/types'
@@ -163,10 +164,7 @@ const hueOf = (name: string) => {
             <span class="hero__name">云岭农诊</span>
           </div>
           <RegionPicker />
-          <button class="hero__region" @click="router.push('/admin')">
-            <AppIcon name="dashboard" :size="13" />
-            农技站
-          </button>
+          <UserMenu />
         </div>
 
         <h1 class="hero__title">

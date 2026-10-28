@@ -14,6 +14,7 @@ const menu = [
   { name: 'admin-records', path: '/admin/records', label: '诊断记录', icon: 'list' },
   { name: 'admin-crop', path: '/admin/crops', label: '作物审核', icon: 'leaf' },
   { name: 'admin-alert', path: '/admin/alert', label: '区域预警', icon: 'alert' },
+  { name: 'admin-notify', path: '/admin/notify', label: '消息通知', icon: 'bell' },
   { name: 'admin-system', path: '/admin/system', label: '系统状态', icon: 'cpu' }
 ]
 

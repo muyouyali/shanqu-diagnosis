@@ -23,6 +23,32 @@ export interface Crop {
   pests?: string
 }
 
+/** 登录用户 */
+export interface User {
+  id: number
+  account: string
+  nickname: string
+  role: 'user' | 'expert'
+  phone: string
+  email: string
+  wechatId: string
+  avatar: string
+  region: string
+  createdAt: string
+}
+
+/** 站内消息（专家回复 / 系统公告） */
+export interface Message {
+  id: number
+  userId: number | 'all'
+  from: 'expert' | 'system'
+  fromName: string
+  title: string
+  content: string
+  read: boolean
+  createdAt: string
+}
+
 /** 用户提交的新作物（专家审核流） */
 export interface CropSubmission {
   id: number

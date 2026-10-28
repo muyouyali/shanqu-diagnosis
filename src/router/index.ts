@@ -37,6 +37,18 @@ const routes = [
         meta: { title: '病害图谱' }
       },
       {
+        path: 'profile',
+        name: 'profile',
+        component: () => import('@/views/Profile.vue'),
+        meta: { title: '个人中心' }
+      },
+      {
+        path: 'messages-page',
+        name: 'messages-page',
+        component: () => import('@/views/MessagesPage.vue'),
+        meta: { title: '我的消息' }
+      },
+      {
         path: 'knowledge/:diseaseId',
         name: 'disease-detail',
         component: () => import('@/views/DiseaseDetail.vue'),
@@ -47,6 +59,15 @@ const routes = [
   {
     path: '/admin',
     component: () => import('@/layouts/AdminLayout.vue'),
+    // 角色守卫：仅专家可进入农技站后台
+    beforeEnter: async () => {
+      const { useAppStore } = await import('@/stores/app')
+      const store = useAppStore()
+      await store.restoreUser()
+      if (!store.user) return { path: '/', query: { need: 'login' } }
+      if (store.user.role !== 'expert') return { path: '/profile' }
+      return true
+    },
     children: [
       {
         path: '',
@@ -71,6 +92,12 @@ const routes = [
         name: 'admin-alert',
         component: () => import('@/views/admin/Alert.vue'),
         meta: { title: '区域预警' }
+      },
+      {
+        path: 'notify',
+        name: 'admin-notify',
+        component: () => import('@/views/admin/Notify.vue'),
+        meta: { title: '消息通知' }
       },
       {
         path: 'system',

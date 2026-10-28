@@ -183,8 +183,9 @@ app.get('/api/crops/submissions', (req, res) => {
   res.json(store.listCropSubmissions({ status, province }))
 })
 
-// 审核通过 / 驳回
+// 审核通过 / 驳回（专家权限）
 app.patch('/api/crops/submissions/:id', (req, res) => {
+  if (!requireExpert(req, res)) return
   const { status, note } = req.body || {}
   if (!['approved', 'rejected', 'pending'].includes(status)) {
     return res.status(400).json({ error: '审核状态不合法' })
@@ -499,6 +500,148 @@ app.post('/api/qa', async (req, res) => {
 
 app.get('/api/qa/history', (req, res) => {
   res.json({ items: store.listConsultations(Number(req.query.limit) || 20) })
+})
+
+// ==================== 用户认证 ====================
+
+/** 从请求头解析当前登录用户 */
+const currentUser = (req) => {
+  const auth = req.headers.authorization || ''
+  const token = auth.startsWith('Bearer ') ? auth.slice(7) : ''
+  return store.getUserByToken(token)
+}
+
+const requireUser = (req, res) => {
+  const user = currentUser(req)
+  if (!user) {
+    res.status(401).json({ error: '请先登录' })
+    return null
+  }
+  return user
+}
+
+/** 专家专属接口守卫 */
+const requireExpert = (req, res) => {
+  const user = requireUser(req, res)
+  if (!user) return null
+  if (user.role !== 'expert') {
+    res.status(403).json({ error: '该操作需要专家权限' })
+    return null
+  }
+  return user
+}
+
+// 注册（支持手机号 / 邮箱 / 微信号注册）
+app.post('/api/auth/register', (req, res) => {
+  const { account, password, nickname, method } = req.body || {}
+  if (!account || String(account).trim().length < 5) {
+    return res.status(400).json({ error: '账号格式不正确（至少 5 位）' })
+  }
+  if (!password || String(password).length < 6) {
+    return res.status(400).json({ error: '密码至少 6 位' })
+  }
+  const a = String(account).trim().toLowerCase()
+  const extra = {}
+  if (method === 'email' || a.includes('@')) extra.email = a
+  else if (method === 'wechat') extra.wechatId = a
+  else extra.phone = a
+  try {
+    const user = store.createUser({ account: a, password, nickname, ...extra })
+    const token = store.createSession(user.id)
+    res.json({ ok: true, token, user: store.publicUser(user) })
+  } catch (e) {
+    res.status(409).json({ error: e.message })
+  }
+})
+
+// 登录：统一账号（手机号 / 邮箱 / 微信号）+ 密码
+app.post('/api/auth/login', (req, res) => {
+  const { account, password, method } = req.body || {}
+  if (!account || !password) return res.status(400).json({ error: '请输入账号与密码' })
+  const user = store.findUserByAccount(account)
+  if (!user || !store.verifyPassword(user, password)) {
+    return res.status(401).json({ error: '账号或密码错误' })
+  }
+  const token = store.createSession(user.id)
+  res.json({ ok: true, token, user: store.publicUser(user) })
+})
+
+// 当前用户信息
+app.get('/api/auth/me', (req, res) => {
+  const user = currentUser(req)
+  if (!user) return res.status(401).json({ error: '未登录' })
+  res.json({ user: store.publicUser(user) })
+})
+
+// 修改个人资料（含头像 base64 / 可选改密）
+app.put('/api/auth/profile', (req, res) => {
+  const user = requireUser(req, res)
+  if (!user) return
+  const { nickname, avatar, region, phone, email, wechatId, password } = req.body || {}
+  if (avatar && String(avatar).length > 1_600_000) {
+    return res.status(413).json({ error: '头像过大，请更换图片后重试' })
+  }
+  const updated = store.updateUser(user.id, {
+    ...(nickname !== undefined && { nickname: String(nickname).trim().slice(0, 20) || user.nickname }),
+    ...(avatar !== undefined && { avatar }),
+    ...(region !== undefined && { region }),
+    ...(phone !== undefined && { phone: String(phone).trim() }),
+    ...(email !== undefined && { email: String(email).trim() }),
+    ...(wechatId !== undefined && { wechatId: String(wechatId).trim() }),
+    ...(password && { password: String(password) })
+  })
+  res.json({ ok: true, user: updated })
+})
+
+// 退出登录
+app.post('/api/auth/logout', (req, res) => {
+  const auth = req.headers.authorization || ''
+  const token = auth.startsWith('Bearer ') ? auth.slice(7) : ''
+  store.destroySession(token)
+  res.json({ ok: true })
+})
+
+// 注销账号（危险操作：同步删除其消息与会话）
+app.delete('/api/auth/account', (req, res) => {
+  const user = requireUser(req, res)
+  if (!user) return
+  const ok = store.deleteUser(user.id)
+  res.json({ ok, message: '账号已注销，相关数据已删除' })
+})
+
+// ==================== 站内消息 ====================
+
+// 我的消息（含全员公告）
+app.get('/api/messages', (req, res) => {
+  const user = requireUser(req, res)
+  if (!user) return
+  res.json({
+    ...store.listMessages({ userId: user.id }),
+    unread: store.unreadCount(user.id)
+  })
+})
+
+app.post('/api/messages/:id/read', (req, res) => {
+  const user = requireUser(req, res)
+  if (!user) return
+  store.markMessageRead(req.params.id, user.id)
+  res.json({ ok: true, unread: store.unreadCount(user.id) })
+})
+
+// 专家发送消息（可指定用户或全员公告）
+app.post('/api/messages', (req, res) => {
+  const expert = requireExpert(req, res)
+  if (!expert) return
+  const { userId, title, content } = req.body || {}
+  if (!title || !content) return res.status(400).json({ error: '请填写标题与内容' })
+  const item = store.createMessage({
+    userId: userId === 'all' || !userId ? 'all' : Number(userId),
+    from: expert.role,
+    fromName: expert.nickname,
+    title: String(title).slice(0, 40),
+    content: String(content).slice(0, 500)
+  })
+  res.json({ ok: true, item })
 })
 
 // ==================== 检索调试接口（体现 RAG 可观测性） ====================

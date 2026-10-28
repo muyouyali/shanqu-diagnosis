@@ -242,6 +242,37 @@ defineProps<{
       <rect x="3" y="16" width="7" height="5" rx="1" />
     </template>
 
+    <!-- 手机 -->
+    <template v-else-if="name === 'phone'">
+      <rect x="7" y="2.5" width="10" height="19" rx="2.5" />
+      <line x1="10.5" y1="18" x2="13.5" y2="18" />
+    </template>
+
+    <!-- 邮件 -->
+    <template v-else-if="name === 'mail'">
+      <rect x="2.5" y="5" width="19" height="14" rx="2" />
+      <polyline points="3.5,6.5 12,12.5 20.5,6.5" />
+    </template>
+
+    <!-- 铃铛（消息） -->
+    <template v-else-if="name === 'bell'">
+      <path d="M18 8a6 6 0 1 0-12 0c0 7-3 8-3 8h18s-3-1-3-8" />
+      <path d="M10.3 21a2 2 0 0 0 3.4 0" />
+    </template>
+
+    <!-- 退出 -->
+    <template v-else-if="name === 'logout'">
+      <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" />
+      <polyline points="16 17 21 12 16 7" />
+      <line x1="21" y1="12" x2="9" y2="12" />
+    </template>
+
+    <!-- 编辑 -->
+    <template v-else-if="name === 'edit'">
+      <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
+      <path d="M18.5 2.5a2.1 2.1 0 0 1 3 3L12 15l-4 1 1-4Z" />
+    </template>
+
     <!-- 默认圆点 -->
     <template v-else>
       <circle cx="12" cy="12" r="9" />
