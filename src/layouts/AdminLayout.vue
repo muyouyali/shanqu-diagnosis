@@ -3,6 +3,7 @@ import { ref, onMounted, computed } from 'vue'
 import { useRoute } from 'vue-router'
 import { useAppStore } from '@/stores/app'
 import AppIcon from '@/components/AppIcon.vue'
+import { provinceOfRegion } from '@/data/regions'
 
 const route = useRoute()
 const store = useAppStore()
@@ -62,7 +63,7 @@ onMounted(() => {
       <header class="topbar">
         <div class="topbar__left">
           <h1 class="topbar__title">{{ pageTitle }}</h1>
-          <span class="topbar__sub">云南省 · {{ store.region }}</span>
+          <span class="topbar__sub">{{ provinceOfRegion(store.region) }} · {{ store.region }}</span>
         </div>
         <div class="topbar__right">
           <span class="topbar__badge">
