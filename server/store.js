@@ -99,32 +99,42 @@ export const createUser = ({ account, password, nickname, role = 'user', phone =
 export const verifyPassword = (user, password) =>
   user && hashPassword(password, user.salt) === user.passwordHash
 
+// ==================== 无状态签名令牌 ====================
+/**
+ * 采用 HMAC 签名令牌替代服务端会话表：
+ * 线上托管可能运行多个服务实例，文件式会话仅存在于单实例，
+ * 登录与后续请求落到不同实例会导致 401。
+ * 无状态令牌任何实例均可本地验证，天然支持多实例/重启。
+ */
+const AUTH_SECRET =
+  process.env.AUTH_SECRET || 'ylnz-auth-secret-2026-shanqu-demo-fixed-key'
+
+const TOKEN_TTL = 90 * 24 * 3600 * 1000 // 90 天
+
+const sign = (payload) =>
+  crypto.createHmac('sha256', AUTH_SECRET).update(payload).digest('hex').slice(0, 32)
+
 export const createSession = (userId) => {
-  const db = load()
-  const token = crypto.randomBytes(24).toString('hex')
-  db.sessions[token] = { userId: Number(userId), createdAt: new Date().toISOString() }
-  // 会话上限保护
-  const keys = Object.keys(db.sessions)
-  if (keys.length > 2000) delete db.sessions[keys[0]]
-  persist()
-  return token
+  const exp = Date.now() + TOKEN_TTL
+  const payload = `${Number(userId)}.${exp}`
+  return `v1.${payload}.${sign(payload)}`
 }
 
 export const getUserByToken = (token) => {
-  if (!token) return null
-  const db = load()
-  const s = db.sessions[token]
-  if (!s) return null
-  return findUserById(s.userId)
+  if (!token || !token.startsWith('v1.')) return null
+  const parts = token.split('.')
+  if (parts.length !== 4) return null
+  const [, uid, exp, sig] = parts
+  const payload = `${uid}.${exp}`
+  // 防篡改校验 + 过期校验
+  if (sign(payload) !== sig) return null
+  if (Number(exp) < Date.now()) return null
+  const user = findUserById(uid)
+  return user || null
 }
 
-export const destroySession = (token) => {
-  const db = load()
-  if (db.sessions[token]) {
-    delete db.sessions[token]
-    persist()
-  }
-}
+// 兼容旧接口：无状态令牌无需服务端注销（前端删 token 即可）
+export const destroySession = () => true
 
 export const updateUser = (id, patch) => {
   const db = load()
@@ -152,11 +162,8 @@ export const deleteUser = (id) => {
   if (idx === -1) return false
   // 注销用户：保留记录审计字段，但抹去个人资料
   db.users.splice(idx, 1)
-  // 同步清理其消息与会话
+  // 同步清理其消息（无状态令牌随用户删除自然失效）
   db.messages = db.messages.filter((m) => m.userId !== Number(id))
-  for (const [t, s] of Object.entries(db.sessions)) {
-    if (s.userId === Number(id)) delete db.sessions[t]
-  }
   persist()
   return true
 }
@@ -560,7 +567,6 @@ export const resetDemoData = () => {
   cache.cropSubmissions = seedCropSubmissions()
   cache.users = seedUsers()
   cache.messages = seedMessages()
-  cache.sessions = {}
   persist(true)
   return true
 }
