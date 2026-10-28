@@ -1,6 +1,8 @@
 <script setup lang="ts">
 import { ref, computed, watch, onMounted } from 'vue'
 import AppIcon from '@/components/AppIcon.vue'
+import SceneryBanner from '@/components/SceneryBanner.vue'
+import { provinceOfRegion } from '@/data/regions'
 import api from '@/api'
 
 interface WeatherDay {
@@ -123,6 +125,11 @@ onMounted(load)
       <Transition name="sheet">
         <div v-if="showDetail && weather" class="wdetail__mask" @click.self="showDetail = false">
           <div class="wdetail">
+            <SceneryBanner
+              :province="provinceOfRegion(weather.region)"
+              :region="weather.region"
+              class="wdetail__banner"
+            />
             <div class="wdetail__head">
               <div>
                 <h3>{{ weather.region }} · 7 天天气与灾害预警</h3>
@@ -235,6 +242,10 @@ onMounted(load)
   border-radius: var(--r-xl) var(--r-xl) 0 0;
   overflow-y: auto;
   padding: 18px 20px calc(16px + env(safe-area-inset-bottom, 0px));
+}
+
+.wdetail__banner {
+  margin-bottom: 12px;
 }
 
 .wdetail__head {
