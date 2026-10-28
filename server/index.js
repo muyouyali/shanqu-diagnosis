@@ -576,27 +576,6 @@ app.post('/api/auth/login', (req, res) => {
   res.json({ ok: true, token, user: store.publicUser(user) })
 })
 
-// 临时诊断：输出令牌解析每一步（定位线上环境问题后移除）
-app.get('/api/auth/debug', (req, res) => {
-  const token = extractToken(req)
-  const t = String(token)
-  const out = { tokenHead: t.slice(0, 12), tokenLen: t.length }
-  if (t.startsWith('v1.')) {
-    const parts = t.split('.')
-    out.parts = parts.length
-    out.uid = parts[1]
-    out.exp = parts[2]
-    out.expValid = Number(parts[2]) > Date.now()
-    try {
-      const user = store.getUserByToken(t)
-      out.resolved = user ? `${user.nickname}(${user.id})` : null
-    } catch (e) {
-      out.error = e.message
-    }
-  }
-  res.json(out)
-})
-
 // 当前用户信息
 app.get('/api/auth/me', (req, res) => {
   const user = currentUser(req)
