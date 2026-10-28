@@ -1,4 +1,5 @@
 import { CROPS_EXT, DISEASES_EXT, PESTICIDE_SAFETY_EXT } from './diseases-ext.js'
+import { CROPS_EXT2, DISEASES_EXT2, PESTICIDE_SAFETY_EXT2 } from './diseases-ext2.js'
 
 /**
  * 云南山地特色作物病害知识库
@@ -11,6 +12,7 @@ import { CROPS_EXT, DISEASES_EXT, PESTICIDE_SAFETY_EXT } from './diseases-ext.js
 
 export const CROPS = [
   ...CROPS_EXT,
+  ...CROPS_EXT2,
   {
     id: 'sanqi',
     name: '文山三七',
@@ -27,7 +29,8 @@ export const CROPS = [
       '荫棚栽培，透光率需控制在 8%–12%，光照过强易灼伤叶片',
       '土壤以疏松红壤为宜，pH 5.5–6.5，忌连作（轮作周期需 8 年以上）',
       '雨季（6–9月）为病害高发期，排水不畅时根腐病爆发风险骤增'
-    ]
+    ],
+    regions: ['云南']
   },
   {
     id: 'blueberry',
@@ -45,7 +48,8 @@ export const CROPS = [
       '土壤 pH 需维持 4.5–5.5，偏碱极易引发缺铁黄化',
       '根系分布浅（多在 20cm 土层内），忌大水漫灌与积水',
       '高海拔地区昼夜温差大，露水滞留时间长，灰霉病风险高'
-    ]
+    ],
+    regions: ['云南', '贵州', '四川', '重庆', '浙江', '湖北']
   },
   {
     id: 'citrus',
@@ -63,7 +67,8 @@ export const CROPS = [
       '黄龙病无有效治疗药剂，防控核心是控媒（木虱）与清除病株',
       '新梢抽发期是木虱、潜叶蛾防治关键窗口',
       '高温高湿季节溃疡病、炭疽病易流行'
-    ]
+    ],
+    regions: ['云南', '重庆', '广西', '四川', '湖南', '湖北', '广东', '福建', '江西', '浙江', '安徽', '海南', '上海']
   }
 ]
 
@@ -73,6 +78,7 @@ export const CROPS = [
  */
 export const DISEASES = [
   ...DISEASES_EXT,
+  ...DISEASES_EXT2,
   // ==================== 三七 ====================
   {
     id: 'sq-root-rot',
@@ -584,6 +590,7 @@ export const DISEASES = [
  */
 export const PESTICIDE_SAFETY = [
   ...PESTICIDE_SAFETY_EXT,
+  ...PESTICIDE_SAFETY_EXT2,
   {
     cropId: 'sanqi',
     cropName: '三七',

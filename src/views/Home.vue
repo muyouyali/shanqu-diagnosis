@@ -6,6 +6,7 @@ import AppIcon from '@/components/AppIcon.vue'
 import WeatherWidget from '@/components/WeatherWidget.vue'
 import RegionPicker from '@/components/RegionPicker.vue'
 import AlertDetailModal from '@/components/AlertDetailModal.vue'
+import { provinceOfRegion } from '@/data/regions'
 import api from '@/api'
 import type { AlertResponse } from '@/types'
 
@@ -55,6 +56,26 @@ const goDiagnose = (cropId?: string) => {
 const badges = ['多模态识图', 'RAG 检索增强', '双 Agent 协作', '流式输出', '天气工具联动']
 
 const showAlertDetail = ref(false)
+
+// ===== 作物搜索 + 本地置顶 =====
+const cropKeyword = ref('')
+const localProvince = computed(() => provinceOfRegion(store.region))
+
+const isLocalCrop = (c: { regions?: string[] }) => Boolean(c.regions?.includes(localProvince.value))
+
+const filteredCrops = computed(() => {
+  const k = cropKeyword.value.trim()
+  let list = store.crops as ({ regions?: string[] } & Record<string, any>)[]
+  if (k) {
+    list = list.filter(
+      (c) => c.name.includes(k) || (c.alias || '').includes(k) || (c.tagline || '').includes(k)
+    )
+  } else {
+    // 本地作物置顶
+    list = [...list].sort((a, b) => Number(isLocalCrop(b)) - Number(isLocalCrop(a)))
+  }
+  return list
+})
 </script>
 
 <template>
@@ -145,28 +166,51 @@ const showAlertDetail = ref(false)
       </button>
     </section>
 
-    <!-- ===== 作物快捷入口 ===== -->
+    <!-- ===== 选择作物开始诊断 ===== -->
     <section class="section">
       <div class="section__head">
-        <h2 class="section__title">选择作物开始诊断</h2>
+        <h2 class="section__title">
+          选择作物开始诊断
+          <span class="section__local">{{ localProvince }}本地作物已置顶</span>
+        </h2>
         <span class="section__more" @click="router.push('/knowledge')">
           病害图谱 <AppIcon name="arrow-right" :size="13" />
         </span>
       </div>
 
+      <!-- 作物搜索 -->
+      <div class="crop-search">
+        <AppIcon name="search" :size="14" class="crop-search__icon" />
+        <input
+          v-model="cropKeyword"
+          class="crop-search__input"
+          placeholder="搜索作物，如：三七、咖啡、石榴…"
+          maxlength="10"
+        />
+        <button v-if="cropKeyword" class="crop-search__clear" @click="cropKeyword = ''">
+          <AppIcon name="x" :size="12" />
+        </button>
+      </div>
+
       <div class="crop-grid" v-reveal="100">
         <button
-          v-for="c in store.crops"
+          v-for="c in filteredCrops"
           :key="c.id"
           class="crop-card"
+          :class="{ 'is-local': isLocalCrop(c) && !cropKeyword }"
           :style="{ '--crop-color': c.color }"
           @click="goDiagnose(c.id)"
         >
+          <span v-if="isLocalCrop(c) && !cropKeyword" class="crop-card__local">本地</span>
           <span class="crop-card__emoji">{{ c.emoji }}</span>
           <span class="crop-card__name">{{ c.name }}</span>
           <span class="crop-card__meta">{{ c.diseaseCount }} 种病害</span>
           <span class="crop-card__arrow"><AppIcon name="arrow-right" :size="14" /></span>
         </button>
+
+        <div v-if="!filteredCrops.length" class="crop-empty">
+          没有找到「{{ cropKeyword }}」相关作物，试试：三七 / 茶树 / 咖啡
+        </div>
       </div>
     </section>
 
@@ -202,7 +246,7 @@ const showAlertDetail = ref(false)
           </span>
           <span class="feature__body">
             <strong>病害图谱</strong>
-            <small>26 种云南特色作物病害，图文对照</small>
+            <small>34 种特色作物病害，覆盖 10 种山地作物，图文对照</small>
           </span>
           <AppIcon name="arrow-right" :size="16" class="feature__arrow" />
         </button>
@@ -569,6 +613,82 @@ const showAlertDetail = ref(false)
   font-size: 11px;
   font-weight: 700;
   color: var(--tone);
+}
+
+/* 作物搜索 */
+.crop-search {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 12px;
+  padding: 0 14px;
+  height: 42px;
+  border-radius: var(--r-full);
+  background: var(--c-bg-card);
+  border: 1.5px solid var(--c-line);
+  transition: border-color var(--dur-fast);
+  box-shadow: var(--sh-xs);
+}
+
+.crop-search:focus-within {
+  border-color: var(--c-primary-300);
+}
+
+.crop-search__icon {
+  color: var(--c-text-4);
+  flex-shrink: 0;
+}
+
+.crop-search__input {
+  flex: 1;
+  min-width: 0;
+  font-size: 13.5px;
+}
+
+.crop-search__clear {
+  color: var(--c-text-4);
+  display: grid;
+  place-items: center;
+  padding: 4px;
+}
+
+.section__local {
+  font-size: 10.5px;
+  font-weight: 600;
+  color: var(--c-primary-600);
+  background: var(--c-primary-50);
+  border-radius: var(--r-full);
+  padding: 2px 9px;
+  margin-left: 7px;
+  vertical-align: 2px;
+}
+
+.crop-card.is-local {
+  border-color: var(--c-primary-200);
+  background: linear-gradient(160deg, var(--c-primary-50), #fff 60%);
+}
+
+.crop-card__local {
+  position: absolute;
+  top: 9px;
+  right: 9px;
+  padding: 2px 8px;
+  border-radius: var(--r-full);
+  background: var(--c-primary-600);
+  color: #fff;
+  font-size: 9.5px;
+  font-weight: 700;
+  letter-spacing: 0.5px;
+}
+
+.crop-empty {
+  grid-column: 1 / -1;
+  padding: 26px 16px;
+  text-align: center;
+  font-size: 12.5px;
+  color: var(--c-text-4);
+  background: var(--c-bg-muted);
+  border-radius: var(--r-md);
 }
 
 /* ===== 作物卡 ===== */
