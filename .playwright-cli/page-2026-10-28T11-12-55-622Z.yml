@@ -1,0 +1,126 @@
+- generic [ref=e3]:
+  - banner [ref=e4]:
+    - generic [ref=e5]:
+      - link [ref=e6] [cursor=pointer]:
+        - /url: /
+        - strong [ref=e11]: 云岭农诊
+      - navigation [ref=e12]:
+        - link "首页" [ref=e13] [cursor=pointer]:
+          - /url: /
+        - link "智能诊断" [ref=e16] [cursor=pointer]:
+          - /url: /diagnose
+        - link "病害图谱" [ref=e20] [cursor=pointer]:
+          - /url: /knowledge
+        - link "农技问答" [ref=e24] [cursor=pointer]:
+          - /url: /qa
+        - link "我的档案" [ref=e27] [cursor=pointer]:
+          - /url: /archive
+      - link "农技站后台" [ref=e31] [cursor=pointer]:
+        - /url: /admin
+  - main [ref=e34]:
+    - generic [ref=e35]:
+      - generic [ref=e40]:
+        - generic [ref=e41]:
+          - generic [ref=e42]: 云岭农诊
+          - button "文山市" [ref=e49] [cursor=pointer]
+          - button "农技站" [ref=e55] [cursor=pointer]
+        - heading "晚上好， 给作物看看病吧" [level=1] [ref=e61]: 晚上好，给作物看看病吧
+        - paragraph [ref=e62]: 拍张照片，AI 农技员帮您判断病虫害 针对云南山地作物专门优化
+        - button "拍照诊断 上传病叶照片，30 秒出结果" [ref=e63] [cursor=pointer]:
+          - generic [ref=e68]:
+            - strong [ref=e69]: 拍照诊断
+            - generic [ref=e70]: 上传病叶照片，30 秒出结果
+        - generic [ref=e73]:
+          - generic [ref=e74]: 多模态识图
+          - generic [ref=e75]: RAG 检索增强
+          - generic [ref=e76]: 双 Agent 协作
+          - generic [ref=e77]: 流式输出
+          - generic [ref=e78]: 天气工具联动
+      - button "文山市 · 未来 7 天 病害风险 偏高 · 86 今天 小雨 15~27° 💧61% 明天 阴 14~25° 💧25% 后天 阵雨 13~23° 💧99% 第4天 晴 12~21° 💧23% 第5天 中雨 17~25° 💧97% 三七根腐病在连续降雨+高湿条件下风险显著升高，注意深沟排水 暴雨预警 · 点击查看预警详情" [ref=e81] [cursor=pointer]:
+        - generic [ref=e82]:
+          - generic [ref=e83]: 文山市 · 未来 7 天
+          - generic [ref=e88]: 病害风险 偏高 · 86
+        - generic [ref=e89]:
+          - generic [ref=e90]:
+            - generic [ref=e91]: 今天
+            - generic [ref=e92]: 小雨
+            - generic [ref=e93]: 15~27°
+            - generic [ref=e94]: 💧61%
+          - generic [ref=e95]:
+            - generic [ref=e96]: 明天
+            - generic [ref=e97]: 阴
+            - generic [ref=e98]: 14~25°
+            - generic [ref=e99]: 💧25%
+          - generic [ref=e100]:
+            - generic [ref=e101]: 后天
+            - generic [ref=e102]: 阵雨
+            - generic [ref=e103]: 13~23°
+            - generic [ref=e104]: 💧99%
+          - generic [ref=e105]:
+            - generic [ref=e106]: 第4天
+            - generic [ref=e107]: 晴
+            - generic [ref=e108]: 12~21°
+            - generic [ref=e109]: 💧23%
+          - generic [ref=e110]:
+            - generic [ref=e111]: 第5天
+            - generic [ref=e112]: 中雨
+            - generic [ref=e113]: 17~25°
+            - generic [ref=e114]: 💧97%
+        - paragraph [ref=e115]: 三七根腐病在连续降雨+高湿条件下风险显著升高，注意深沟排水
+        - generic [ref=e116]: 暴雨预警 · 点击查看预警详情
+      - generic [ref=e123]:
+        - generic [ref=e124]:
+          - generic [ref=e125]: 区域预警 · 关注
+          - generic [ref=e129]: 近 14 天
+        - heading "三七疫病占比偏高，需重点关注" [level=3] [ref=e130]
+        - paragraph [ref=e131]: 近 14 天累计诊断 104 次，其中 「三七疫病」出现 16 次，占比 15.4%。需人工复核比例 5.8%，整体可控。
+        - list [ref=e132]:
+          - listitem [ref=e133]: 针对「三七疫病」发布专项防控提示，重点覆盖石屏县
+          - listitem [ref=e135]: 雨季前完成田间排水沟疏通，降低根腐类病害风险
+      - generic [ref=e137]:
+        - generic [ref=e138]:
+          - heading "选择作物开始诊断" [level=2] [ref=e139]
+          - generic [ref=e140]: 病害图谱
+        - generic [ref=e143]:
+          - button "🍃 普洱茶树 4 种病害" [ref=e144] [cursor=pointer]:
+            - generic [ref=e145]: 🍃
+            - generic [ref=e146]: 普洱茶树
+            - generic [ref=e147]: 4 种病害
+          - button "🌱 昭通天麻 3 种病害" [ref=e151] [cursor=pointer]:
+            - generic [ref=e152]: 🌱
+            - generic [ref=e153]: 昭通天麻
+            - generic [ref=e154]: 3 种病害
+          - button "🌰 云南核桃 4 种病害" [ref=e158] [cursor=pointer]:
+            - generic [ref=e159]: 🌰
+            - generic [ref=e160]: 云南核桃
+            - generic [ref=e161]: 4 种病害
+          - button "🌿 文山三七 5 种病害" [ref=e165] [cursor=pointer]:
+            - generic [ref=e166]: 🌿
+            - generic [ref=e167]: 文山三七
+            - generic [ref=e168]: 5 种病害
+          - button "🫐 高原蓝莓 5 种病害" [ref=e172] [cursor=pointer]:
+            - generic [ref=e173]: 🫐
+            - generic [ref=e174]: 高原蓝莓
+            - generic [ref=e175]: 5 种病害
+          - button "🍊 柑橘 5 种病害" [ref=e179] [cursor=pointer]:
+            - generic [ref=e180]: 🍊
+            - generic [ref=e181]: 柑橘
+            - generic [ref=e182]: 5 种病害
+      - generic [ref=e186]:
+        - heading "常用功能" [level=2] [ref=e187]
+        - generic [ref=e188]:
+          - button "农技问答 用大白话问，AI 从植保手册里找答案" [ref=e189] [cursor=pointer]:
+            - generic [ref=e193]:
+              - strong [ref=e194]: 农技问答
+              - generic [ref=e195]: 用大白话问，AI 从植保手册里找答案
+          - button "我的种植档案 记录每次诊断，AI 帮您复盘规律" [ref=e198] [cursor=pointer]:
+            - generic [ref=e203]:
+              - strong [ref=e204]: 我的种植档案
+              - generic [ref=e205]: 记录每次诊断，AI 帮您复盘规律
+          - button "病害图谱 26 种云南特色作物病害，图文对照" [ref=e208] [cursor=pointer]:
+            - generic [ref=e213]:
+              - strong [ref=e214]: 病害图谱
+              - generic [ref=e215]: 26 种云南特色作物病害，图文对照
+      - generic [ref=e218]:
+        - generic [ref=e219]: AI 诊断仅供参考，不替代专业农技人员指导
+        - paragraph [ref=e222]: 全国高校 AI Web 开发挑战赛 · 云南赛区

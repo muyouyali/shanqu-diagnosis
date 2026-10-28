@@ -92,11 +92,86 @@ export const getWeatherForecast = (region, cropId) => {
     citrus: '溃疡病在台风/暴雨后伤口侵染风险高，风雨过后及时防护'
   }
 
+  // ===== 灾害预警生成（基于 7 天预报的规则引擎） =====
+  const warnings = []
+  const rainDays = days.filter((d) => d.rainProb >= 55)
+
+  // 暴雨/强降水
+  const heavyRain = days.find((d) => d.rainProb >= 80)
+  if (heavyRain) {
+    warnings.push({
+      type: '暴雨预警',
+      severity: 'orange',
+      day: heavyRain.day,
+      desc: `${heavyRain.day}降水概率 ${heavyRain.rainProb}%，${heavyRain.cond}，注意防范短时强降水`,
+      actions: ['提前疏通田间排水沟，防涝防渍', '低洼地块提前挖好排水口', '雨后 48 小时内巡查病害']
+    })
+  }
+
+  // 连阴雨（连续 3 天以上有雨）
+  if (rainDays.length >= 3) {
+    warnings.push({
+      type: '连阴雨预警',
+      severity: 'yellow',
+      day: `${rainDays.length} 天`,
+      desc: `未来 7 天有 ${rainDays.length} 天降水，持续高湿易诱发真菌性病害流行`,
+      actions: ['抓住雨歇窗口期完成保护性喷药', '加强通风降湿（大棚/荫棚类作物）', '已发病地块及时清除病株病叶']
+    })
+  }
+
+  // 高温
+  const hotDay = days.find((d) => d.tempHigh >= 33)
+  if (hotDay) {
+    warnings.push({
+      type: '高温预警',
+      severity: hotDay.tempHigh >= 36 ? 'orange' : 'yellow',
+      day: hotDay.day,
+      desc: `${hotDay.day}最高温 ${hotDay.tempHigh}℃，高温叠加高湿易引发日灼与土传病害`,
+      actions: ['避开正午高温时段施药，防止药害', '设施的注意通风降温', '保证水分供应，防止萎蔫']
+    })
+  }
+
+  // 低温/霜冻（高海拔山地重点）
+  const coldDay = days.find((d) => d.tempLow <= 5)
+  if (coldDay) {
+    warnings.push({
+      type: '低温冻害预警',
+      severity: coldDay.tempLow <= 2 ? 'orange' : 'blue',
+      day: coldDay.day,
+      desc: `${coldDay.day}最低温 ${coldDay.tempLow}℃，山地昼夜温差大，谨防晚霜冻`,
+      actions: ['提前熏烟或覆盖防霜', '幼嫩组织喷施防冻剂（如磷酸二氢钾）', '天麻窖、育苗棚加强保温']
+    })
+  }
+
+  // 大风（山地风口）
+  const windyDay = days.find((d) => d.cond === '阵雨' || d.cond === '中雨')
+  if (windyDay && days[0].humidity >= 80) {
+    warnings.push({
+      type: '风雹提醒',
+      severity: 'blue',
+      day: windyDay.day,
+      desc: `${windyDay.day}有${windyDay.cond}，山地风口地带强对流天气易伴随短时大风`,
+      actions: ['加固荫棚、支架与大棚膜', '靠近成熟果园注意防落果', '风雨后及时防护伤口性病害']
+    })
+  }
+
+  // 若无任何预警，给一条平稳提示
+  if (!warnings.length) {
+    warnings.push({
+      type: '无明显灾害风险',
+      severity: 'green',
+      day: '未来 7 天',
+      desc: '天气平稳，适合安排农事作业与常规预防性管理',
+      actions: ['利用晴好天气完成施肥、除草等农事', '保持常规巡田，关注叶部早期症状']
+    })
+  }
+
   return {
     region,
     updated: new Date().toISOString(),
     source: '模拟气象数据（演示环境，可替换为真实气象 API）',
     days,
+    warnings,
     riskPeak,
     riskLevel: riskPeak >= 75 ? 'high' : riskPeak >= 60 ? 'medium' : 'low',
     cropNote: cropId ? (cropRiskNote[cropId] || '关注高湿天气带来的真菌病害压力') : cropRiskNote.sanqi
