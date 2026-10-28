@@ -1,4 +1,7 @@
 import { createApp } from 'vue'
+
+// 应用启动时间戳：供 api 层判断 401 是否发生在首屏加载（静默清理，不弹提示）
+;(window as any).__ylnz_booted = Date.now()
 import { createPinia } from 'pinia'
 import App from './App.vue'
 import router from './router'

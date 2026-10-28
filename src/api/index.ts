@@ -30,11 +30,14 @@ http.interceptors.response.use(
   (r) => r,
   (err) => {
     // 会话失效（token 过期 / 服务端重启清空会话）：清除本地登录态并通知全局
+    // 页面刚加载的 2 秒内静默清理（避免打开首页就弹「已过期」打扰），之后才提示
     const url: string = err.config?.url || ''
     const isAuthReq = url.startsWith('/auth/login') || url.startsWith('/auth/register')
     if (err.response?.status === 401 && !isAuthReq) {
       localStorage.removeItem('ylnz_token')
-      window.dispatchEvent(new CustomEvent('ylnz:auth-expired'))
+      if (Date.now() - (window as any).__ylnz_booted > 2000) {
+        window.dispatchEvent(new CustomEvent('ylnz:auth-expired'))
+      }
     }
     const msg =
       err.response?.data?.error ||
