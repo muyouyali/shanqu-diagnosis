@@ -506,13 +506,17 @@ app.get('/api/qa/history', (req, res) => {
 
 /**
  * 从请求解析登录令牌
- * 兼容三种通道：Authorization 头 / x-token 自定义头 / 查询参数 token
- * 部分托管网关会剥离 Authorization 头，自定义头与查询参数可绕过
+ * 优先级：x-token 自定义头 > 查询参数 token > Authorization 头
+ * 注意：托管平台网关会向 Authorization 注入平台自身的 JWT，
+ * 因此必须优先使用自有通道，Authorization 仅作最后兼容
  */
 const extractToken = (req) => {
-  const auth = req.headers.authorization || ''
-  const bearer = auth.startsWith('Bearer ') ? auth.slice(7) : ''
-  return bearer || req.headers['x-token'] || req.query.token || ''
+  return (
+    req.headers['x-token'] ||
+    req.query.token ||
+    (req.headers.authorization || '').replace(/^Bearer\s+/i, '') ||
+    ''
+  )
 }
 
 const currentUser = (req) => store.getUserByToken(extractToken(req))
