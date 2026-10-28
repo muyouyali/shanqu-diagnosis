@@ -31,8 +31,10 @@ http.interceptors.response.use(
   (err) => {
     // 会话失效（token 过期 / 服务端重启清空会话）：清除本地登录态并通知全局
     // 页面刚加载的 2 秒内静默清理（避免打开首页就弹「已过期」打扰），之后才提示
+    // 注意：axios 的 config.url 是相对 baseURL 的路径（如 'auth/login'，不带前导斜杠），
+    // 必须用 includes 匹配，否则「密码错误」的 401 会被误判为会话过期
     const url: string = err.config?.url || ''
-    const isAuthReq = url.startsWith('/auth/login') || url.startsWith('/auth/register')
+    const isAuthReq = url.includes('auth/login') || url.includes('auth/register')
     if (err.response?.status === 401 && !isAuthReq) {
       localStorage.removeItem('ylnz_token')
       if (Date.now() - (window as any).__ylnz_booted > 2000) {

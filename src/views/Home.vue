@@ -164,7 +164,8 @@ const hueOf = (name: string) => {
             <span class="hero__name">云岭农诊</span>
           </div>
           <RegionPicker />
-          <UserMenu />
+          <!-- 移动端用户区（宽屏时隐藏：顶部导航已有同一组件，避免重复） -->
+          <UserMenu class="hero__um" />
         </div>
 
         <h1 class="hero__title">
@@ -537,6 +538,17 @@ const hueOf = (name: string) => {
   font-size: 15px;
   font-weight: 700;
   letter-spacing: 1.2px;
+}
+
+/* 宽屏隐藏 Hero 内用户区：顶栏已有同款，避免重复 */
+.hero__um {
+  display: flex;
+}
+
+@media (min-width: 960px) {
+  .hero__um {
+    display: none;
+  }
 }
 
 .hero__region {
