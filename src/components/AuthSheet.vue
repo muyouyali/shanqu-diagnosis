@@ -163,7 +163,19 @@ const fillDemo = (role: 'expert' | 'user') => {
               <small v-if="mode === 'register'" class="au__hint">6–32 位，建议字母 + 数字组合</small>
             </label>
 
-            <p v-if="error" class="au__error"><AppIcon name="alert" :size="13" />{{ error }}</p>
+            <p v-if="error" class="au__error">
+              <AppIcon name="alert" :size="13" />
+              <span>
+                {{ error }}
+                <button
+                  v-if="error.includes('密码错误') && mode === 'login'"
+                  class="au__error-link"
+                  @click="mode = 'register'"
+                >
+                  没有账号？先注册
+                </button>
+              </span>
+            </p>
 
             <button class="au__btn" :disabled="!canGo || busy" @click="go">
               <AppIcon v-if="busy" name="loader" :size="15" class="spin" />
@@ -346,13 +358,21 @@ const fillDemo = (role: 'expert' | 'user') => {
 
 .au__error {
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   gap: 6px;
   font-size: 12px;
+  line-height: 1.6;
   color: var(--c-danger);
   background: var(--c-danger-bg);
   padding: 9px 11px;
   border-radius: var(--r-sm);
+}
+
+.au__error-link {
+  color: var(--c-danger);
+  font-weight: 700;
+  text-decoration: underline;
+  margin-left: 3px;
 }
 
 .au__btn {
