@@ -156,8 +156,8 @@ const fillDemo = (role: 'expert' | 'user') => {
                   maxlength="32"
                   @keyup.enter="go"
                 />
-                <button class="au__eye" @click="showPwd = !showPwd">
-                  <AppIcon :name="showPwd ? 'volume-off' : 'volume'" :size="14" />
+                <button class="au__eye" type="button" @click="showPwd = !showPwd">
+                  <AppIcon :name="showPwd ? 'eye-off' : 'eye'" :size="15" />
                 </button>
               </div>
               <small v-if="mode === 'register'" class="au__hint">6–32 位，建议字母 + 数字组合</small>

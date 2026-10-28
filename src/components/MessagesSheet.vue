@@ -33,7 +33,10 @@ const load = async () => {
     unread.value = res.unread
     store.unread = res.unread
   } catch (e: any) {
-    store.showToast(e?.message || '消息加载失败', 'error')
+    // 登录态失效由全局统一提示并清理，这里仅在其余错误时提示
+    if (localStorage.getItem('ylnz_token')) {
+      store.showToast(e?.message || '消息加载失败', 'error')
+    }
   } finally {
     loading.value = false
   }

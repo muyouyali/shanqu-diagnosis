@@ -273,6 +273,18 @@ defineProps<{
       <path d="M18.5 2.5a2.1 2.1 0 0 1 3 3L12 15l-4 1 1-4Z" />
     </template>
 
+    <!-- 眼睛：显示密码 -->
+    <template v-else-if="name === 'eye'">
+      <path d="M2 12s3.5-6.5 10-6.5S22 12 22 12s-3.5 6.5-10 6.5S2 12 2 12Z" />
+      <circle cx="12" cy="12" r="2.8" />
+    </template>
+
+    <!-- 眼睛闭：隐藏密码 -->
+    <template v-else-if="name === 'eye-off'">
+      <path d="M2 12s3.5-6.5 10-6.5c2 0 3.7.6 5.1 1.4M22 12s-3.5 6.5-10 6.5c-2 0-3.7-.6-5.1-1.4" />
+      <line x1="4" y1="20" x2="20" y2="4" />
+    </template>
+
     <!-- 默认圆点 -->
     <template v-else>
       <circle cx="12" cy="12" r="9" />

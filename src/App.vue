@@ -1,8 +1,19 @@
 <script setup lang="ts">
+import { onMounted, onUnmounted } from 'vue'
 import { useAppStore } from '@/stores/app'
 import AppIcon from '@/components/AppIcon.vue'
 
 const store = useAppStore()
+
+/** 会话过期：统一清空登录态并提示（顶栏头像随之变回「登录」） */
+const onAuthExpired = () => {
+  store.user = null
+  store.unread = 0
+  store.showToast('登录已过期，请重新登录', 'error')
+}
+
+onMounted(() => window.addEventListener('ylnz:auth-expired', onAuthExpired))
+onUnmounted(() => window.removeEventListener('ylnz:auth-expired', onAuthExpired))
 </script>
 
 <template>

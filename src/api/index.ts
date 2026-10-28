@@ -29,6 +29,13 @@ http.interceptors.request.use((cfg) => {
 http.interceptors.response.use(
   (r) => r,
   (err) => {
+    // 会话失效（token 过期 / 服务端重启清空会话）：清除本地登录态并通知全局
+    const url: string = err.config?.url || ''
+    const isAuthReq = url.startsWith('/auth/login') || url.startsWith('/auth/register')
+    if (err.response?.status === 401 && !isAuthReq) {
+      localStorage.removeItem('ylnz_token')
+      window.dispatchEvent(new CustomEvent('ylnz:auth-expired'))
+    }
     const msg =
       err.response?.data?.error ||
       (err.code === 'ECONNABORTED' ? '请求超时，请检查网络或稍后重试' : '网络异常，请稍后重试')
