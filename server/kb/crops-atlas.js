@@ -1,0 +1,168 @@
+/**
+ * 山地作物百科：全国各省特色作物图谱
+ * - 与知识库 CROPS（含完整病害知识）配合：省份命中的知识库作物 + 本表百科作物 = 当地作物全集
+ * - 百科作物可被 AI 问答咨询，也支持用户提交新作物经审核后并入
+ */
+
+export const ATLAS = {
+  云南: [
+    { name: '昭通苹果', emoji: '🍎', desc: '高原糖心苹果，昼夜温差大、着色好、脆甜多汁', season: '9–11月', altitude: '1900–2400m' },
+    { name: '食用玫瑰', emoji: '🌹', desc: '安宁玫瑰，鲜花饼原料，花冠厚实香气浓', season: '3–5月', altitude: '1800–2200m' },
+    { name: '宣威马铃薯', emoji: '🥔', desc: '高山马铃薯，干物质高、口感沙糯', season: '7–11月', altitude: '1800–2600m' }
+  ],
+  贵州: [
+    { name: '修文猕猴桃', emoji: '🥝', desc: '贵长猕猴桃，肉细汁多、酸甜适口', season: '9–11月', altitude: '1000–1500m' },
+    { name: '威宁荞麦', emoji: '🌾', desc: '高原苦荞，黄酮含量高，健康杂粮', season: '8–10月', altitude: '2200–2500m' },
+    { name: '都匀毛尖', emoji: '🍃', desc: '中国十大名茶，卷曲披毫、鲜爽回甘', season: '3–5月采制', altitude: '1000–1600m' }
+  ],
+  四川: [
+    { name: '安岳柠檬', emoji: '🍋', desc: '中国柠檬之都，果香浓、酸度高、出汁多', season: '10–12月', altitude: '300–600m' },
+    { name: '苍溪红心猕猴桃', emoji: '🥝', desc: '红心果肉、甜度高，国家地理标志产品', season: '8–10月', altitude: '600–1200m' },
+    { name: '盐源苹果', emoji: '🍎', desc: '高原苹果，日照足、糖度高达 16°+', season: '10–11月', altitude: '2300–2700m' }
+  ],
+  重庆: [
+    { name: '奉节脐橙', emoji: '🍊', desc: '三峡库区名片，皮薄化渣、甜酸爽口', season: '11–次年2月', altitude: '200–800m' },
+    { name: '涪陵青菜头', emoji: '🥬', desc: '榨菜原料，肉质肥厚、脆嫩鲜美', season: '1–2月', altitude: '300–800m' },
+    { name: '巫山脆李', emoji: '🍑', desc: '脆甜离核，喀斯特山地特色果品', season: '6–8月', altitude: '500–1200m' }
+  ],
+  广西: [
+    { name: '横州茉莉花', emoji: '🌼', desc: '全球最大茉莉花产地，窨制花茶核心原料', season: '6–9月', altitude: '100–300m' },
+    { name: '百色芒果', emoji: '🥭', desc: '桂七芒香气浓郁，右江河谷热区水果', season: '6–8月', altitude: '150–600m' },
+    { name: '融安金桔', emoji: '🍊', desc: '滑皮金桔，皮薄蜜甜、可连皮食用', season: '11–次年1月', altitude: '300–700m' }
+  ],
+  西藏: [
+    { name: '林芝苹果', emoji: '🍎', desc: '雪域高原苹果，糖心、着色艳、耐储运', season: '10–11月', altitude: '2900–3300m' },
+    { name: '青稞', emoji: '🌾', desc: '高原主粮，糌粑与青稞酒原料，耐寒耐瘠', season: '8–9月', altitude: '3200–4200m' },
+    { name: '林芝松茸', emoji: '🍄', desc: '出口级松茸，青藏高原林下珍稀食用菌', season: '7–9月', altitude: '3000–4000m' }
+  ],
+  湖南: [
+    { name: '安化黑茶', emoji: '🍃', desc: '千年黑茶之乡，雪峰山区大叶种原料', season: '5–9月采制', altitude: '300–1000m' },
+    { name: '炎陵黄桃', emoji: '🍑', desc: '高山黄桃，果肉金黄、浓甜有香气', season: '7–8月', altitude: '600–1200m' },
+    { name: '靖州杨梅', emoji: '🫐', desc: '东魁杨梅个大汁多，武陵山区特产', season: '6月中下旬', altitude: '300–800m' }
+  ],
+  湖北: [
+    { name: '秭归脐橙', emoji: '🍊', desc: '四季有鲜橙，三峡河谷冬暖小气候', season: '全年多茬', altitude: '200–800m' },
+    { name: '恩施硒茶', emoji: '🍃', desc: '世界硒都富硒茶，玉露蒸青工艺独特', season: '3–9月采制', altitude: '600–1300m' },
+    { name: '房县黑木耳', emoji: '🍄', desc: '椴木黑木耳，朵大肉厚，山地林下栽培', season: '全年多茬', altitude: '500–1000m' }
+  ],
+  广东: [
+    { name: '增城荔枝', emoji: '🍒', desc: '挂绿荔枝故里，桂味糯米糍清甜核小', season: '6–7月', altitude: '50–300m' },
+    { name: '梅州金柚', emoji: '🍊', desc: '沙田柚类，蜜甜耐储，长寿之乡特产', season: '10–12月', altitude: '200–600m' },
+    { name: '徐闻菠萝', emoji: '🍍', desc: '中国菠萝第一县，菠萝的海连片种植', season: '3–6月', altitude: '50–200m' }
+  ],
+  福建: [
+    { name: '安溪铁观音', emoji: '🍃', desc: '乌龙茶代表，兰花香观音韵', season: '4–10月采制', altitude: '600–1200m' },
+    { name: '平和蜜柚', emoji: '🍊', desc: '琯溪蜜柚，汁多化渣，年产量全国第一', season: '9–12月', altitude: '100–600m' },
+    { name: '古田银耳', emoji: '🍄', desc: '食用菌之都，银耳产量占全国 90%', season: '全年工厂化', altitude: '500–1000m' }
+  ],
+  浙江: [
+    { name: '西湖龙井', emoji: '🍃', desc: '绿茶皇后，扁平挺秀、豆香馥郁', season: '3–4月采制', altitude: '100–800m' },
+    { name: '仙居杨梅', emoji: '🫐', desc: '东魁杨梅发源地，果大如乒乓', season: '6月', altitude: '100–600m' },
+    { name: '临安山核桃', emoji: '🌰', desc: '天目山珍，壳薄仁香，浙江名产', season: '9月', altitude: '300–900m' }
+  ],
+  江西: [
+    { name: '赣南脐橙', emoji: '🍊', desc: '世界橙都，甜酸适度、香气浓', season: '11–次年1月', altitude: '200–600m' },
+    { name: '婺源皇菊', emoji: '🌼', desc: '金丝皇菊一朵一杯，徽州山区特产', season: '10–11月', altitude: '300–800m' },
+    { name: '南丰蜜桔', emoji: '🍊', desc: '千年贡桔，皮薄易剥、蜜甜无渣', season: '10–11月', altitude: '100–400m' }
+  ],
+  陕西: [
+    { name: '洛川苹果', emoji: '🍎', desc: '黄土高原苹果优生区，硬度大耐储存', season: '10–11月', altitude: '1000–1200m' },
+    { name: '周至猕猴桃', emoji: '🥝', desc: '全球最大猕猴桃生产基地，翠香徐香', season: '9–10月', altitude: '500–800m' },
+    { name: '紫阳富硒茶', emoji: '🍃', desc: '天然富硒绿茶，陕南秦巴山区特产', season: '3–9月采制', altitude: '500–1000m' }
+  ],
+  甘肃: [
+    { name: '花牛苹果', emoji: '🍎', desc: '天水蛇果，可与美国蛇果媲美的元帅系', season: '9–10月', altitude: '1000–1600m' },
+    { name: '兰州百合', emoji: '🧄', desc: '唯一食用甜百合，色白如玉、清甜无渣', season: '10–11月', altitude: '2000–2600m' },
+    { name: '岷县当归', emoji: '🌿', desc: '中国当归之乡，岷归为道地药材上品', season: '10月采挖', altitude: '2200–2800m' }
+  ],
+  海南: [
+    { name: '三亚芒果', emoji: '🥭', desc: '反季节芒果，台农贵妃品种丰富', season: '2–6月', altitude: '50–300m' },
+    { name: '文昌椰子', emoji: '🥥', desc: '海南椰子半文昌，椰肉香椰水甜', season: '全年', altitude: '0–100m' },
+    { name: '白沙绿茶', emoji: '🍃', desc: '陨石坑茶叶，雨林生态高山绿茶', season: '全年多轮', altitude: '300–800m' }
+  ],
+  安徽: [
+    { name: '黄山毛峰', emoji: '🍃', desc: '绿茶名品，鱼叶金黄、色似象牙', season: '3–5月采制', altitude: '300–1000m' },
+    { name: '六安瓜片', emoji: '🍃', desc: '唯一无芽无梗单片叶茶，大别山特产', season: '4–5月采制', altitude: '300–900m' },
+    { name: '砀山酥梨', emoji: '🍐', desc: '百年梨都，果大核小、酥脆多汁', season: '8–9月', altitude: '50–200m' }
+  ],
+  河南: [
+    { name: '灵宝苹果', emoji: '🍎', desc: '秦岭北麓优生区，果香浓郁脆甜', season: '10–11月', altitude: '600–1100m' },
+    { name: '信阳毛尖', emoji: '🍃', desc: '绿茶尖峰，细圆光直、栗香高长', season: '4–9月采制', altitude: '300–800m' },
+    { name: '怀山药', emoji: '🌿', desc: '四大怀药之首，垆土铁棍山药为上品', season: '10–11月', altitude: '100–300m' }
+  ],
+  山西: [
+    { name: '隰县玉露香梨', emoji: '🍐', desc: '梨中极品，皮薄核小、汁多无渣', season: '9–10月', altitude: '900–1300m' },
+    { name: '大同黄花', emoji: '🌼', desc: '大同黄花菜，金针菜上品，云州区主产', season: '6–8月', altitude: '1000–1400m' },
+    { name: '运城苹果', emoji: '🍎', desc: '晋南黄土坡苹果，早熟品种优势明显', season: '8–11月', altitude: '400–800m' }
+  ],
+  山东: [
+    { name: '烟台苹果', emoji: '🍎', desc: '中国苹果发源地，红富士品质标杆', season: '10–11月', altitude: '100–600m' },
+    { name: '沾化冬枣', emoji: '🍒', desc: '皮薄肉脆、甘甜清香，晚熟枣极品', season: '9–10月', altitude: '10–100m' },
+    { name: '肥城桃', emoji: '🍑', desc: '佛桃个大香浓，中国桃乡', season: '8–9月', altitude: '100–400m' }
+  ],
+  河北: [
+    { name: '迁西板栗', emoji: '🌰', desc: '燕山板栗代表，糯香甘甜、适于炒食', season: '9–10月', altitude: '200–800m' },
+    { name: '赵州雪梨', emoji: '🍐', desc: '千年梨乡，皮薄汁丰、清肺润燥', season: '9–10月', altitude: '50–200m' },
+    { name: '赞皇大枣', emoji: '🍒', desc: '三倍体枣品种唯一，个大核小', season: '9–10月', altitude: '100–500m' }
+  ],
+  辽宁: [
+    { name: '丹东草莓', emoji: '🍓', desc: '九九草莓，果大香甜，中国草莓之都', season: '12–次年5月', altitude: '50–300m' },
+    { name: '大连樱桃', emoji: '🍒', desc: '暖棚大樱桃，果硬味浓、上市早', season: '3–6月', altitude: '50–300m' },
+    { name: '南果梨', emoji: '🍐', desc: '鞍山特产，需后熟转黄，酒香浓郁', season: '9月', altitude: '100–500m' }
+  ],
+  吉林: [
+    { name: '长白山人参', emoji: '🌿', desc: '道地人参核心产区，林下山参珍稀', season: '8–9月采挖', altitude: '500–1200m' },
+    { name: '延边苹果梨', emoji: '🍐', desc: '抗寒梨种，果肉脆嫩、酸甜带香', season: '9–10月', altitude: '200–800m' },
+    { name: '吉林黑木耳', emoji: '🍄', desc: '寒地黑木耳，胶质厚、品质优', season: '全年多茬', altitude: '300–800m' }
+  ],
+  黑龙江: [
+    { name: '五常大米', emoji: '🌾', desc: '稻花香 2 号，米香浓郁、冷饭不回生', season: '9–10月', altitude: '150–300m' },
+    { name: '东北黑木耳', emoji: '🍄', desc: '小兴安岭木耳，朵小肉厚胶质足', season: '全年多茬', altitude: '200–600m' },
+    { name: '椴树蜜', emoji: '🍯', desc: '黑蜂椴树雪蜜，结晶洁白细腻', season: '7月摇蜜', altitude: '200–800m' }
+  ],
+  江苏: [
+    { name: '阳山水蜜桃', emoji: '🍑', desc: '太湖水蜜桃代表，汁多可插吸管', season: '6–8月', altitude: '10–100m' },
+    { name: '洞庭碧螺春', emoji: '🍃', desc: '茶果间作独特花果香，卷曲如螺', season: '3–4月采制', altitude: '50–300m' },
+    { name: '泰兴银杏', emoji: '🌰', desc: '银杏之乡，果仁糯香、药食同源', season: '9–10月', altitude: '10–50m' }
+  ],
+  内蒙古: [
+    { name: '河套向日葵', emoji: '🌻', desc: '葵花籽黄金产区，籽粒饱满香脆', season: '9月', altitude: '1000–1200m' },
+    { name: '武川马铃薯', emoji: '🥔', desc: '阴山北麓马铃薯，干物质高耐储运', season: '9–10月', altitude: '1500–2000m' },
+    { name: '阴山燕麦', emoji: '🌾', desc: '高原裸燕麦，β-葡聚糖含量高', season: '8–9月', altitude: '1500–2000m' }
+  ],
+  宁夏: [
+    { name: '中宁枸杞', emoji: '🍒', desc: '中国枸杞之乡，粒大色红、甘甜少籽', season: '6–10月', altitude: '1100–1500m' },
+    { name: '贺兰山酿酒葡萄', emoji: '🍇', desc: '葡萄酒新贵产区，日照足温差大', season: '9–10月', altitude: '1000–1300m' },
+    { name: '西吉马铃薯', emoji: '🥔', desc: '六盘山马铃薯，淀粉含量高', season: '9–10月', altitude: '1700–2200m' }
+  ],
+  青海: [
+    { name: '柴达木枸杞', emoji: '🍒', desc: '高原红枸杞，颗粒大、多糖含量高', season: '7–10月', altitude: '2800–3300m' },
+    { name: '互助青稞', emoji: '🌾', desc: '高原青稞，酿青稞酒与糌粑原料', season: '8–9月', altitude: '2500–3000m' },
+    { name: '门源油菜籽', emoji: '🌻', desc: '百里油菜花海，菜籽油清香营养', season: '7月花/8月籽', altitude: '2700–3200m' }
+  ],
+  新疆: [
+    { name: '库尔勒香梨', emoji: '🍐', desc: '皮薄肉细、香甜多汁，享誉全球', season: '9–10月', altitude: '850–1000m' },
+    { name: '吐鲁番葡萄', emoji: '🍇', desc: '火洲葡萄，无核白晾制葡萄干首选', season: '7–9月', altitude: '-100–300m' },
+    { name: '哈密瓜', emoji: '🍈', desc: '甜瓜之王，网纹细密、糖度 15°+', season: '7–9月', altitude: '500–1500m' }
+  ],
+  北京: [
+    { name: '平谷大桃', emoji: '🍑', desc: '中国桃乡，白桃黄桃蟠桃全系列', season: '6–10月', altitude: '100–500m' },
+    { name: '怀柔板栗', emoji: '🌰', desc: '长城板栗，糖炒栗子上品', season: '9–10月', altitude: '200–700m' },
+    { name: '京西白蜜', emoji: '🍯', desc: '荆条花蜂蜜，门头沟林下蜂业', season: '6–8月', altitude: '300–1000m' }
+  ],
+  天津: [
+    { name: '沙窝萝卜', emoji: '🥬', desc: '赛鸭梨水果萝卜，脆甜多汁', season: '10–12月', altitude: '5–20m' },
+    { name: '茶淀玫瑰香葡萄', emoji: '🍇', desc: '玫瑰香浓郁，滨海新区名产', season: '8–9月', altitude: '5–20m' },
+    { name: '盘山柿子', emoji: '🧡', desc: '磨盘柿个大无核，蓟州山货', season: '10–11月', altitude: '100–500m' }
+  ],
+  上海: [
+    { name: '南汇水蜜桃', emoji: '🍑', desc: '玉露水蜜桃，沪郊果品名片', season: '7–8月', altitude: '5–20m' },
+    { name: '马陆葡萄', emoji: '🍇', desc: '设施葡萄标杆，巨峰阳光玫瑰', season: '7–9月', altitude: '5–20m' },
+    { name: '崇明大米', emoji: '🌾', desc: '生态岛大米，软糯清香', season: '10–11月', altitude: '5–20m' }
+  ],
+  台湾: [
+    { name: '冻顶乌龙', emoji: '🍃', desc: '中国台湾乌龙代表，烘焙香醇厚', season: '4–11月采制', altitude: '500–1200m' },
+    { name: '凤梨', emoji: '🍍', desc: '金钻凤梨无眼无刺、可直接削食', season: '全年', altitude: '50–500m' },
+    { name: '玉荷包荔枝', emoji: '🍒', desc: '早熟荔枝，果肉脆甜微酸', season: '5–6月', altitude: '50–400m' }
+  ]
+}

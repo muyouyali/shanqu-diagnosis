@@ -67,7 +67,7 @@ watch(() => store.selectedCropId, load)
     <!-- 作物切换 -->
     <div class="crop-tabs">
       <button
-        v-for="c in store.crops"
+        v-for="c in store.crops.filter((c) => c.diagnosable !== false)"
         :key="c.id"
         class="crop-tab"
         :class="{ 'is-active': store.selectedCropId === c.id }"

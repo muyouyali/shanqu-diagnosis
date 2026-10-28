@@ -6,6 +6,8 @@ import AppIcon from '@/components/AppIcon.vue'
 import WeatherWidget from '@/components/WeatherWidget.vue'
 import RegionPicker from '@/components/RegionPicker.vue'
 import AlertDetailModal from '@/components/AlertDetailModal.vue'
+import CropDetailSheet from '@/components/CropDetailSheet.vue'
+import CropSubmitSheet from '@/components/CropSubmitSheet.vue'
 import { provinceOfRegion } from '@/data/regions'
 import api from '@/api'
 import type { AlertResponse } from '@/types'
@@ -57,25 +59,90 @@ const badges = ['多模态识图', 'RAG 检索增强', '双 Agent 协作', '流�
 
 const showAlertDetail = ref(false)
 
-// ===== 作物搜索 + 本地置顶 =====
+// ===== 作物搜索 + 本地分组 =====
 const cropKeyword = ref('')
 const localProvince = computed(() => provinceOfRegion(store.region))
 
-const isLocalCrop = (c: { regions?: string[] }) => Boolean(c.regions?.includes(localProvince.value))
+/** 地区筛选：全部 / 本地 / 知识库 / 共建 */
+const cropTab = ref<'all' | 'local' | 'kb' | 'community'>('all')
+
+/** 是否为当前地区作物 */
+const isLocalCrop = (c: { regions?: string[] }) =>
+  Boolean(c.regions?.includes(localProvince.value))
+
+/** 本地知识库作物（可诊断） */
+const localKbCrops = computed(() =>
+  (store.crops as any[]).filter((c) => c.diagnosable && isLocalCrop(c))
+)
+
+/** 本地百科作物（知识库未收录，地区图谱） */
+const localAtlasCrops = computed(() =>
+  (store.crops as any[]).filter((c) => !c.diagnosable && isLocalCrop(c))
+)
+
+/** 其他地区知识库作物（跨区可用） */
+const otherCrops = computed(() =>
+  (store.crops as any[]).filter((c) => c.diagnosable && !isLocalCrop(c))
+)
 
 const filteredCrops = computed(() => {
   const k = cropKeyword.value.trim()
-  let list = store.crops as ({ regions?: string[] } & Record<string, any>)[]
+  let list = store.crops as any[]
   if (k) {
     list = list.filter(
-      (c) => c.name.includes(k) || (c.alias || '').includes(k) || (c.tagline || '').includes(k)
+      (c) => c.name.includes(k) || (c.alias || '').includes(k) || (c.desc || c.tagline || '').includes(k)
     )
-  } else {
-    // 本地作物置顶
-    list = [...list].sort((a, b) => Number(isLocalCrop(b)) - Number(isLocalCrop(a)))
   }
+  if (cropTab.value === 'local') list = list.filter(isLocalCrop)
+  if (cropTab.value === 'kb') list = list.filter((c) => c.diagnosable)
+  if (cropTab.value === 'community') list = list.filter((c) => c.source === 'community')
   return list
 })
+
+const tabCount = computed(() => ({
+  all: store.crops.length,
+  local: (store.crops as any[]).filter(isLocalCrop).length,
+  kb: (store.crops as any[]).filter((c) => c.diagnosable).length,
+  community: (store.crops as any[]).filter((c) => c.source === 'community').length
+}))
+
+const tabs = computed(() => [
+  { key: 'all', label: '全部', n: tabCount.value.all },
+  { key: 'local', label: '本地', n: tabCount.value.local },
+  { key: 'kb', label: '可诊断', n: tabCount.value.kb },
+  { key: 'community', label: '农户共建', n: tabCount.value.community }
+])
+
+// 作物详情 / 提交弹层
+const detailCrop = ref<any>(null)
+const submitOpen = ref(false)
+const submitPreset = ref('')
+
+const openCrop = (c: any) => {
+  detailCrop.value = c
+}
+
+const goDiagnoseFromDetail = (id: string) => {
+  detailCrop.value = null
+  goDiagnose(id)
+}
+
+const openSubmit = (preset = '') => {
+  submitPreset.value = preset
+  detailCrop.value = null
+  submitOpen.value = true
+}
+
+const onSubmitted = () => {
+  store.loadCrops(true).catch(() => {})
+}
+
+/** 徽标配色（按作物名生成稳定色相，避免全部同色） */
+const hueOf = (name: string) => {
+  let h = 0
+  for (let i = 0; i < name.length; i++) h = (h * 31 + name.charCodeAt(i)) % 360
+  return h
+}
 </script>
 
 <template>
@@ -166,12 +233,12 @@ const filteredCrops = computed(() => {
       </button>
     </section>
 
-    <!-- ===== 选择作物开始诊断 ===== -->
+    <!-- ===== 地区作物百科 ===== -->
     <section class="section">
       <div class="section__head">
         <h2 class="section__title">
-          选择作物开始诊断
-          <span class="section__local">{{ localProvince }}本地作物已置顶</span>
+          {{ localProvince }}·{{ store.region }} 作物图谱
+          <span class="section__local">{{ tabCount.local }} 种在地作物</span>
         </h2>
         <span class="section__more" @click="router.push('/knowledge')">
           病害图谱 <AppIcon name="arrow-right" :size="13" />
@@ -184,7 +251,7 @@ const filteredCrops = computed(() => {
         <input
           v-model="cropKeyword"
           class="crop-search__input"
-          placeholder="搜索作物，如：三七、咖啡、石榴…"
+          placeholder="搜索作物，如：三七、咖啡、石榴、苹果…"
           maxlength="10"
         />
         <button v-if="cropKeyword" class="crop-search__clear" @click="cropKeyword = ''">
@@ -192,27 +259,152 @@ const filteredCrops = computed(() => {
         </button>
       </div>
 
-      <div class="crop-grid" v-reveal="100">
+      <!-- 筛选胶囊 -->
+      <div class="crop-tabs">
         <button
-          v-for="c in filteredCrops"
-          :key="c.id"
-          class="crop-card"
-          :class="{ 'is-local': isLocalCrop(c) && !cropKeyword }"
-          :style="{ '--crop-color': c.color }"
-          @click="goDiagnose(c.id)"
+          v-for="t in tabs"
+          :key="t.key"
+          class="crop-tab"
+          :class="{ 'is-on': cropTab === t.key }"
+          @click="cropTab = t.key as any"
         >
-          <span v-if="isLocalCrop(c) && !cropKeyword" class="crop-card__local">本地</span>
-          <span class="crop-card__emoji">{{ c.emoji }}</span>
-          <span class="crop-card__name">{{ c.name }}</span>
-          <span class="crop-card__meta">{{ c.diseaseCount }} 种病害</span>
-          <span class="crop-card__arrow"><AppIcon name="arrow-right" :size="14" /></span>
+          {{ t.label }}<em v-if="t.n">{{ t.n }}</em>
         </button>
+      </div>
+
+      <!-- 分支一：无搜索时按「本地可诊断 / 本地图谱 / 其他区域」分组 -->
+      <template v-if="!cropKeyword && cropTab === 'all'">
+        <div v-if="localKbCrops.length" class="crop-group" v-reveal="60">
+          <div class="crop-group__head">
+            <span class="crop-group__dot crop-group__dot--kb" />
+            <h3>本地主栽 · 可 AI 诊断</h3>
+            <span class="crop-group__hint">已建立完整病害知识库</span>
+          </div>
+          <div class="atlas-grid">
+            <button
+              v-for="c in localKbCrops"
+              :key="c.id"
+              class="atlas-card atlas-card--kb"
+              :style="{ '--h': hueOf(c.name) }"
+              @click="openCrop(c)"
+            >
+              <span class="atlas-card__glow" />
+              <span class="atlas-card__top">
+                <span class="atlas-card__emoji">{{ c.emoji }}</span>
+                <span class="atlas-card__badge">可诊断</span>
+              </span>
+              <span class="atlas-card__name">{{ c.name }}</span>
+              <span class="atlas-card__desc">{{ c.tagline || c.desc }}</span>
+              <span class="atlas-card__foot">
+                <span class="atlas-card__chip">{{ c.diseaseCount }} 种病害</span>
+                <span v-if="c.altitude" class="atlas-card__chip atlas-card__chip--ghost">{{ c.altitude }}</span>
+              </span>
+            </button>
+          </div>
+        </div>
+
+        <div v-if="localAtlasCrops.length" class="crop-group" v-reveal="100">
+          <div class="crop-group__head">
+            <span class="crop-group__dot crop-group__dot--atlas" />
+            <h3>本地特色 · 图谱收录</h3>
+            <span class="crop-group__hint">地标农产品，病害资料持续共建</span>
+          </div>
+          <div class="atlas-grid">
+            <button
+              v-for="c in localAtlasCrops"
+              :key="c.id"
+              class="atlas-card atlas-card--atlas"
+              :style="{ '--h': hueOf(c.name) }"
+              @click="openCrop(c)"
+            >
+              <span class="atlas-card__glow" />
+              <span class="atlas-card__top">
+                <span class="atlas-card__emoji">{{ c.emoji }}</span>
+                <span v-if="c.source === 'community'" class="atlas-card__badge atlas-card__badge--cm">共建</span>
+                <span v-else class="atlas-card__badge atlas-card__badge--atlas">百科</span>
+              </span>
+              <span class="atlas-card__name">{{ c.name }}</span>
+              <span class="atlas-card__desc">{{ c.desc }}</span>
+              <span class="atlas-card__foot">
+                <span v-if="c.season" class="atlas-card__chip">上市 {{ c.season }}</span>
+                <span v-if="c.altitude" class="atlas-card__chip atlas-card__chip--ghost">{{ c.altitude }}</span>
+              </span>
+            </button>
+
+            <!-- 提交入口卡 -->
+            <button class="atlas-card atlas-card--add" @click="openSubmit()">
+              <span class="atlas-card__plus"><AppIcon name="plus" :size="18" /></span>
+              <span class="atlas-card__name">补充本地作物</span>
+              <span class="atlas-card__desc">提交家乡作物，专家审核后并入图谱</span>
+            </button>
+          </div>
+        </div>
+
+        <div v-if="otherCrops.length" class="crop-group" v-reveal="140">
+          <div class="crop-group__head">
+            <span class="crop-group__dot crop-group__dot--other" />
+            <h3>其他区域作物</h3>
+            <span class="crop-group__hint">跨区查询同样支持诊断</span>
+          </div>
+          <div class="crop-mini-grid">
+            <button v-for="c in otherCrops" :key="c.id" class="crop-mini" @click="openCrop(c)">
+              <span class="crop-mini__emoji">{{ c.emoji }}</span>
+              <span class="crop-mini__name">{{ c.name }}</span>
+              <span class="crop-mini__meta">{{ c.diseaseCount }} 病</span>
+            </button>
+          </div>
+        </div>
+      </template>
+
+      <!-- 分支二：搜索或筛选状态，平铺展示 -->
+      <template v-else>
+        <div class="atlas-grid" v-reveal="60">
+          <button
+            v-for="c in filteredCrops"
+            :key="c.id"
+            class="atlas-card"
+            :class="c.diagnosable ? 'atlas-card--kb' : 'atlas-card--atlas'"
+            :style="{ '--h': hueOf(c.name) }"
+            @click="openCrop(c)"
+          >
+            <span class="atlas-card__glow" />
+            <span class="atlas-card__top">
+              <span class="atlas-card__emoji">{{ c.emoji }}</span>
+              <span v-if="isLocalCrop(c)" class="atlas-card__badge">本地</span>
+              <span v-else class="atlas-card__badge atlas-card__badge--atlas">
+                {{ c.source === 'community' ? '共建' : c.diagnosable ? '可诊断' : '百科' }}
+              </span>
+            </span>
+            <span class="atlas-card__name">{{ c.name }}</span>
+            <span class="atlas-card__desc">{{ c.desc || c.tagline }}</span>
+            <span class="atlas-card__foot">
+              <span v-if="c.diagnosable" class="atlas-card__chip">{{ c.diseaseCount }} 种病害</span>
+              <span v-else-if="c.season" class="atlas-card__chip">上市 {{ c.season }}</span>
+              <span v-if="c.altitude" class="atlas-card__chip atlas-card__chip--ghost">{{ c.altitude }}</span>
+            </span>
+          </button>
+        </div>
 
         <div v-if="!filteredCrops.length" class="crop-empty">
-          没有找到「{{ cropKeyword }}」相关作物，试试：三七 / 茶树 / 咖啡
+          没有找到「{{ cropKeyword }}」相关作物
+          <button class="crop-empty__btn" @click="openSubmit(cropKeyword)">提交它到作物图谱</button>
         </div>
-      </div>
+      </template>
     </section>
+
+    <!-- 作物详情 & 提交 -->
+    <CropDetailSheet
+      :crop="detailCrop"
+      @close="detailCrop = null"
+      @diagnose="goDiagnoseFromDetail"
+      @contribute="openSubmit(detailCrop?.name || '')"
+    />
+    <CropSubmitSheet
+      :open="submitOpen"
+      :preset-name="submitPreset"
+      @close="submitOpen = false"
+      @submitted="onSubmitted"
+    />
 
     <!-- ===== 功能入口 ===== -->
     <section class="section">
@@ -663,22 +855,326 @@ const filteredCrops = computed(() => {
   vertical-align: 2px;
 }
 
-.crop-card.is-local {
-  border-color: var(--c-primary-200);
-  background: linear-gradient(160deg, var(--c-primary-50), #fff 60%);
+/* ===== 筛选胶囊 ===== */
+.crop-tabs {
+  display: flex;
+  gap: 7px;
+  margin-bottom: 14px;
+  overflow-x: auto;
+  scrollbar-width: none;
 }
 
-.crop-card__local {
+.crop-tabs::-webkit-scrollbar {
+  display: none;
+}
+
+.crop-tab {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex-shrink: 0;
+  height: 31px;
+  padding: 0 13px;
+  border-radius: var(--r-full);
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--c-text-3);
+  background: var(--c-bg-card);
+  border: 1.5px solid var(--c-line-soft);
+  transition: all var(--dur-fast) var(--ease-out);
+}
+
+.crop-tab em {
+  font-style: normal;
+  font-size: 10px;
+  font-weight: 700;
+  padding: 1px 5px;
+  border-radius: var(--r-full);
+  background: var(--c-bg-muted);
+  color: var(--c-text-4);
+}
+
+.crop-tab.is-on {
+  background: var(--c-primary-600);
+  border-color: var(--c-primary-600);
+  color: #fff;
+  box-shadow: 0 5px 14px rgba(var(--c-primary-rgb), 0.24);
+}
+
+.crop-tab.is-on em {
+  background: rgba(255, 255, 255, 0.22);
+  color: #fff;
+}
+
+/* ===== 作物分组 ===== */
+.crop-group {
+  margin-bottom: 18px;
+}
+
+.crop-group__head {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  margin-bottom: 9px;
+}
+
+.crop-group__head h3 {
+  font-size: 13px;
+  font-weight: 800;
+  color: var(--c-text-1);
+}
+
+.crop-group__dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.crop-group__dot--kb {
+  background: var(--c-primary-500);
+  box-shadow: 0 0 0 3px var(--c-primary-50);
+}
+
+.crop-group__dot--atlas {
+  background: var(--c-accent-500);
+  box-shadow: 0 0 0 3px var(--c-accent-100);
+}
+
+.crop-group__dot--other {
+  background: var(--c-text-4);
+  box-shadow: 0 0 0 3px var(--c-bg-muted);
+}
+
+.crop-group__hint {
+  font-size: 10.5px;
+  color: var(--c-text-4);
+  margin-left: auto;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* ===== 百科式作物卡 ===== */
+.atlas-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.atlas-card {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 13px 13px 12px;
+  border-radius: 16px;
+  text-align: left;
+  overflow: hidden;
+  background: var(--c-bg-card);
+  border: 1px solid var(--c-line-soft);
+  box-shadow: var(--sh-xs);
+  transition: transform var(--dur-base) var(--ease-out), box-shadow var(--dur-base) var(--ease-out),
+    border-color var(--dur-base);
+}
+
+.atlas-card__glow {
   position: absolute;
-  top: 9px;
-  right: 9px;
-  padding: 2px 8px;
+  inset: auto -30% 40% auto;
+  width: 96px;
+  height: 96px;
+  border-radius: 50%;
+  background: hsl(var(--h, 150) 58% 62%);
+  opacity: 0.1;
+  filter: blur(2px);
+  pointer-events: none;
+}
+
+.atlas-card--kb {
+  border-color: hsl(var(--h, 150) 45% 86%);
+  background: linear-gradient(158deg, hsl(var(--h, 150) 52% 97%), #fff 58%);
+}
+
+.atlas-card--atlas {
+  border-style: dashed;
+  border-color: var(--c-line);
+}
+
+.atlas-card:active {
+  transform: scale(0.975);
+}
+
+.atlas-card:hover {
+  transform: translateY(-2px);
+  box-shadow: var(--sh-md);
+}
+
+.atlas-card__top {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  margin-bottom: 2px;
+}
+
+.atlas-card__emoji {
+  width: 36px;
+  height: 36px;
+  border-radius: 12px;
+  display: grid;
+  place-items: center;
+  font-size: 20px;
+  background: hsl(var(--h, 150) 55% 95%);
+  box-shadow: inset 0 0 0 1px hsl(var(--h, 150) 45% 90%);
+}
+
+.atlas-card__badge {
+  font-size: 9px;
+  font-weight: 800;
+  letter-spacing: 0.3px;
+  padding: 2px 7px;
   border-radius: var(--r-full);
   background: var(--c-primary-600);
   color: #fff;
+  white-space: nowrap;
+}
+
+.atlas-card__badge--atlas {
+  background: var(--c-accent-100);
+  color: var(--c-accent-600);
+}
+
+.atlas-card__badge--cm {
+  background: #e8f2ff;
+  color: #2563eb;
+}
+
+.atlas-card__name {
+  font-size: 14px;
+  font-weight: 800;
+  color: var(--c-text-1);
+  letter-spacing: 0.2px;
+  line-height: 1.3;
+}
+
+.atlas-card__desc {
+  font-size: 11px;
+  line-height: 1.55;
+  color: var(--c-text-3);
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  min-height: 34px;
+}
+
+.atlas-card__foot {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-top: auto;
+  padding-top: 4px;
+}
+
+.atlas-card__chip {
   font-size: 9.5px;
   font-weight: 700;
-  letter-spacing: 0.5px;
+  padding: 2px 7px;
+  border-radius: var(--r-full);
+  background: hsl(var(--h, 150) 55% 94%);
+  color: hsl(var(--h, 150) 42% 32%);
+  white-space: nowrap;
+}
+
+.atlas-card__chip--ghost {
+  background: var(--c-bg-muted);
+  color: var(--c-text-4);
+  font-weight: 600;
+}
+
+/* 提交入口卡 */
+.atlas-card--add {
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  border: 1.5px dashed var(--c-primary-300);
+  background: repeating-linear-gradient(
+    135deg,
+    var(--c-primary-50),
+    var(--c-primary-50) 8px,
+    #fff 8px,
+    #fff 16px
+  );
+  gap: 6px;
+}
+
+.atlas-card--add .atlas-card__name {
+  color: var(--c-primary-700);
+  font-size: 13px;
+}
+
+.atlas-card--add .atlas-card__desc {
+  font-size: 10.5px;
+  color: var(--c-primary-600);
+  opacity: 0.75;
+  min-height: 0;
+  -webkit-line-clamp: 2;
+}
+
+.atlas-card__plus {
+  width: 38px;
+  height: 38px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  background: #fff;
+  color: var(--c-primary-600);
+  box-shadow: 0 4px 12px rgba(var(--c-primary-rgb), 0.16);
+}
+
+/* 其他区域：紧凑胶囊 */
+.crop-mini-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 7px;
+}
+
+.crop-mini {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding: 9px 11px;
+  border-radius: 12px;
+  background: var(--c-bg-card);
+  border: 1px solid var(--c-line-soft);
+  text-align: left;
+  transition: all var(--dur-fast);
+}
+
+.crop-mini:active {
+  transform: scale(0.98);
+  background: var(--c-bg-muted);
+}
+
+.crop-mini__emoji {
+  font-size: 16px;
+  line-height: 1;
+}
+
+.crop-mini__name {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--c-text-1);
+  flex: 1;
+  min-width: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.crop-mini__meta {
+  font-size: 9.5px;
+  color: var(--c-text-4);
+  flex-shrink: 0;
 }
 
 .crop-empty {
@@ -689,70 +1185,19 @@ const filteredCrops = computed(() => {
   color: var(--c-text-4);
   background: var(--c-bg-muted);
   border-radius: var(--r-md);
-}
-
-/* ===== 作物卡 ===== */
-.crop-grid {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
   gap: 10px;
 }
 
-.crop-card {
-  position: relative;
-  display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-  gap: 2px;
-  padding: 15px 14px 14px;
-  border-radius: var(--r-md);
-  background: var(--c-bg-card);
-  border: 1px solid var(--c-line-soft);
-  box-shadow: var(--sh-xs);
-  transition: all var(--dur-base) var(--ease-out);
-  overflow: hidden;
-  text-align: left;
-}
-
-.crop-card::before {
-  content: '';
-  position: absolute;
-  right: -24px;
-  top: -24px;
-  width: 72px;
-  height: 72px;
-  border-radius: 50%;
-  background: var(--crop-color);
-  opacity: 0.07;
-}
-
-.crop-card:active {
-  transform: scale(0.975);
-}
-
-.crop-card__emoji {
-  font-size: 25px;
-  line-height: 1;
-  margin-bottom: 6px;
-}
-
-.crop-card__name {
-  font-size: 14.5px;
+.crop-empty__btn {
+  padding: 7px 16px;
+  border-radius: var(--r-full);
+  font-size: 12px;
   font-weight: 700;
-  color: var(--c-text-1);
-}
-
-.crop-card__meta {
-  font-size: 11px;
-  color: var(--c-text-4);
-}
-
-.crop-card__arrow {
-  position: absolute;
-  right: 12px;
-  bottom: 14px;
-  color: var(--crop-color);
-  opacity: 0.55;
+  color: #fff;
+  background: var(--c-primary-600);
 }
 
 /* ===== 功能列表 ===== */
@@ -874,12 +1319,15 @@ const filteredCrops = computed(() => {
     padding: 0 32px;
     margin-top: 30px;
   }
-  .crop-grid {
-    grid-template-columns: repeat(3, 1fr);
+  .atlas-grid {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
     gap: 14px;
   }
-  .crop-card {
-    padding: 20px 18px 18px;
+  .crop-mini-grid {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+  .atlas-card {
+    padding: 18px 16px 16px;
   }
   .feature-list {
     display: grid;

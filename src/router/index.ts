@@ -61,6 +61,12 @@ const routes = [
         meta: { title: '诊断记录' }
       },
       {
+        path: 'crops',
+        name: 'admin-crop',
+        component: () => import('@/views/admin/CropReview.vue'),
+        meta: { title: '作物审核' }
+      },
+      {
         path: 'alert',
         name: 'admin-alert',
         component: () => import('@/views/admin/Alert.vue'),

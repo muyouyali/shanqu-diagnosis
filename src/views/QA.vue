@@ -129,7 +129,7 @@ const speak = (text: string) => {
     <!-- 作物切换 -->
     <div class="crop-switch">
       <button
-        v-for="c in store.crops"
+        v-for="c in store.crops.filter((c) => c.diagnosable !== false)"
         :key="c.id"
         class="crop-switch__item"
         :class="{ 'is-active': store.selectedCropId === c.id }"

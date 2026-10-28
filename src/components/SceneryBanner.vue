@@ -29,7 +29,7 @@ const THEME_LABEL: Record<Theme, string> = {
   plain: '水乡田园 · 平原农区'
 }
 
-const props = defineProps<{ province: string; region?: string }>()
+const props = defineProps<{ province: string; region?: string; compact?: boolean; height?: number }>()
 
 const theme = computed<Theme>(() => PROVINCE_THEME[props.province] || 'terraced')
 const label = computed(() => THEME_LABEL[theme.value])
@@ -48,7 +48,7 @@ const p = computed(() => P[theme.value])
 </script>
 
 <template>
-  <div class="scenery">
+  <div class="scenery" :class="{ 'scenery--compact': compact }">
     <svg viewBox="0 0 600 180" preserveAspectRatio="xMidYMid slice" class="scenery__svg">
       <!-- 天空 -->
       <defs>
@@ -165,6 +165,15 @@ const p = computed(() => P[theme.value])
   width: 100%;
   height: 120px;
   display: block;
+}
+
+.scenery--compact .scenery__svg {
+  height: 150px;
+}
+
+.scenery--compact {
+  border-radius: 0;
+  box-shadow: none;
 }
 
 .scenery__overlay {

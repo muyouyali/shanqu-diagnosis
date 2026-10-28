@@ -2,6 +2,7 @@ import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
 import api from '@/api'
 import type { Crop, RecordItem, DiagnoseResponse } from '@/types'
+import { provinceOfRegion } from '@/data/regions'
 
 const USER_KEY = 'ylnz_user_id'
 
@@ -21,18 +22,28 @@ export const useAppStore = defineStore('app', () => {
   const setRegion = (r: string) => {
     region.value = r
     localStorage.setItem('ylnz_region', r)
+    // 地区变更后作物列表也要跟着换（不同地区不同作物）
+    loadCrops(true).catch(() => {})
   }
 
   // ---------- 作物 ----------
   const crops = ref<Crop[]>([])
   const cropsLoaded = ref(false)
+  const cropsProvince = ref('')
   const selectedCropId = ref<string>(localStorage.getItem('ylnz_crop') || 'sanqi')
 
   const selectedCrop = computed(() => crops.value.find((c) => c.id === selectedCropId.value) || null)
 
-  const loadCrops = async () => {
-    if (cropsLoaded.value) return crops.value
-    crops.value = await api.crops()
+  /**
+   * 加载作物（按当前地区返回：知识库本地作物 + 地区百科作物 + 其余知识库作物）
+   * 地区变化时需重新拉取，保证「选哪个地方就显示哪个地方的作物」
+   */
+  const loadCrops = async (force = false) => {
+    const province = provinceOfRegion(region.value)
+    if (cropsLoaded.value && !force && cropsProvince.value === province) return crops.value
+    const res = await api.crops({ region: region.value })
+    crops.value = res.items
+    cropsProvince.value = province
     cropsLoaded.value = true
     return crops.value
   }

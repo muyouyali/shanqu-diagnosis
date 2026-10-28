@@ -1,6 +1,7 @@
 import axios from 'axios'
 import type {
   Crop,
+  CropSubmission,
   Disease,
   DiagnoseResponse,
   QAResponse,
@@ -31,7 +32,29 @@ http.interceptors.response.use(
 export const api = {
   health: () => http.get<HealthResponse>('/health').then((r) => r.data),
 
-  crops: () => http.get<{ items: Crop[] }>('/crops').then((r) => r.data.items),
+  crops: (params?: { region?: string; keyword?: string }) =>
+    http
+      .get<{ items: Crop[]; province: string; localCount: number }>('/crops', { params })
+      .then((r) => r.data),
+
+  /** 提交新作物（进入专家审核队列） */
+  submitCrop: (payload: Partial<CropSubmission> & { name: string; province: string; desc: string }) =>
+    http.post<{ ok: boolean; item: CropSubmission }>('/crops/submit', payload).then((r) => r.data),
+
+  /** 作物提交列表（后台审核用） */
+  cropSubmissions: (params?: { status?: string; province?: string }) =>
+    http
+      .get<{ total: number; items: CropSubmission[] }>('/crops/submissions', { params })
+      .then((r) => r.data),
+
+  /** 审核作物提交 */
+  reviewCropSubmission: (id: number, payload: { status: string; note?: string }) =>
+    http
+      .patch<{ ok: boolean; item: CropSubmission }>(`/crops/submissions/${id}`, payload)
+      .then((r) => r.data),
+
+  deleteCropSubmission: (id: number) =>
+    http.delete(`/crops/submissions/${id}`).then((r) => r.data),
 
   diseases: (cropId: string) =>
     http.get<{ items: Disease[] }>(`/crops/${cropId}/diseases`).then((r) => r.data.items),

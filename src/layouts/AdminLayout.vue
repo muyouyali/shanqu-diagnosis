@@ -12,6 +12,7 @@ const collapsed = ref(false)
 const menu = [
   { name: 'admin-dashboard', path: '/admin', label: '数据看板', icon: 'chart' },
   { name: 'admin-records', path: '/admin/records', label: '诊断记录', icon: 'list' },
+  { name: 'admin-crop', path: '/admin/crops', label: '作物审核', icon: 'leaf' },
   { name: 'admin-alert', path: '/admin/alert', label: '区域预警', icon: 'alert' },
   { name: 'admin-system', path: '/admin/system', label: '系统状态', icon: 'cpu' }
 ]

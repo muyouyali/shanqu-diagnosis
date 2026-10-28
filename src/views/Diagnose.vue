@@ -173,7 +173,7 @@ const submit = async () => {
         <label class="block__label">1 · 选择作物</label>
         <div class="crop-chips">
           <button
-            v-for="c in store.crops"
+            v-for="c in store.crops.filter((c) => c.diagnosable !== false)"
             :key="c.id"
             class="crop-chip"
             :class="{ 'is-active': store.selectedCropId === c.id }"

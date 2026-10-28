@@ -11,6 +11,8 @@ import fs from 'node:fs'
 import { fileURLToPath } from 'node:url'
 
 import { CROPS, DISEASES, PESTICIDE_SAFETY, getDiseasesByCrop } from './kb/diseases.js'
+import { ATLAS } from './kb/crops-atlas.js'
+import { provinceOf } from './kb/regions.js'
 import { retrieve, buildContext, getDocCount } from './kb/retriever.js'
 import { isConfigured, getConfigSummary, metrics, chatText, chatStream, chatRaw, extractJSON } from './ai/adapter.js'
 import { getWeatherForecast, executeTool, runWithTools, TOOL_DEFINITIONS } from './ai/tools.js'
@@ -68,12 +70,134 @@ app.get('/api/health', (req, res) => {
 })
 
 app.get('/api/crops', (req, res) => {
-  res.json({
-    items: CROPS.map((c) => ({
-      ...c,
-      diseaseCount: getDiseasesByCrop(c.id).length
+  const region = req.query.region || ''
+  const province = provinceOf(region) || ''
+  const keyword = String(req.query.keyword || '').trim()
+
+  // 本地知识库作物：带完整病害知识，可走诊断流程
+  const kbCrops = CROPS.map((c) => ({
+    id: c.id,
+    name: c.name,
+    alias: c.alias || '',
+    emoji: c.emoji || '🌱',
+    tagline: c.tagline || '',
+    desc: c.desc || c.tagline || '',
+    season: c.season || '',
+    altitude: c.altitude || '',
+    regions: c.regions || [],
+    diseaseCount: getDiseasesByCrop(c.id).length,
+    diagnosable: true,
+    source: 'kb'
+  }))
+
+  const localKb = province ? kbCrops.filter((c) => c.regions.includes(province)) : []
+  const otherKb = kbCrops.filter((c) => !localKb.includes(c))
+
+  // 地区百科作物：知识库未收录，仅作资料展示与问答参考
+  const atlasRaw = [
+    ...(ATLAS[province] || []).map((a) => ({ ...a, source: 'atlas' })),
+    ...store.listApprovedCrops(province).map((s) => ({
+      name: s.name,
+      alias: s.alias || '',
+      emoji: s.emoji || '🌱',
+      desc: s.desc || '',
+      season: s.season || '',
+      altitude: s.altitude || '',
+      pests: s.pests || '',
+      source: 'community'
     }))
+  ]
+  const atlasCrops = atlasRaw
+    .filter((a) => !kbCrops.some((c) => c.name === a.name || (c.alias || '').includes(a.name)))
+    .map((a, i) => ({
+      id: `atlas-${province}-${i}`,
+      name: a.name,
+      alias: a.alias || '',
+      emoji: a.emoji,
+      tagline: a.desc,
+      desc: a.desc,
+      season: a.season,
+      altitude: a.altitude,
+      pests: a.pests || '',
+      regions: province ? [province] : [],
+      diseaseCount: 0,
+      diagnosable: false,
+      source: a.source
+    }))
+
+  let items = [...localKb, ...atlasCrops, ...otherKb]
+  // 传了 keyword 视为跨区搜索：本地结果置顶，其余保持知识库优先
+  if (keyword) {
+    const k = keyword
+    const hit = items.filter(
+      (c) => c.name.includes(k) || (c.alias || '').includes(k) || (c.desc || '').includes(k)
+    )
+    const isLocal = (c) => localKb.includes(c) || atlasCrops.includes(c)
+    items = [...hit.filter(isLocal), ...hit.filter((c) => !isLocal(c))]
+  }
+  res.json({
+    province,
+    region,
+    localCount: localKb.length + atlasCrops.length,
+    items
   })
+})
+
+// 用户提交新作物
+app.post('/api/crops/submit', (req, res) => {
+  const { name, alias, province, altitude, season, emoji, desc, pests, submitter, contact } =
+    req.body || {}
+
+  if (!name || String(name).trim().length < 2) {
+    return res.status(400).json({ error: '请填写作物名称（至少 2 个字）' })
+  }
+  if (!province) return res.status(400).json({ error: '请选择所属省份' })
+  if (!desc || String(desc).trim().length < 8) {
+    return res.status(400).json({ error: '请补充至少 8 个字的作物简介' })
+  }
+
+  const dup =
+    CROPS.some((c) => c.name === name) ||
+    (ATLAS[province] || []).some((c) => c.name === name) ||
+    store.listCropSubmissions().items.some((s) => s.name === name && s.status !== 'rejected')
+  if (dup) return res.status(409).json({ error: '该作物已在库中或正在审核中' })
+
+  const item = store.createCropSubmission({
+    name: String(name).trim(),
+    alias: String(alias || '').trim(),
+    province,
+    altitude: String(altitude || '').trim() || '待补充',
+    season: String(season || '').trim() || '待补充',
+    emoji: emoji || '🌱',
+    desc: String(desc).trim(),
+    pests: String(pests || '').trim(),
+    submitter: String(submitter || '匿名用户').trim(),
+    contact: String(contact || '').trim()
+  })
+  res.json({ ok: true, item })
+})
+
+// 提交列表（供后台审核）
+app.get('/api/crops/submissions', (req, res) => {
+  const { status, province } = req.query
+  res.json(store.listCropSubmissions({ status, province }))
+})
+
+// 审核通过 / 驳回
+app.patch('/api/crops/submissions/:id', (req, res) => {
+  const { status, note } = req.body || {}
+  if (!['approved', 'rejected', 'pending'].includes(status)) {
+    return res.status(400).json({ error: '审核状态不合法' })
+  }
+  const item = store.reviewCropSubmission(req.params.id, { status, note })
+  if (!item) return res.status(404).json({ error: '提交记录不存在' })
+  res.json({ ok: true, item })
+})
+
+app.delete('/api/crops/submissions/:id', (req, res) => {
+  const ok = store.deleteCropSubmission(req.params.id)
+  if (!ok) return res.status(404).json({ error: '提交记录不存在' })
+  res.json({ ok: true })
 })
 
 app.get('/api/crops/:cropId/diseases', (req, res) => {

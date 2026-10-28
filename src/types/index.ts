@@ -11,6 +11,36 @@ export interface Crop {
   intro: string
   keyPoints: string[]
   diseaseCount?: number
+  /** 适种省份（用于本地作物识别） */
+  regions?: string[]
+  /** 是否可走完整诊断流程（知识库作物为 true） */
+  diagnosable?: boolean
+  /** 数据来源：知识库 / 地区百科 / 用户共建 */
+  source?: 'kb' | 'atlas' | 'community'
+  /** 百科作物的简介 */
+  desc?: string
+  /** 百科作物的主要病虫害（文字描述） */
+  pests?: string
+}
+
+/** 用户提交的新作物（专家审核流） */
+export interface CropSubmission {
+  id: number
+  name: string
+  alias: string
+  province: string
+  altitude: string
+  season: string
+  emoji: string
+  desc: string
+  pests: string
+  submitter: string
+  contact: string
+  status: 'pending' | 'approved' | 'rejected'
+  note: string
+  reviewer: string
+  createdAt: string
+  reviewedAt: string
 }
 
 export interface Disease {
