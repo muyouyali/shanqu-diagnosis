@@ -22,7 +22,15 @@ const http = axios.create({
 
 http.interceptors.request.use((cfg) => {
   const token = localStorage.getItem('ylnz_token')
-  if (token) cfg.headers.Authorization = `Bearer ${token}`
+  if (token) {
+    // 双通道携带：部分托管网关会剥离 Authorization 头，自定义头兜底
+    cfg.headers.Authorization = `Bearer ${token}`
+    cfg.headers['X-Token'] = token
+    // GET 请求再以查询参数兜底
+    if ((cfg.method || 'get').toLowerCase() === 'get') {
+      cfg.params = { ...(cfg.params || {}), token }
+    }
+  }
   return cfg
 })
 

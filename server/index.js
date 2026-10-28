@@ -504,12 +504,18 @@ app.get('/api/qa/history', (req, res) => {
 
 // ==================== 用户认证 ====================
 
-/** 从请求头解析当前登录用户 */
-const currentUser = (req) => {
+/**
+ * 从请求解析登录令牌
+ * 兼容三种通道：Authorization 头 / x-token 自定义头 / 查询参数 token
+ * 部分托管网关会剥离 Authorization 头，自定义头与查询参数可绕过
+ */
+const extractToken = (req) => {
   const auth = req.headers.authorization || ''
-  const token = auth.startsWith('Bearer ') ? auth.slice(7) : ''
-  return store.getUserByToken(token)
+  const bearer = auth.startsWith('Bearer ') ? auth.slice(7) : ''
+  return bearer || req.headers['x-token'] || req.query.token || ''
 }
+
+const currentUser = (req) => store.getUserByToken(extractToken(req))
 
 const requireUser = (req, res) => {
   const user = currentUser(req)
@@ -595,9 +601,7 @@ app.put('/api/auth/profile', (req, res) => {
 
 // 退出登录
 app.post('/api/auth/logout', (req, res) => {
-  const auth = req.headers.authorization || ''
-  const token = auth.startsWith('Bearer ') ? auth.slice(7) : ''
-  store.destroySession(token)
+  store.destroySession(extractToken(req))
   res.json({ ok: true })
 })
 
