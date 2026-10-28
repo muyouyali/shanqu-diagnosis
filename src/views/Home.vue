@@ -5,6 +5,7 @@ import { useAppStore } from '@/stores/app'
 import AppIcon from '@/components/AppIcon.vue'
 import WeatherWidget from '@/components/WeatherWidget.vue'
 import RegionPicker from '@/components/RegionPicker.vue'
+import AlertDetailModal from '@/components/AlertDetailModal.vue'
 import api from '@/api'
 import type { AlertResponse } from '@/types'
 
@@ -52,6 +53,8 @@ const goDiagnose = (cropId?: string) => {
 }
 
 const badges = ['多模态识图', 'RAG 检索增强', '双 Agent 协作', '流式输出', '天气工具联动']
+
+const showAlertDetail = ref(false)
 </script>
 
 <template>
@@ -114,10 +117,11 @@ const badges = ['多模态识图', 'RAG 检索增强', '双 Agent 协作', '流�
         <div class="sk-line" style="width: 80%"></div>
       </div>
 
-      <div
+      <button
         v-else-if="alert"
         class="alert-card"
         :style="{ '--tone': alertTone.color, '--tone-bg': alertTone.bg }"
+        @click="showAlertDetail = true"
       >
         <div class="alert-card__head">
           <span class="alert-card__tag">
@@ -133,7 +137,12 @@ const badges = ['多模态识图', 'RAG 检索增强', '双 Agent 协作', '流�
             <span class="alert-card__dot"></span>{{ a }}
           </li>
         </ul>
-      </div>
+        <span class="alert-card__more">
+          <AppIcon name="chart" :size="11" />
+          查看高发病害排行与详情
+          <AppIcon name="arrow-right" :size="11" />
+        </span>
+      </button>
     </section>
 
     <!-- ===== 作物快捷入口 ===== -->
@@ -201,6 +210,8 @@ const badges = ['多模态识图', 'RAG 检索增强', '双 Agent 协作', '流�
     </section>
 
     <!-- ===== 底部说明 ===== -->
+    <AlertDetailModal :show="showAlertDetail" :alert="alert" @close="showAlertDetail = false" />
+
     <footer class="foot">
       <div class="foot__badge">
         <AppIcon name="shield" :size="13" />
@@ -536,6 +547,19 @@ const badges = ['多模态识图', 'RAG 检索增强', '双 Agent 协作', '流�
   background: var(--tone);
   flex-shrink: 0;
   margin-top: 6px;
+}
+
+.alert-card__more {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  margin-top: 10px;
+  padding-top: 9px;
+  border-top: 1px dashed var(--c-line);
+  width: 100%;
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--tone);
 }
 
 /* ===== 作物卡 ===== */
