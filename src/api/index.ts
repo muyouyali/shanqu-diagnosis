@@ -140,7 +140,7 @@ export const api = {
   qa: (payload: { question: string; cropId?: string; history?: { role: string; content: string }[] }) =>
     http.post<QAResponse>('/qa', payload).then((r) => r.data),
 
-  records: (params?: { cropId?: string; limit?: number; offset?: number; userId?: string }) =>
+  records: (params?: { cropId?: string; limit?: number; offset?: number; userId?: string; days?: number }) =>
     http.get<{ total: number; items: RecordItem[] }>('/records', { params }).then((r) => r.data),
 
   record: (id: number | string) => http.get<RecordItem>(`/records/${id}`).then((r) => r.data),

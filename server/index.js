@@ -873,13 +873,14 @@ app.get('/api/retrieve', (req, res) => {
 // ==================== 诊断记录 ====================
 
 app.get('/api/records', (req, res) => {
-  const { cropId, limit, offset, userId } = req.query
+  const { cropId, limit, offset, userId, days } = req.query
   res.json(
     store.listRecords({
       cropId: cropId || undefined,
       limit: Number(limit) || 30,
       offset: Number(offset) || 0,
-      userId: userId || undefined
+      userId: userId || undefined,
+      days: Number(days) || undefined
     })
   )
 })

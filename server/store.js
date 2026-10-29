@@ -552,11 +552,15 @@ export const createRecord = (record) => {
   return full
 }
 
-export const listRecords = ({ cropId, limit = 50, offset = 0, userId } = {}) => {
+export const listRecords = ({ cropId, limit = 50, offset = 0, userId, days } = {}) => {
   const db = load()
   let list = db.records
   if (cropId) list = list.filter((r) => r.cropId === cropId)
   if (userId) list = list.filter((r) => r.userId === userId)
+  if (days) {
+    const since = Date.now() - days * 24 * 3600 * 1000
+    list = list.filter((r) => new Date(r.createdAt).getTime() >= since)
+  }
   return {
     total: list.length,
     items: list.slice(offset, offset + limit)
@@ -602,7 +606,7 @@ export const getStats = ({ days = 30, cropId } = {}) => {
   const topDiseases = [...diseaseCount.entries()]
     .map(([name, count]) => ({ name, count }))
     .sort((a, b) => b.count - a.count)
-    .slice(0, 8)
+    .slice(0, 20)
 
   // 按天趋势
   const dayMap = new Map()

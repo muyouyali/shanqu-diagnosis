@@ -4,11 +4,73 @@ import * as echarts from 'echarts'
 import { useAppStore } from '@/stores/app'
 import AppIcon from '@/components/AppIcon.vue'
 import api from '@/api'
-import type { StatsResponse } from '@/types'
+import type { StatsResponse, RecordItem } from '@/types'
+import { useRouter } from 'vue-router'
 
 const store = useAppStore()
+const router = useRouter()
 const stats = ref<StatsResponse | null>(null)
 const loading = ref(true)
+
+/* ---------- KPI 详情弹层 ---------- */
+type DetailKey = 'total' | 'confidence' | 'escalated' | 'disease' | null
+const detailKey = ref<DetailKey>(null)
+const detailRecords = ref<RecordItem[]>([])
+const detailLoading = ref(false)
+
+const detailTitle = computed(
+  () =>
+    ({
+      total: '累计诊断明细',
+      confidence: '平均置信度详情',
+      escalated: '转人工复核明细',
+      disease: '涉及病害明细'
+    })[detailKey.value as string] || ''
+)
+
+/** 与 KPI 同口径：服务端已按「近 N 天 + 作物」过滤，total 即累计诊断数 */
+const detailServerTotal = ref(0)
+
+const detailTotal = computed(() => detailServerTotal.value || detailRecords.value.length)
+
+const escalatedRecords = computed(() => detailRecords.value.filter((r) => r.gate?.needHumanReview))
+
+const topConf = (r: RecordItem) => r.diagnosis?.results?.[0]?.confidence || 0
+const topLevel = (r: RecordItem) => r.diagnosis?.results?.[0]?.confidenceLevel || 'low'
+
+const confSorted = computed(() =>
+  [...detailRecords.value].sort((a, b) => topConf(b) - topConf(a))
+)
+
+const confLabel = (c: number) => (c >= 0.75 ? '高' : c >= 0.5 ? '中' : '低')
+
+const openDetail = async (key: Exclude<DetailKey, null>) => {
+  detailKey.value = key
+  detailLoading.value = true
+  try {
+    // 与 /api/stats 完全相同的口径：近 days 天 + 当前作物筛选
+    const res = await api.records({
+      cropId: cropFilter.value || undefined,
+      days: days.value,
+      limit: 300
+    })
+    detailRecords.value = res.items || []
+    detailServerTotal.value = res.total || 0
+  } catch (e: any) {
+    store.showToast(e?.message || '明细加载失败', 'error')
+  } finally {
+    detailLoading.value = false
+  }
+}
+
+const gotoResult = (id: number) => router.push(`/result/${id}`)
+
+const fmtTime = (iso: string) => {
+  const d = new Date(iso)
+  return `${d.getMonth() + 1}/${d.getDate()} ${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`
+}
+
+const cropName = (id: string) => store.crops.find((c) => c.id === id)?.name || id
 const days = ref(30)
 const cropFilter = ref('')
 
@@ -24,6 +86,7 @@ const kpis = computed(() => {
   const s = stats.value
   return [
     {
+      key: 'total' as const,
       label: '累计诊断',
       value: s.total,
       unit: '次',
@@ -32,6 +95,7 @@ const kpis = computed(() => {
       hint: `近 ${s.days} 天`
     },
     {
+      key: 'confidence' as const,
       label: '平均置信度',
       value: Math.round(s.avgConfidence * 100),
       unit: '%',
@@ -40,6 +104,7 @@ const kpis = computed(() => {
       hint: '诊断把握程度'
     },
     {
+      key: 'escalated' as const,
       label: '转人工复核',
       value: s.escalated,
       unit: '例',
@@ -48,12 +113,13 @@ const kpis = computed(() => {
       hint: `占比 ${s.escalatedRate}%`
     },
     {
+      key: 'disease' as const,
       label: '涉及病害',
       value: s.topDiseases.length,
       unit: '类',
       icon: 'leaf',
       tone: 'purple',
-      hint: '高发病害统计'
+      hint: `近 ${s.days} 天全部病害`
     }
   ]
 })
@@ -307,7 +373,14 @@ watch([days, cropFilter], load)
 
     <!-- KPI -->
     <div class="kpi-grid">
-      <div v-for="k in kpis" :key="k.label" class="kpi" :class="`kpi--${k.tone}`">
+      <div
+        v-for="k in kpis"
+        :key="k.label"
+        class="kpi"
+        :class="`kpi--${k.tone}`"
+        :title="`点击查看${k.label}明细`"
+        @click="openDetail(k.key)"
+      >
         <div class="kpi__icon">
           <AppIcon :name="k.icon" :size="19" />
         </div>
@@ -335,7 +408,7 @@ watch([days, cropFilter], load)
       <div class="chart-card">
         <div class="chart-card__head">
           <h3 class="chart-card__title">高发病害排行</h3>
-          <span class="chart-card__sub">Top {{ stats?.topDiseases.length || 0 }}</span>
+          <span class="chart-card__sub">按出现次数排序（共 {{ stats?.topDiseases.length || 0 }} 类）</span>
         </div>
         <div ref="diseaseRef" class="chart-card__body" style="height: 240px"></div>
       </div>
@@ -402,6 +475,109 @@ watch([days, cropFilter], load)
         </div>
       </div>
     </div>
+
+    <!-- KPI 详情弹层 -->
+    <Teleport to="body">
+      <Transition name="fade">
+        <div v-if="detailKey" class="kd-mask" @click.self="detailKey = null">
+          <div class="kd">
+            <header class="kd__head">
+              <div>
+                <h3>{{ detailTitle }}</h3>
+                <p v-if="detailKey !== 'disease'">
+                  统计口径：近 {{ days }} 天<template v-if="cropFilter"> · {{ cropName(cropFilter) }}</template>
+                  · 共 {{ detailTotal }} 条{{ detailTotal > detailRecords.length ? `（列表显示最近 ${detailRecords.length} 条）` : '' }}
+                </p>
+                <p v-else>近 {{ days }} 天各类病害出现次数与占比</p>
+                <p class="kd__tip">点击任意一条可打开完整诊断报告</p>
+              </div>
+              <button class="kd__close" @click="detailKey = null"><AppIcon name="x" :size="15" /></button>
+            </header>
+
+            <div class="kd__body">
+              <div v-if="detailLoading" class="kd__empty">正在加载明细…</div>
+
+              <!-- 累计诊断 -->
+              <template v-else-if="detailKey === 'total'">
+                <div v-if="!detailRecords.length" class="kd__empty">暂无诊断记录</div>
+                <button v-for="r in detailRecords" :key="r.id" class="kd-item" @click="gotoResult(r.id)">
+                  <span class="kd-item__crop">{{ r.cropName || r.cropId }}</span>
+                  <span class="kd-item__disease">{{ r.diagnosis?.results?.[0]?.name || '—' }}</span>
+                  <span class="kd-item__conf" :class="topLevel(r)">
+                    {{ Math.round(topConf(r) * 100) }}%
+                  </span>
+                  <span v-if="r.gate?.needHumanReview" class="kd-item__esc">转人工</span>
+                  <small class="kd-item__time">{{ fmtTime(r.createdAt) }}</small>
+                  <AppIcon name="arrow-right" :size="13" class="kd-item__arrow" />
+                </button>
+              </template>
+
+              <!-- 平均置信度 -->
+              <template v-else-if="detailKey === 'confidence'">
+                <div class="kd-buckets" v-if="stats">
+                  <div class="kd-bucket">
+                    <b>{{ stats.confBuckets.high }}</b>
+                    <span>高置信 ≥75%</span>
+                  </div>
+                  <div class="kd-bucket">
+                    <b>{{ stats.confBuckets.medium }}</b>
+                    <span>中置信 50–75%</span>
+                  </div>
+                  <div class="kd-bucket">
+                    <b>{{ stats.confBuckets.low }}</b>
+                    <span>低置信 &lt;50%（自动转人工）</span>
+                  </div>
+                </div>
+                <div v-if="!confSorted.length" class="kd__empty">暂无记录</div>
+                <button v-for="r in confSorted" :key="r.id" class="kd-item" @click="gotoResult(r.id)">
+                  <span class="kd-item__crop">{{ r.cropName || r.cropId }}</span>
+                  <span class="kd-item__disease">{{ r.diagnosis?.results?.[0]?.name || '—' }}</span>
+                  <span class="kd-item__conf" :class="topLevel(r)">
+                    {{ Math.round(topConf(r) * 100) }}% {{ confLabel(topConf(r)) }}
+                  </span>
+                  <small class="kd-item__time">{{ fmtTime(r.createdAt) }}</small>
+                  <AppIcon name="arrow-right" :size="13" class="kd-item__arrow" />
+                </button>
+              </template>
+
+              <!-- 转人工 -->
+              <template v-else-if="detailKey === 'escalated'">
+                <div v-if="!escalatedRecords.length" class="kd__empty">
+                  近 {{ stats?.days || days }} 天没有需要人工复核的病例，说明模型置信度整体健康
+                </div>
+                <button v-for="r in escalatedRecords" :key="r.id" class="kd-item" @click="gotoResult(r.id)">
+                  <span class="kd-item__crop">{{ r.cropName || r.cropId }}</span>
+                  <span class="kd-item__disease">{{ r.diagnosis?.results?.[0]?.name || '—' }}</span>
+                  <span class="kd-item__conf is-low">
+                    置信 {{ Math.round(topConf(r) * 100) }}%
+                  </span>
+                  <span class="kd-item__esc">转人工</span>
+                  <small class="kd-item__time">{{ fmtTime(r.createdAt) }}</small>
+                  <AppIcon name="arrow-right" :size="13" class="kd-item__arrow" />
+                </button>
+              </template>
+
+              <!-- 涉及病害 -->
+              <template v-else>
+                <div v-if="!stats?.topDiseases.length" class="kd__empty">暂无病害数据</div>
+                <div v-for="(d, i) in stats?.topDiseases || []" :key="d.name" class="kd-disease">
+                  <span class="kd-disease__idx">{{ i + 1 }}</span>
+                  <span class="kd-disease__name">{{ d.name }}</span>
+                  <div class="kd-disease__bar">
+                    <i
+                      :style="{
+                        width: `${(d.count / (stats?.topDiseases[0]?.count || 1)) * 100}%`
+                      }"
+                    />
+                  </div>
+                  <b class="kd-disease__count">{{ d.count }} 次</b>
+                </div>
+              </template>
+            </div>
+          </div>
+        </div>
+      </Transition>
+    </Teleport>
   </div>
 </template>
 
@@ -696,5 +872,262 @@ watch([days, cropFilter], load)
     grid-template-columns: 1fr;
     gap: 14px;
   }
+}
+</style>
+
+<style scoped>
+/* KPI 可点击 */
+.kpi {
+  cursor: pointer;
+  transition: transform var(--dur-fast), box-shadow var(--dur-fast);
+}
+
+.kpi:hover {
+  transform: translateY(-2px);
+  box-shadow: var(--sh-md, 0 8px 20px rgba(0, 0, 0, 0.08));
+}
+
+/* KPI 详情弹层 */
+.kd-mask {
+  position: fixed;
+  inset: 0;
+  z-index: 150;
+  background: rgba(14, 30, 22, 0.5);
+  backdrop-filter: blur(3px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+}
+
+.kd {
+  width: min(680px, 100%);
+  max-height: 84vh;
+  display: flex;
+  flex-direction: column;
+  background: var(--c-bg-page);
+  border-radius: var(--r-xl);
+  overflow: hidden;
+}
+
+.kd__head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  padding: 16px 18px;
+  background: var(--c-bg-card);
+  border-bottom: 1px solid var(--c-line-soft);
+}
+
+.kd__head h3 {
+  font-size: 16px;
+  font-weight: 800;
+  color: var(--c-text-1);
+}
+
+.kd__head p {
+  margin-top: 3px;
+  font-size: 11px;
+  color: var(--c-text-4);
+}
+
+.kd__close {
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  background: var(--c-bg-muted);
+  color: var(--c-text-3);
+  flex-shrink: 0;
+}
+
+.kd__body {
+  flex: 1;
+  overflow-y: auto;
+  padding: 12px 14px 18px;
+}
+
+.kd__empty {
+  padding: 44px 16px;
+  text-align: center;
+  color: var(--c-text-4);
+  font-size: 12.5px;
+  line-height: 1.8;
+}
+
+.kd__tip {
+  margin-top: 3px;
+  font-size: 11.5px;
+  color: var(--c-text-4);
+}
+
+/* 记录行 */
+.kd-item {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  width: 100%;
+  padding: 11px 13px;
+  margin-bottom: 7px;
+  border-radius: 11px;
+  background: var(--c-bg-card);
+  border: 1px solid var(--c-line-soft);
+  text-align: left;
+  transition: all var(--dur-fast);
+}
+
+.kd-item:hover {
+  border-color: var(--c-primary-300);
+  background: var(--c-primary-50);
+}
+
+.kd-item__crop {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--c-text-1);
+  flex-shrink: 0;
+  min-width: 56px;
+}
+
+.kd-item__disease {
+  flex: 1;
+  min-width: 0;
+  font-size: 12.5px;
+  color: var(--c-text-2);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.kd-item__conf {
+  font-size: 10.5px;
+  font-weight: 800;
+  padding: 2px 8px;
+  border-radius: var(--r-full);
+  flex-shrink: 0;
+}
+
+.kd-item__conf.high {
+  background: #e6f6ec;
+  color: #15803d;
+}
+
+.kd-item__conf.medium {
+  background: #fef9c3;
+  color: #a16207;
+}
+
+.kd-item__conf.low,
+.kd-item__conf.is-low {
+  background: #fee2e2;
+  color: #b91c1c;
+}
+
+.kd-item__esc {
+  font-size: 9px;
+  font-weight: 800;
+  color: #fff;
+  background: var(--c-danger);
+  padding: 2px 7px;
+  border-radius: var(--r-full);
+  flex-shrink: 0;
+}
+
+.kd-item__time {
+  font-size: 10px;
+  color: var(--c-text-4);
+  flex-shrink: 0;
+}
+
+.kd-item__arrow {
+  color: var(--c-text-4);
+  flex-shrink: 0;
+}
+
+/* 置信度分桶 */
+.kd-buckets {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 9px;
+  margin-bottom: 12px;
+}
+
+.kd-bucket {
+  padding: 13px;
+  border-radius: 12px;
+  background: var(--c-bg-card);
+  border: 1px solid var(--c-line-soft);
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  text-align: center;
+}
+
+.kd-bucket b {
+  font-size: 20px;
+  color: var(--c-text-1);
+}
+
+.kd-bucket span {
+  font-size: 10.5px;
+  color: var(--c-text-4);
+}
+
+/* 病害明细 */
+.kd-disease {
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  padding: 11px 13px;
+  margin-bottom: 7px;
+  border-radius: 11px;
+  background: var(--c-bg-card);
+  border: 1px solid var(--c-line-soft);
+}
+
+.kd-disease__idx {
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  font-size: 11px;
+  font-weight: 800;
+  background: var(--c-primary-50);
+  color: var(--c-primary-700);
+  flex-shrink: 0;
+}
+
+.kd-disease__name {
+  width: 150px;
+  font-size: 12.5px;
+  font-weight: 700;
+  color: var(--c-text-1);
+  flex-shrink: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.kd-disease__bar {
+  flex: 1;
+  height: 8px;
+  border-radius: var(--r-full);
+  background: var(--c-bg-muted);
+  overflow: hidden;
+}
+
+.kd-disease__bar i {
+  display: block;
+  height: 100%;
+  border-radius: var(--r-full);
+  background: linear-gradient(90deg, var(--c-primary-500), var(--c-primary-600));
+}
+
+.kd-disease__count {
+  font-size: 12px;
+  color: var(--c-text-1);
+  flex-shrink: 0;
 }
 </style>
