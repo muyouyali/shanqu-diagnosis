@@ -85,18 +85,44 @@ const fmt = (iso: string) => {
 
 <template>
   <div class="cp">
-    <header class="cp__head">
-      <div>
+    <!-- 页头横幅 -->
+    <header class="cp__hero">
+      <div class="cp__hero-text">
         <h1>作物共建审核</h1>
         <p>农户提交的地方作物经核验后并入对应省份的作物图谱，供全站用户检索</p>
       </div>
-      <div class="cp__stat">
-        <div><strong>{{ counts.pending || 0 }}</strong><small>待审核</small></div>
-        <div><strong>{{ counts.approved || 0 }}</strong><small>已通过</small></div>
-        <div><strong>{{ counts.rejected || 0 }}</strong><small>已驳回</small></div>
+      <div class="cp__hero-badge">
+        <AppIcon name="leaf" :size="22" />
+        <span>共建图谱</span>
       </div>
     </header>
 
+    <!-- 统计卡 -->
+    <div class="cp__stats">
+      <div class="stat stat--amber" :class="{ 'is-dim': status !== 'pending' }" @click="switchStatus('pending')">
+        <span class="stat__icon"><AppIcon name="clock" :size="16" /></span>
+        <div>
+          <strong>{{ counts.pending || 0 }}</strong>
+          <small>待审核</small>
+        </div>
+      </div>
+      <div class="stat stat--green" :class="{ 'is-dim': status !== 'approved' }" @click="switchStatus('approved')">
+        <span class="stat__icon"><AppIcon name="check-circle" :size="16" /></span>
+        <div>
+          <strong>{{ counts.approved || 0 }}</strong>
+          <small>已通过</small>
+        </div>
+      </div>
+      <div class="stat stat--red" :class="{ 'is-dim': status !== 'rejected' }" @click="switchStatus('rejected')">
+        <span class="stat__icon"><AppIcon name="x" :size="16" /></span>
+        <div>
+          <strong>{{ counts.rejected || 0 }}</strong>
+          <small>已驳回</small>
+        </div>
+      </div>
+    </div>
+
+    <!-- 筛选签 -->
     <div class="cp__tabs">
       <button
         v-for="t in STATUS_TABS"
@@ -106,14 +132,16 @@ const fmt = (iso: string) => {
         @click="switchStatus(t.key)"
       >
         {{ t.label }}
+        <i v-if="t.key !== 'all' && counts[t.key]">{{ counts[t.key] }}</i>
       </button>
     </div>
 
     <div v-if="loading" class="cp__empty">正在加载…</div>
 
     <div v-else-if="!list.length" class="cp__empty">
-      <AppIcon name="check-circle" :size="26" />
+      <span class="cp__empty-icon">🌾</span>
       <p>当前没有{{ STATUS_TABS.find((t) => t.key === status)?.label }}的提交</p>
+      <small>农户在「我的档案 · 作物共建」提交后，会出现在这里等待核验</small>
     </div>
 
     <div v-else class="cp__list">
@@ -217,61 +245,131 @@ const fmt = (iso: string) => {
   max-width: 1080px;
 }
 
-.cp__head {
+/* 页头横幅 */
+.cp__hero {
+  position: relative;
+  overflow: hidden;
   display: flex;
-  align-items: flex-start;
+  align-items: center;
   justify-content: space-between;
   gap: 20px;
-  margin-bottom: 20px;
-  flex-wrap: wrap;
+  padding: 24px 26px;
+  border-radius: var(--r-lg, 16px);
+  background:
+    radial-gradient(120% 180% at 100% 0%, rgba(255, 255, 255, 0.14), transparent 55%),
+    linear-gradient(120deg, #14532d, #1a7f45 70%, #2f9e5f);
+  color: #fff;
+  margin-bottom: 14px;
 }
 
-.cp__head h1 {
+.cp__hero::after {
+  content: '';
+  position: absolute;
+  right: -40px;
+  bottom: -70px;
+  width: 220px;
+  height: 220px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.08);
+  pointer-events: none;
+}
+
+.cp__hero h1 {
   font-size: 21px;
   font-weight: 800;
-  color: var(--c-text-1);
+  letter-spacing: 0.5px;
 }
 
-.cp__head p {
+.cp__hero p {
   font-size: 12.5px;
-  color: var(--c-text-4);
-  margin-top: 5px;
-  max-width: 520px;
+  opacity: 0.85;
+  margin-top: 6px;
+  max-width: 560px;
+  line-height: 1.6;
 }
 
-.cp__stat {
+.cp__hero-badge {
+  flex-shrink: 0;
   display: flex;
-  gap: 22px;
-  padding: 12px 20px;
+  align-items: center;
+  gap: 8px;
+  padding: 9px 16px;
+  border-radius: var(--r-full);
+  background: rgba(255, 255, 255, 0.16);
+  backdrop-filter: blur(4px);
+  font-size: 12.5px;
+  font-weight: 700;
+}
+
+/* 统计卡 */
+.cp__stats {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 12px;
+  margin-bottom: 16px;
+}
+
+.stat {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 14px 18px;
   border-radius: var(--r-md);
   background: var(--c-bg-card);
   border: 1px solid var(--c-line-soft);
+  box-shadow: var(--sh-xs);
+  cursor: pointer;
+  transition: transform var(--dur-fast), box-shadow var(--dur-fast), opacity var(--dur-fast);
 }
 
-.cp__stat div {
-  text-align: center;
+.stat:hover {
+  transform: translateY(-2px);
+  box-shadow: var(--sh-sm);
 }
 
-.cp__stat strong {
+.stat.is-dim {
+  opacity: 0.55;
+}
+
+.stat__icon {
+  width: 38px;
+  height: 38px;
+  border-radius: 12px;
+  display: grid;
+  place-items: center;
+  flex-shrink: 0;
+}
+
+.stat--amber .stat__icon { background: #fdf3e7; color: #b57a17; }
+.stat--green .stat__icon { background: #e8f7ee; color: #1a7f45; }
+.stat--red .stat__icon { background: #fdeceb; color: #b4342f; }
+
+.stat strong {
   display: block;
-  font-size: 19px;
+  font-size: 20px;
   font-weight: 800;
-  color: var(--c-primary-700);
+  line-height: 1.15;
+  color: var(--c-text-1);
 }
 
-.cp__stat small {
-  font-size: 10.5px;
+.stat small {
+  font-size: 11px;
   color: var(--c-text-4);
 }
 
+/* 筛选签 */
 .cp__tabs {
   display: flex;
   gap: 8px;
   margin-bottom: 16px;
+  flex-wrap: wrap;
 }
 
 .cp__tab {
-  padding: 7px 16px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 7px 15px;
   border-radius: var(--r-full);
   font-size: 12.5px;
   font-weight: 700;
@@ -281,14 +379,29 @@ const fmt = (iso: string) => {
   transition: all var(--dur-fast);
 }
 
+.cp__tab i {
+  font-style: normal;
+  font-size: 10.5px;
+  font-weight: 800;
+  padding: 1px 7px;
+  border-radius: var(--r-full);
+  background: var(--c-bg-muted);
+  color: var(--c-text-3);
+}
+
 .cp__tab.is-on {
   background: var(--c-primary-600);
   border-color: var(--c-primary-600);
   color: #fff;
 }
 
+.cp__tab.is-on i {
+  background: rgba(255, 255, 255, 0.22);
+  color: #fff;
+}
+
 .cp__empty {
-  padding: 60px 20px;
+  padding: 56px 20px;
   text-align: center;
   color: var(--c-text-4);
   font-size: 13px;
@@ -298,13 +411,41 @@ const fmt = (iso: string) => {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 10px;
+  gap: 8px;
+}
+
+.cp__empty-icon {
+  font-size: 40px;
+  line-height: 1;
+  margin-bottom: 2px;
+}
+
+.cp__empty p {
+  font-weight: 700;
+  color: var(--c-text-2);
+}
+
+.cp__empty small {
+  font-size: 11.5px;
+  color: var(--c-text-4);
 }
 
 .cp__list {
-  display: flex;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(420px, 1fr));
+  gap: 12px;
+}
+
+.cp__list .sub-card {
   flex-direction: column;
-  gap: 10px;
+  gap: 12px;
+}
+
+.cp__list .sub-card__ops {
+  width: 100%;
+  justify-content: flex-end;
+  border-top: 1px dashed var(--c-line-soft);
+  padding-top: 10px;
 }
 
 .sub-card {
@@ -625,8 +766,32 @@ const fmt = (iso: string) => {
   .cp {
     padding: 16px 14px 50px;
   }
+  .cp__hero {
+    flex-direction: column;
+    align-items: flex-start;
+    padding: 20px 18px;
+  }
+  .cp__stats {
+    grid-template-columns: repeat(3, 1fr);
+    gap: 8px;
+  }
+  .stat {
+    padding: 10px 12px;
+    gap: 8px;
+  }
+  .stat__icon {
+    width: 32px;
+    height: 32px;
+    border-radius: 10px;
+  }
+  .stat strong {
+    font-size: 16px;
+  }
   .sub-card {
     flex-wrap: wrap;
+  }
+  .cp__list {
+    grid-template-columns: 1fr;
   }
   .sub-card__ops {
     width: 100%;
