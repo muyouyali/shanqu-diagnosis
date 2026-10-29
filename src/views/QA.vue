@@ -2,6 +2,7 @@
 import { ref, onMounted, nextTick, computed } from 'vue'
 import { useAppStore } from '@/stores/app'
 import AppIcon from '@/components/AppIcon.vue'
+import PageHero from '@/components/PageHero.vue'
 import api from '@/api'
 
 interface Msg {
@@ -147,6 +148,22 @@ const toggleKb = (m: any) => {
       </div>
     </header>
 
+    <!-- 宽屏横幅 -->
+    <PageHero
+      wide-only
+      emoji="💬"
+      title="农技问答"
+      desc="基于本地植保知识库，大白话提问 · 有据可查 · 流式呈现"
+      badge="RAG 检索增强"
+      badge-icon="book"
+    >
+      <div class="hero-tips">
+        <span>✓ 引用来源可展开</span>
+        <span>✓ 支持语音朗读</span>
+        <span>✓ 一键转问专家</span>
+      </div>
+    </PageHero>
+
     <!-- 作物切换 -->
     <div class="crop-switch">
       <button
@@ -272,6 +289,23 @@ const toggleKb = (m: any) => {
   flex-direction: column;
   background: var(--c-bg-page);
   height: 100dvh;
+}
+
+.hero-tips {
+  display: flex;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
+.hero-tips span {
+  font-size: 12.5px;
+  font-weight: 600;
+  color: rgba(255, 255, 255, 0.92);
+  background: rgba(255, 255, 255, 0.14);
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  padding: 6px 13px;
+  border-radius: 999px;
+  backdrop-filter: blur(4px);
 }
 
 .page-head {
@@ -743,6 +777,13 @@ const toggleKb = (m: any) => {
   }
   .msg--assistant .msg__bubble {
     font-size: 14.5px;
+  }
+}
+
+/* 宽屏隐藏移动端顶栏（由横幅替代） */
+@media (min-width: 960px) {
+  .page-head.page-head {
+    display: none;
   }
 }
 </style>

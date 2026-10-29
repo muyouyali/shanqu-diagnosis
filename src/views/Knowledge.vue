@@ -3,6 +3,7 @@ import { ref, computed, onMounted, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { useAppStore } from '@/stores/app'
 import AppIcon from '@/components/AppIcon.vue'
+import PageHero from '@/components/PageHero.vue'
 import api from '@/api'
 import type { Disease } from '@/types'
 
@@ -50,10 +51,13 @@ watch(() => store.selectedCropId, load)
 
 <template>
   <div class="kb">
-    <header class="kb__head">
-      <h1 class="kb__title">病害图谱</h1>
-      <p class="kb__sub">云南特色作物常见病虫害 · 图文对照速查</p>
-    </header>
+    <PageHero
+      emoji="🌿"
+      title="病害图谱"
+      desc="云南特色作物常见病虫害 · 图文对照速查，选作物或直接搜索症状"
+      badge="图文速查"
+      badge-icon="book"
+    />
 
     <!-- 搜索 -->
     <div class="search">
@@ -502,7 +506,6 @@ watch(() => store.selectedCropId, load)
 
 <style scoped>
 @media (min-width: 960px) {
-  .kb__head,
   .search,
   .crop-tabs,
   .crop-intro {

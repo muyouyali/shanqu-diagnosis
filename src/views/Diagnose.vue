@@ -3,6 +3,7 @@ import { ref, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { useAppStore } from '@/stores/app'
 import AppIcon from '@/components/AppIcon.vue'
+import PageHero from '@/components/PageHero.vue'
 import api from '@/api'
 
 const router = useRouter()
@@ -166,6 +167,22 @@ const submit = async () => {
         <AppIcon name="refresh" :size="17" />
       </button>
     </header>
+
+    <!-- 宽屏横幅 -->
+    <PageHero
+      wide-only
+      emoji="📷"
+      title="智能诊断"
+      desc="拍张照片、描述症状，AI 双 Agent 联合分析，约 30 秒出具诊断报告"
+      badge="多 Agent 协作"
+      badge-icon="sparkle"
+    >
+      <div class="hero-tips">
+        <span>✓ 症状越清晰越准</span>
+        <span>✓ 支持叶片 / 果实 / 根部</span>
+        <span>✓ 低置信度自动转专家复核</span>
+      </div>
+    </PageHero>
 
     <div class="scroll-area">
       <!-- 作物选择 -->
@@ -381,6 +398,23 @@ const submit = async () => {
 }
 
 /* 顶栏 */
+.hero-tips {
+  display: flex;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
+.hero-tips span {
+  font-size: 12.5px;
+  font-weight: 600;
+  color: rgba(255, 255, 255, 0.92);
+  background: rgba(255, 255, 255, 0.14);
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  padding: 6px 13px;
+  border-radius: 999px;
+  backdrop-filter: blur(4px);
+}
+
 .page-head {
   height: 54px;
   display: flex;
@@ -913,6 +947,13 @@ const submit = async () => {
     max-width: var(--max-w-mobile);
     margin: 0 auto;
     width: 100%;
+  }
+}
+
+/* 宽屏隐藏移动端顶栏（由横幅替代） */
+@media (min-width: 960px) {
+  .page-head.page-head {
+    display: none;
   }
 }
 </style>

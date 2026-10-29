@@ -3,6 +3,7 @@ import { ref, onMounted, computed } from 'vue'
 import { useRouter } from 'vue-router'
 import { useAppStore } from '@/stores/app'
 import AppIcon from '@/components/AppIcon.vue'
+import PageHero from '@/components/PageHero.vue'
 import api from '@/api'
 import type { RecordItem, ReviewResponse } from '@/types'
 
@@ -79,10 +80,13 @@ const fmtDate = (iso: string) => {
 
 <template>
   <div class="archive">
-    <header class="head">
-      <h1 class="head__title">我的种植档案</h1>
-      <p class="head__sub">记录每次诊断，AI 帮您找出病害规律</p>
-    </header>
+    <PageHero
+      emoji="🗂️"
+      title="我的种植档案"
+      desc="记录每次诊断，AI 复盘帮您找出病害规律、给出下季种植建议"
+      :badge="`${records.length} 条诊断记录`"
+      badge-icon="camera"
+    />
 
     <!-- 统计概览 -->
     <div class="overview">
