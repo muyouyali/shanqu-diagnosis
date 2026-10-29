@@ -78,8 +78,10 @@ const fmt = (iso: string) => {
           <header class="msg__head">
             <div>
               <h2>消息中心</h2>
-              <p v-if="unread > 0">{{ unread }} 条未读</p>
-              <p v-else>全部消息已读</p>
+              <p v-if="unread > 0" class="msg__unread-tip">
+                <i class="msg__unread-dot" />{{ unread }} 条未读消息，点击查看详情
+              </p>
+              <p v-else class="msg__read-tip">全部消息已读</p>
             </div>
             <button class="msg__close" @click="emit('close')"><AppIcon name="x" :size="15" /></button>
           </header>
@@ -107,11 +109,18 @@ const fmt = (iso: string) => {
                 <span class="msg-item__body">
                   <span class="msg-item__top">
                     <strong>{{ m.title }}</strong>
+                    <span class="msg-item__state" :class="m.read ? 'is-read' : 'is-unread-tag'">
+                      {{ m.read ? '已读' : '未读' }}
+                    </span>
                     <small>{{ fmt(m.createdAt) }}</small>
                   </span>
                   <span class="msg-item__from">{{ m.fromName }} · {{ tone(m).label }}</span>
                   <span class="msg-item__preview" v-if="expanded !== m.id">{{ m.content.slice(0, 44) }}…</span>
                   <span class="msg-item__content" v-else>{{ m.content }}</span>
+                  <span class="msg-item__detail-btn">
+                    {{ expanded === m.id ? '收起详情' : '查看详情' }}
+                    <AppIcon :name="expanded === m.id ? 'chevron-down' : 'arrow-right'" :size="11" />
+                  </span>
                 </span>
               </button>
             </template>
@@ -163,6 +172,35 @@ const fmt = (iso: string) => {
   font-size: 11px;
   color: var(--c-accent-600);
   margin-top: 2px;
+}
+
+.msg__unread-tip {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  color: var(--c-danger);
+}
+
+.msg__unread-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--c-danger);
+  animation: pulse 1.6s infinite;
+}
+
+@keyframes pulse {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.35;
+  }
+}
+
+.msg__read-tip {
+  color: var(--c-text-4);
 }
 
 .msg__close {
@@ -268,6 +306,35 @@ const fmt = (iso: string) => {
 .msg-item__from {
   font-size: 10.5px;
   color: var(--c-text-4);
+}
+
+.msg-item__state {
+  font-size: 9px;
+  font-weight: 800;
+  padding: 1.5px 7px;
+  border-radius: var(--r-full);
+  flex-shrink: 0;
+  letter-spacing: 0.5px;
+}
+
+.msg-item__state.is-unread-tag {
+  background: var(--c-danger);
+  color: #fff;
+}
+
+.msg-item__state.is-read {
+  background: var(--c-bg-muted);
+  color: var(--c-text-4);
+}
+
+.msg-item__detail-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  margin-top: 5px;
+  font-size: 10.5px;
+  font-weight: 700;
+  color: var(--c-primary-600);
 }
 
 .msg-item__preview {

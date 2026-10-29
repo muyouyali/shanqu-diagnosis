@@ -77,11 +77,18 @@ const fmt = (iso: string) => {
         <span class="mp-item__body">
           <span class="mp-item__top">
             <strong>{{ m.title }}</strong>
+            <span class="mp-item__state" :class="m.read ? 'is-read' : 'is-unread-tag'">
+              {{ m.read ? '已读' : '未读' }}
+            </span>
             <small>{{ fmt(m.createdAt) }}</small>
           </span>
           <span class="mp-item__from">{{ m.fromName }} · {{ tone(m).label }}</span>
           <span class="mp-item__preview" v-if="expanded !== m.id">{{ m.content.slice(0, 48) }}…</span>
           <span class="mp-item__content" v-else>{{ m.content }}</span>
+          <span class="mp-item__detail-btn">
+            {{ expanded === m.id ? '收起详情' : '查看详情' }}
+            <AppIcon :name="expanded === m.id ? 'chevron-down' : 'arrow-right'" :size="11" />
+          </span>
         </span>
       </button>
     </template>
@@ -203,6 +210,35 @@ const fmt = (iso: string) => {
 .mp-item__from {
   font-size: 10.5px;
   color: var(--c-text-4);
+}
+
+.mp-item__state {
+  font-size: 9px;
+  font-weight: 800;
+  padding: 1.5px 7px;
+  border-radius: var(--r-full);
+  flex-shrink: 0;
+  letter-spacing: 0.5px;
+}
+
+.mp-item__state.is-unread-tag {
+  background: var(--c-danger);
+  color: #fff;
+}
+
+.mp-item__state.is-read {
+  background: var(--c-bg-muted);
+  color: var(--c-text-4);
+}
+
+.mp-item__detail-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  margin-top: 5px;
+  font-size: 10.5px;
+  font-weight: 700;
+  color: var(--c-primary-600);
 }
 
 .mp-item__preview {
