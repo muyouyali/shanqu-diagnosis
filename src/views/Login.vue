@@ -15,6 +15,7 @@ const store = useAppStore()
 const mode = ref<'login' | 'register'>('login')
 const account = ref('')
 const password = ref('')
+const confirmPwd = ref('')
 const nickname = ref('')
 const regRole = ref<'user' | 'expert'>('user')
 const regTitle = ref('')
@@ -35,7 +36,9 @@ const toggleSpecialty = (s: string) => {
 const canSubmit = computed(() => {
   if (busy.value) return false
   if (mode.value === 'login') return account.value.trim() && password.value
-  if (!account.value.trim() || !password.value || !nickname.value.trim()) return false
+  if (!account.value.trim() || !password.value || password.value.length < 6) return false
+  if (confirmPwd.value !== password.value) return false
+  if (!nickname.value.trim()) return false
   if (regRole.value === 'expert') return !!regTitle.value.trim()
   return true
 })
@@ -91,6 +94,11 @@ const demo = async (role: 'user' | 'expert') => {
   } finally {
     busy.value = false
   }
+}
+
+/** 其他登录方式（演示环境模拟） */
+const otherLogin = (name: string) => {
+  store.showToast(`${name}登录暂未接入，请使用账号或「快速体验」`, 'info')
 }
 
 /** 底部 AI 提示轮播 */
@@ -187,8 +195,20 @@ onBeforeUnmount(() => timer && clearInterval(timer))
           </label>
           <label class="lg-field">
             <span class="lg-field__label">🔒 设置密码</span>
-            <input v-model="password" class="lg-field__input" type="password" placeholder="至少 6 位" @keyup.enter="submit" />
+            <input v-model="password" class="lg-field__input" type="password" placeholder="至少 6 位" />
           </label>
+          <label class="lg-field">
+            <span class="lg-field__label">🔁 确认密码</span>
+            <input
+              v-model="confirmPwd"
+              class="lg-field__input"
+              type="password"
+              placeholder="请再次输入密码"
+              :class="{ 'is-bad': confirmPwd && confirmPwd !== password }"
+              @keyup.enter="submit"
+            />
+          </label>
+          <p v-if="confirmPwd && confirmPwd !== password" class="lg-warn">两次输入的密码不一致</p>
           <template v-if="regRole === 'expert'">
             <label class="lg-field">
               <span class="lg-field__label">🎓 职称</span>
@@ -234,6 +254,16 @@ onBeforeUnmount(() => timer && clearInterval(timer))
           <div class="lg-demo__btns">
             <button class="lg-demo__btn" :disabled="busy" @click="demo('user')">🌾 农户体验</button>
             <button class="lg-demo__btn" :disabled="busy" @click="demo('expert')">🎓 专家体验</button>
+          </div>
+        </div>
+
+        <div class="lg-other">
+          <small>—— 其他方式（演示环境可选体验） ——</small>
+          <div class="lg-other__btns">
+            <button class="lg-other__btn" title="微信登录" @click="otherLogin('微信')">💬</button>
+            <button class="lg-other__btn" title="支付宝登录" @click="otherLogin('支付宝')">🅰️</button>
+            <button class="lg-other__btn" title="Google 登录" @click="otherLogin('Google')">🇬</button>
+            <button class="lg-other__btn" title="扫码登录" @click="otherLogin('扫码')">▦</button>
           </div>
         </div>
 
@@ -509,6 +539,53 @@ onBeforeUnmount(() => timer && clearInterval(timer))
   padding: 8px 11px;
   margin-bottom: 12px;
   text-align: left;
+}
+
+.lg-warn {
+  font-size: 11.5px;
+  color: #ffd9a0;
+  margin: -8px 0 10px;
+  text-align: left;
+}
+
+.lg-field__input.is-bad {
+  border-color: rgba(255, 150, 130, 0.7);
+}
+
+/* 其他登录方式 */
+.lg-other {
+  margin-top: 13px;
+}
+
+.lg-other small {
+  font-size: 10.5px;
+  color: rgba(255, 255, 255, 0.55);
+  letter-spacing: 1px;
+}
+
+.lg-other__btns {
+  display: flex;
+  justify-content: center;
+  gap: 14px;
+  margin-top: 9px;
+}
+
+.lg-other__btn {
+  width: 42px;
+  height: 42px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  font-size: 17px;
+  color: #fff;
+  border: 1px solid rgba(255, 255, 255, 0.25);
+  background: rgba(255, 255, 255, 0.08);
+  transition: all var(--dur-fast);
+}
+
+.lg-other__btn:hover {
+  background: rgba(255, 255, 255, 0.18);
+  transform: translateY(-2px);
 }
 
 /* 登录按钮 */
