@@ -4,12 +4,14 @@
  * 农户提交 → 专家核验 → 通过后自动并入该省地区作物图谱
  */
 import { ref, onMounted, computed } from 'vue'
+import { useRouter } from 'vue-router'
 import api from '@/api'
 import AppIcon from '@/components/AppIcon.vue'
 import { useAppStore } from '@/stores/app'
 import type { CropSubmission } from '@/types'
 
 const store = useAppStore()
+const router = useRouter()
 
 const list = ref<CropSubmission[]>([])
 const loading = ref(true)
@@ -91,10 +93,11 @@ const fmt = (iso: string) => {
         <h1>作物共建审核</h1>
         <p>农户提交的地方作物经核验后并入对应省份的作物图谱，供全站用户检索</p>
       </div>
-      <div class="cp__hero-badge">
-        <AppIcon name="leaf" :size="22" />
+      <button class="cp__hero-badge" @click="router.push('/knowledge')">
+        <AppIcon name="leaf" :size="18" />
         <span>共建图谱</span>
-      </div>
+        <AppIcon name="arrow-right" :size="14" />
+      </button>
     </header>
 
     <!-- 统计卡 -->
@@ -241,8 +244,7 @@ const fmt = (iso: string) => {
 
 <style scoped>
 .cp {
-  padding: 24px 28px 60px;
-  max-width: 1080px;
+  padding: 26px 34px 64px;
 }
 
 /* 页头横幅 */
@@ -253,13 +255,13 @@ const fmt = (iso: string) => {
   align-items: center;
   justify-content: space-between;
   gap: 20px;
-  padding: 24px 26px;
-  border-radius: var(--r-lg, 16px);
+  padding: 30px 32px;
+  border-radius: 18px;
   background:
     radial-gradient(120% 180% at 100% 0%, rgba(255, 255, 255, 0.14), transparent 55%),
     linear-gradient(120deg, #14532d, #1a7f45 70%, #2f9e5f);
   color: #fff;
-  margin-bottom: 14px;
+  margin-bottom: 16px;
 }
 
 .cp__hero::after {
@@ -275,17 +277,17 @@ const fmt = (iso: string) => {
 }
 
 .cp__hero h1 {
-  font-size: 21px;
+  font-size: 25px;
   font-weight: 800;
   letter-spacing: 0.5px;
 }
 
 .cp__hero p {
-  font-size: 12.5px;
+  font-size: 14px;
   opacity: 0.85;
-  margin-top: 6px;
-  max-width: 560px;
-  line-height: 1.6;
+  margin-top: 7px;
+  max-width: 640px;
+  line-height: 1.65;
 }
 
 .cp__hero-badge {
@@ -293,27 +295,35 @@ const fmt = (iso: string) => {
   display: flex;
   align-items: center;
   gap: 8px;
-  padding: 9px 16px;
+  padding: 11px 20px;
   border-radius: var(--r-full);
   background: rgba(255, 255, 255, 0.16);
   backdrop-filter: blur(4px);
-  font-size: 12.5px;
+  font-size: 14px;
   font-weight: 700;
+  color: #fff;
+  cursor: pointer;
+  transition: background var(--dur-fast), transform var(--dur-fast);
+}
+
+.cp__hero-badge:hover {
+  background: rgba(255, 255, 255, 0.28);
+  transform: translateX(2px);
 }
 
 /* 统计卡 */
 .cp__stats {
   display: grid;
   grid-template-columns: repeat(3, 1fr);
-  gap: 12px;
-  margin-bottom: 16px;
+  gap: 14px;
+  margin-bottom: 18px;
 }
 
 .stat {
   display: flex;
   align-items: center;
-  gap: 12px;
-  padding: 14px 18px;
+  gap: 14px;
+  padding: 18px 22px;
   border-radius: var(--r-md);
   background: var(--c-bg-card);
   border: 1px solid var(--c-line-soft);
@@ -332,9 +342,9 @@ const fmt = (iso: string) => {
 }
 
 .stat__icon {
-  width: 38px;
-  height: 38px;
-  border-radius: 12px;
+  width: 46px;
+  height: 46px;
+  border-radius: 14px;
   display: grid;
   place-items: center;
   flex-shrink: 0;
@@ -346,32 +356,32 @@ const fmt = (iso: string) => {
 
 .stat strong {
   display: block;
-  font-size: 20px;
+  font-size: 26px;
   font-weight: 800;
   line-height: 1.15;
   color: var(--c-text-1);
 }
 
 .stat small {
-  font-size: 11px;
+  font-size: 12.5px;
   color: var(--c-text-4);
 }
 
 /* 筛选签 */
 .cp__tabs {
   display: flex;
-  gap: 8px;
-  margin-bottom: 16px;
+  gap: 9px;
+  margin-bottom: 18px;
   flex-wrap: wrap;
 }
 
 .cp__tab {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
-  padding: 7px 15px;
+  gap: 7px;
+  padding: 9px 19px;
   border-radius: var(--r-full);
-  font-size: 12.5px;
+  font-size: 14px;
   font-weight: 700;
   color: var(--c-text-3);
   background: var(--c-bg-card);
@@ -381,9 +391,9 @@ const fmt = (iso: string) => {
 
 .cp__tab i {
   font-style: normal;
-  font-size: 10.5px;
+  font-size: 11.5px;
   font-weight: 800;
-  padding: 1px 7px;
+  padding: 1px 8px;
   border-radius: var(--r-full);
   background: var(--c-bg-muted);
   color: var(--c-text-3);
@@ -401,21 +411,21 @@ const fmt = (iso: string) => {
 }
 
 .cp__empty {
-  padding: 56px 20px;
+  padding: 72px 20px;
   text-align: center;
   color: var(--c-text-4);
-  font-size: 13px;
+  font-size: 14px;
   background: var(--c-bg-card);
   border-radius: var(--r-md);
   border: 1px dashed var(--c-line);
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 8px;
+  gap: 9px;
 }
 
 .cp__empty-icon {
-  font-size: 40px;
+  font-size: 52px;
   line-height: 1;
   margin-bottom: 2px;
 }
@@ -426,14 +436,14 @@ const fmt = (iso: string) => {
 }
 
 .cp__empty small {
-  font-size: 11.5px;
+  font-size: 12.5px;
   color: var(--c-text-4);
 }
 
 .cp__list {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(420px, 1fr));
-  gap: 12px;
+  grid-template-columns: repeat(auto-fill, minmax(460px, 1fr));
+  gap: 14px;
 }
 
 .cp__list .sub-card {
@@ -451,7 +461,7 @@ const fmt = (iso: string) => {
 .sub-card {
   display: flex;
   gap: 14px;
-  padding: 15px 16px;
+  padding: 18px 20px;
   border-radius: var(--r-md);
   background: var(--c-bg-card);
   border: 1px solid var(--c-line-soft);
@@ -468,12 +478,12 @@ const fmt = (iso: string) => {
 }
 
 .sub-card__emoji {
-  width: 46px;
-  height: 46px;
-  border-radius: 14px;
+  width: 52px;
+  height: 52px;
+  border-radius: 15px;
   display: grid;
   place-items: center;
-  font-size: 23px;
+  font-size: 27px;
   background: var(--c-primary-50);
 }
 
@@ -489,29 +499,29 @@ const fmt = (iso: string) => {
 }
 
 .sub-card__top h3 {
-  font-size: 14.5px;
+  font-size: 16.5px;
   font-weight: 800;
   color: var(--c-text-1);
 }
 
 .sub-card__status {
-  font-size: 10px;
+  font-size: 11px;
   font-weight: 800;
-  padding: 2px 8px;
+  padding: 3px 10px;
   border-radius: var(--r-full);
 }
 
 .sub-card__alias {
-  font-size: 11px;
+  font-size: 12px;
   color: var(--c-text-4);
   margin-top: 2px;
 }
 
 .sub-card__desc {
-  font-size: 12.5px;
-  line-height: 1.65;
+  font-size: 13.5px;
+  line-height: 1.7;
   color: var(--c-text-2);
-  margin: 6px 0 8px;
+  margin: 7px 0 9px;
   display: -webkit-box;
   -webkit-line-clamp: 2;
   -webkit-box-orient: vertical;
@@ -521,8 +531,8 @@ const fmt = (iso: string) => {
 .sub-card__meta {
   display: flex;
   flex-wrap: wrap;
-  gap: 12px;
-  font-size: 11px;
+  gap: 13px;
+  font-size: 12px;
   color: var(--c-text-4);
 }
 
@@ -550,9 +560,9 @@ const fmt = (iso: string) => {
 }
 
 .op-btn {
-  padding: 7px 15px;
+  padding: 9px 19px;
   border-radius: var(--r-full);
-  font-size: 12px;
+  font-size: 13px;
   font-weight: 700;
   white-space: nowrap;
 }
