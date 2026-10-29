@@ -422,6 +422,21 @@ app.post('/api/qa/stream', async (req, res) => {
     sources: kb.hits.map((h) => ({ name: h.disease.name, score: h.scoreNormalized }))
   })
 
+  // 农户登录状态下提问 → 实时推送到专家端消息中心
+  try {
+    const asker = store.getUserByToken(extractToken(req))
+    if (asker) {
+      store.notifyExpertsAsk({
+        user: asker,
+        question,
+        cropName: cropId ? CROP_NAME[cropId] || '' : '',
+        region: region || ''
+      })
+    }
+  } catch (err) {
+    console.warn('[qa/stream] 专家通知失败:', err.message)
+  }
+
   send('done', { usedFallback, consultationId: saved.id, length: answer.length })
   res.end()
 })
@@ -482,6 +497,21 @@ app.post('/api/qa', async (req, res) => {
     usedFallback,
     sources: kb.hits.map((h) => ({ name: h.disease.name, score: h.scoreNormalized }))
   })
+
+  // 非流式提问同样推送到专家端
+  try {
+    const asker = store.getUserByToken(extractToken(req))
+    if (asker) {
+      store.notifyExpertsAsk({
+        user: asker,
+        question,
+        cropName: cropId ? CROP_NAME[cropId] || '' : '',
+        region: ''
+      })
+    }
+  } catch (err) {
+    console.warn('[qa] 专家通知失败:', err.message)
+  }
 
   res.json({
     answer,
@@ -786,6 +816,20 @@ app.get('/api/alerts', async (req, res) => {
   }
 
   res.json({ ...result, stats: { total: stats.total, days, escalatedRate: stats.escalatedRate } })
+})
+
+// 一键推送灾害预警公告：专家端与农户端消息中心同时收到
+app.post('/api/alerts/publish', (req, res) => {
+  const user = requireUser(req, res)
+  if (!user) return
+  if (user.role !== 'expert') return res.status(403).json({ error: '仅专家可发布预警公告' })
+  const { title, content } = req.body || {}
+  if (!title || !String(title).trim()) return res.status(400).json({ error: '请填写预警标题' })
+  const msg = store.broadcastAlert({
+    title: `⚠️ 灾害预警：${String(title).slice(0, 60)}`,
+    content: String(content || '').slice(0, 500)
+  })
+  res.json({ ok: true, messageId: msg.id })
 })
 
 // ==================== 种植档案复盘 ====================

@@ -275,6 +275,29 @@ export const unreadCount = (userId) => {
   return db.messages.filter((m) => !m.read && (m.userId === Number(userId) || m.userId === 'all')).length
 }
 
+/** 所有专家账号 id（用于把农户提问推送到专家端） */
+export const listExpertIds = () => {
+  const db = load()
+  return db.users.filter((u) => u.role === 'expert').map((u) => u.id)
+}
+
+/** 农户提问 → 推送给所有专家（专家端消息中心可见） */
+export const notifyExpertsAsk = ({ user, question, cropName, region }) => {
+  const ids = listExpertIds()
+  const who = user ? user.nickname || user.account : '游客农户'
+  const prefix = [cropName, region].filter(Boolean).join(' · ')
+  const title = `${who} 向您提问`
+  const content = `${prefix ? `【${prefix}】` : ''}${String(question).slice(0, 300)}`
+  return ids.map((id) =>
+    createMessage({ userId: id, from: 'user', fromName: who, title, content })
+  )
+}
+
+/** 灾害预警公告 → 推送给全员（专家端与农户端都收到） */
+export const broadcastAlert = ({ title, content }) => {
+  return createMessage({ userId: 'all', from: 'system', fromName: '平台公告', title, content })
+}
+
 const seedMessages = () => [
   {
     id: 9101,

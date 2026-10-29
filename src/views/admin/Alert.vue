@@ -23,6 +23,22 @@ const levelMeta: Record<string, { label: string; color: string; bg: string; grad
 
 const level = computed(() => levelMeta[alert.value?.level || 'green'])
 
+/** 一键推送预警公告：专家端与农户端消息中心同时收到 */
+const publishing = ref(false)
+const publishAlert = async () => {
+  if (!alert.value || publishing.value) return
+  publishing.value = true
+  try {
+    const content = [alert.value.analysis, '', '防控建议：', ...alert.value.actions.map((a, i) => `${i + 1}. ${a}`)].join('\n')
+    await api.publishAlert(alert.value.headline, content)
+    store.showToast('预警公告已推送给专家端与农户端', 'success')
+  } catch (e: any) {
+    store.showToast(e?.message || '推送失败', 'error')
+  } finally {
+    publishing.value = false
+  }
+}
+
 const renderMap = () => {
   if (!mapRef.value || !stats.value) return
   if (chart) chart.dispose()
@@ -138,6 +154,10 @@ onBeforeUnmount(() => {
           </span>
           <h2 class="alert-hero__headline">{{ alert.headline }}</h2>
           <p class="alert-hero__analysis">{{ alert.analysis }}</p>
+          <button class="alert-hero__push" :disabled="publishing" @click="publishAlert">
+            <AppIcon name="volume" :size="13" />
+            {{ publishing ? '推送中…' : '一键推送预警公告（专家端 + 农户端）' }}
+          </button>
         </div>
         <div class="alert-hero__right">
           <div class="alert-hero__stat">
@@ -339,6 +359,32 @@ onBeforeUnmount(() => {
   font-size: 13px;
   line-height: 1.75;
   color: var(--c-text-2);
+}
+
+.alert-hero__push {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 12px;
+  height: 32px;
+  padding: 0 14px;
+  border-radius: var(--r-full);
+  font-size: 12px;
+  font-weight: 700;
+  color: #fff;
+  background: var(--tone, var(--c-primary-600));
+  border: none;
+  box-shadow: var(--sh-sm);
+  transition: all var(--dur-fast);
+  white-space: nowrap;
+}
+
+.alert-hero__push:hover {
+  transform: translateY(-1px);
+}
+
+.alert-hero__push:disabled {
+  opacity: 0.6;
 }
 
 .alert-hero__right {

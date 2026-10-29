@@ -155,6 +155,11 @@ export const api = {
 
   alerts: (days = 14) => http.get<AlertResponse>('/alerts', { params: { days } }).then((r) => r.data),
 
+  publishAlert: (title: string, content: string) =>
+    http
+      .post<{ ok: boolean; messageId: number }>('/alerts/publish', { title, content })
+      .then((r) => r.data),
+
   review: (payload: { cropId?: string; userId?: string }) =>
     http.post<ReviewResponse>('/review', payload).then((r) => r.data),
 
