@@ -273,6 +273,11 @@ defineProps<{
       <path d="M18.5 2.5a2.1 2.1 0 0 1 3 3L12 15l-4 1 1-4Z" />
     </template>
 
+    <!-- 空心圆（未选中） -->
+    <template v-else-if="name === 'circle'">
+      <circle cx="12" cy="12" r="9" />
+    </template>
+
     <!-- 垃圾桶（清理） -->
     <template v-else-if="name === 'trash'">
       <polyline points="3 6 5 6 21 6" />

@@ -111,8 +111,10 @@ export const api = {
   readAllMessages: () =>
     http.post<{ ok: boolean; marked: number }>('/messages/read-all').then((r) => r.data),
 
-  clearMessages: () =>
-    http.delete<{ ok: boolean; removed: number }>('/messages').then((r) => r.data),
+  clearMessages: (ids?: number[]) =>
+    http
+      .delete<{ ok: boolean; removed: number; unread: number }>('/messages', { data: { ids } })
+      .then((r) => r.data),
 
   readMessage: (id: number) =>
     http.post<{ ok: boolean; unread: number }>(`/messages/${id}/read`).then((r) => r.data),

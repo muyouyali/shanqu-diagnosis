@@ -253,11 +253,19 @@ export const markAllRead = (userId) => {
   return n
 }
 
-/** 清空我的消息中心（删除本人私信与针对本人的公告副本不影响他人） */
-export const clearMessages = (userId) => {
+/** 清理我的消息：不传 ids 清空全部（本人私信 + 公告对本人不可见），传 ids 只删指定消息 */
+export const clearMessages = (userId, ids) => {
   const db = load()
+  const uid = Number(userId)
   const before = db.messages.length
-  db.messages = db.messages.filter((m) => m.userId !== Number(userId))
+  const idSet = Array.isArray(ids) && ids.length ? new Set(ids.map(Number)) : null
+  db.messages = db.messages.filter((m) => {
+    // 只考虑「属于我的」消息：本人私信或全员公告
+    const mine = m.userId === uid || m.userId === 'all'
+    if (!mine) return true
+    if (idSet) return !idSet.has(Number(m.id))
+    return m.userId !== uid
+  })
   persist()
   return before - db.messages.length
 }

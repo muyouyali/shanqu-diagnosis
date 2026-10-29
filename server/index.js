@@ -637,12 +637,12 @@ app.post('/api/messages/read-all', (req, res) => {
   res.json({ ok: true, marked: n, unread: 0 })
 })
 
-// 清空我的消息
+// 清理消息：可带 { ids: [...] } 只删所选，不带则全部清空
 app.delete('/api/messages', (req, res) => {
   const user = requireUser(req, res)
   if (!user) return
-  const n = store.clearMessages(user.id)
-  res.json({ ok: true, removed: n, unread: 0 })
+  const n = store.clearMessages(user.id, req.body?.ids)
+  res.json({ ok: true, removed: n, unread: store.unreadCount(user.id) })
 })
 
 app.post('/api/messages/:id/read', (req, res) => {

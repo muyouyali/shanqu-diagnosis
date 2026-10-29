@@ -1,6 +1,6 @@
 <script setup lang="ts">
 /** 消息页：复用 MessagesSheet 的列表逻辑，以整页形式呈现 */
-import { ref, onMounted } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import api from '@/api'
 import AppIcon from '@/components/AppIcon.vue'
@@ -12,6 +12,14 @@ const store = useAppStore()
 const items = ref<Message[]>([])
 const loading = ref(true)
 const expanded = ref<number | null>(null)
+
+/** 未读排最前，其余按时间倒序 */
+const sorted = computed(() =>
+  [...items.value].sort((a, b) => {
+    if (a.read !== b.read) return a.read ? 1 : -1
+    return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+  })
+)
 
 onMounted(async () => {
   await store.restoreUser()
@@ -36,19 +44,62 @@ const readAll = async () => {
   }
 }
 
-const confirming = ref(false)
+/* ---------- 选择清理模式 ---------- */
+const selecting = ref(false)
+const checked = ref<Set<number>>(new Set())
+const confirmClearAll = ref(false)
+let clearTimer: ReturnType<typeof setTimeout> | null = null
 
-const clearAll = async () => {
-  if (!confirming.value) {
-    confirming.value = true
-    setTimeout(() => (confirming.value = false), 3000)
+const enterSelect = () => {
+  selecting.value = true
+  checked.value = new Set()
+  confirmClearAll.value = false
+  expanded.value = null
+}
+const exitSelect = () => {
+  selecting.value = false
+  checked.value = new Set()
+  confirmClearAll.value = false
+}
+const toggleCheck = (id: number) => {
+  const s = new Set(checked.value)
+  s.has(id) ? s.delete(id) : s.add(id)
+  checked.value = s
+}
+const allChecked = computed(
+  () => items.value.length > 0 && checked.value.size === items.value.length
+)
+const toggleAll = () => {
+  checked.value = allChecked.value ? new Set() : new Set(items.value.map((m) => m.id))
+}
+
+const removeChecked = async () => {
+  const ids = [...checked.value]
+  if (!ids.length) return
+  try {
+    const res = await api.clearMessages(ids)
+    items.value = items.value.filter((m) => !checked.value.has(m.id))
+    store.unread = res.unread
+    store.showToast(`已清理 ${res.removed} 条消息`, 'success')
+    if (!items.value.length) exitSelect()
+    else checked.value = new Set()
+  } catch (e: any) {
+    store.showToast(e?.message || '清理失败', 'error')
+  }
+}
+
+const clearEverything = async () => {
+  if (!confirmClearAll.value) {
+    confirmClearAll.value = true
+    if (clearTimer) clearTimeout(clearTimer)
+    clearTimer = setTimeout(() => (confirmClearAll.value = false), 3000)
     return
   }
   try {
     const res = await api.clearMessages()
     items.value = []
-    store.unread = 0
-    confirming.value = false
+    store.unread = res.unread
+    exitSelect()
     store.showToast(`已清理 ${res.removed} 条消息`, 'success')
   } catch (e: any) {
     store.showToast(e?.message || '清理失败', 'error')
@@ -56,6 +107,7 @@ const clearAll = async () => {
 }
 
 const openMsg = async (m: Message) => {
+  if (selecting.value) return toggleCheck(m.id)
   expanded.value = expanded.value === m.id ? null : m.id
   if (!m.read) {
     m.read = true
@@ -85,18 +137,31 @@ const fmt = (iso: string) => {
       <button class="mp__back" @click="router.back()"><AppIcon name="arrow-left" :size="17" /></button>
       <h1>我的消息</h1>
       <div class="mp-head__ops">
-        <button v-if="items.length" class="mp-op" @click="readAll">
-          <AppIcon name="check-circle" :size="12" /> 全部已读
-        </button>
-        <button
-          v-if="items.length"
-          class="mp-op mp-op--danger"
-          :class="{ 'is-confirming': confirming }"
-          @click="clearAll"
-        >
-          <AppIcon name="trash" :size="12" />
-          {{ confirming ? '再点确认清空' : '清理消息' }}
-        </button>
+        <template v-if="items.length && !selecting">
+          <button v-if="items.some((m) => !m.read)" class="mp-op" @click="readAll">
+            <AppIcon name="check-circle" :size="12" /> 全部已读
+          </button>
+          <button class="mp-op mp-op--danger" @click="enterSelect">
+            <AppIcon name="trash" :size="12" /> 清理消息
+          </button>
+        </template>
+        <template v-else-if="items.length && selecting">
+          <button class="mp-op" @click="toggleAll">
+            <AppIcon :name="allChecked ? 'check-circle' : 'circle'" :size="12" />
+            {{ allChecked ? '取消全选' : '全选' }}
+          </button>
+          <button class="mp-op mp-op--danger" :disabled="!checked.size" @click="removeChecked">
+            <AppIcon name="trash" :size="12" /> 删除所选{{ checked.size ? `(${checked.size})` : '' }}
+          </button>
+          <button
+            class="mp-op mp-op--danger"
+            :class="{ 'is-confirming': confirmClearAll }"
+            @click="clearEverything"
+          >
+            {{ confirmClearAll ? '再点确认清空' : '全部清空' }}
+          </button>
+          <button class="mp-op" @click="exitSelect">取消</button>
+        </template>
       </div>
     </header>
 
@@ -108,12 +173,24 @@ const fmt = (iso: string) => {
 
     <template v-else>
       <button
-        v-for="m in items"
+        v-for="m in sorted"
         :key="m.id"
         class="mp-item"
-        :class="{ 'is-unread': !m.read, 'is-open': expanded === m.id }"
+        :class="{
+          'is-unread': !m.read,
+          'is-open': expanded === m.id,
+          'is-selected': selecting && checked.has(m.id)
+        }"
         @click="openMsg(m)"
       >
+        <span
+          v-if="selecting"
+          class="mp-item__check"
+          :class="{ 'is-on': checked.has(m.id) }"
+          @click.stop="toggleCheck(m.id)"
+        >
+          <AppIcon v-if="checked.has(m.id)" name="check" :size="12" />
+        </span>
         <span class="mp-item__avatar" :style="{ background: tone(m).bg, color: tone(m).color }">
           <AppIcon :name="tone(m).icon" :size="17" />
           <i v-if="!m.read" class="mp-item__dot" />
@@ -202,6 +279,36 @@ const fmt = (iso: string) => {
   background: var(--c-danger);
   color: #fff;
   border-color: var(--c-danger);
+}
+
+.mp-op:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+/* 选择模式勾选框 */
+.mp-item__check {
+  align-self: center;
+  width: 19px;
+  height: 19px;
+  border-radius: 50%;
+  border: 1.5px solid var(--c-line);
+  background: #fff;
+  display: grid;
+  place-items: center;
+  flex-shrink: 0;
+  color: #fff;
+  transition: all var(--dur-fast);
+}
+
+.mp-item__check.is-on {
+  background: var(--c-danger);
+  border-color: var(--c-danger);
+}
+
+.mp-item.is-selected {
+  border-color: #f3b3b0;
+  background: #fff7f6;
 }
 
 .mp__empty {
