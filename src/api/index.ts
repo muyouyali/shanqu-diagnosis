@@ -93,6 +93,27 @@ export const api = {
   login: (payload: { account: string; password: string; method?: string }) =>
     http.post<{ ok: boolean; token: string; user: User }>('/auth/login', payload).then((r) => r.data),
 
+  /** 获取验证码（演示环境直接回显 demoCode） */
+  smsCode: (target: string) =>
+    http.post<{ ok: boolean; channel: 'sms' | 'email'; demoCode: string; ttl: number }>('/auth/sms-code', { target }).then((r) => r.data),
+
+  /** 验证码快捷登录 / 注册（手机号 / 邮箱） */
+  quickAuth: (payload: {
+    method: 'phone' | 'email'
+    target: string
+    code: string
+    mode: 'login' | 'register'
+    nickname?: string
+    role?: 'user' | 'expert'
+    title?: string
+    specialty?: string[]
+    region?: string
+  }) => http.post<{ ok: boolean; token: string; user: User }>('/auth/quick', payload).then((r) => r.data),
+
+  /** 第三方授权登录（演示环境模拟扫码） */
+  oauthAuth: (payload: { provider: 'wechat' | 'alipay'; openid?: string }) =>
+    http.post<{ ok: boolean; token: string; user: User }>('/auth/oauth', payload).then((r) => r.data),
+
   me: () => http.get<{ user: User }>('/auth/me').then((r) => r.data.user),
 
   updateProfile: (payload: Partial<User> & { password?: string }) =>

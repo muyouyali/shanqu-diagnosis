@@ -96,9 +96,123 @@ const demo = async (role: 'user' | 'expert') => {
   }
 }
 
-/** 其他登录方式（演示环境模拟） */
-const otherLogin = (name: string) => {
-  store.showToast(`${name}登录暂未接入，请使用账号或「快速体验」`, 'info')
+/** 其他登录方式 */
+type QuickProvider = 'wechat' | 'alipay' | 'email' | 'phone'
+const otherOpen = ref<QuickProvider | null>(null)
+const quickMode = ref<'login' | 'register'>('login')
+const quickTarget = ref('')
+const quickCode = ref('')
+const quickNickname = ref('')
+const quickRole = ref<'user' | 'expert'>('user')
+const quickBusy = ref(false)
+const codeSent = ref(false)
+const codeHint = ref('')
+const countdown = ref(0)
+let cdTimer: number | undefined
+
+const PROVIDER_META: Record<QuickProvider, { name: string; icon: string; ph: string; type?: string }> = {
+  wechat: { name: '微信', icon: '💬', ph: '' },
+  alipay: { name: '支付宝', icon: '🅰️', ph: '' },
+  email: { name: '邮箱', icon: '✉️', ph: 'you@example.com', type: 'email' },
+  phone: { name: '手机号', icon: '📱', ph: '13800000000', type: 'tel' }
+}
+
+const otherLogin = (p: QuickProvider) => {
+  if (p === 'wechat' || p === 'alipay') {
+    otherOpen.value = p
+  } else {
+    quickMode.value = 'login'
+    quickTarget.value = ''
+    quickCode.value = ''
+    quickNickname.value = ''
+    quickRole.value = 'user'
+    codeSent.value = false
+    codeHint.value = ''
+    otherOpen.value = p
+  }
+}
+
+const closeOther = () => {
+  otherOpen.value = null
+  if (cdTimer) clearInterval(cdTimer)
+  countdown.value = 0
+}
+
+const getCode = async () => {
+  if (!quickTarget.value.trim() || countdown.value > 0) return
+  try {
+    const res = await api.smsCode(quickTarget.value.trim())
+    codeSent.value = true
+    codeHint.value = res.demoCode
+    countdown.value = 60
+    cdTimer = window.setInterval(() => {
+      countdown.value--
+      if (countdown.value <= 0 && cdTimer) clearInterval(cdTimer)
+    }, 1000)
+    store.showToast(`验证码已发送至${PROVIDER_META[otherOpen.value!]?.name}（演示环境直接回显）`, 'success')
+  } catch (e: any) {
+    store.showToast(e?.message || '验证码发送失败', 'error')
+  }
+}
+
+const canQuick = computed(() => {
+  if (quickBusy.value) return false
+  if (!quickTarget.value.trim() || quickCode.value.length !== 6) return false
+  if (quickMode.value === 'register') {
+    if (!quickNickname.value.trim()) return false
+    if (quickRole.value === 'expert' && !quickRegion.value.trim()) return false
+  }
+  return true
+})
+
+const quickRegion = ref('')
+
+const quickSubmit = async () => {
+  if (!canQuick.value || !otherOpen.value) return
+  quickBusy.value = true
+  try {
+    const res = await api.quickAuth({
+      method: otherOpen.value as 'phone' | 'email',
+      target: quickTarget.value.trim(),
+      code: quickCode.value,
+      mode: quickMode.value,
+      nickname: quickNickname.value.trim() || undefined,
+      role: quickRole.value,
+      region: quickRole.value === 'expert' ? quickRegion.value.trim() : undefined
+    })
+    store.setAuth(res.token, res.user)
+    store.showToast(`欢迎回来，${res.user.nickname || '农友'}`, 'success')
+    closeOther()
+    goIn()
+  } catch (e: any) {
+    store.showToast(e?.message || '登录失败', 'error')
+  } finally {
+    quickBusy.value = false
+  }
+}
+
+/** 模拟扫码授权 */
+const scanning = ref(false)
+const oauthSubmit = async () => {
+  if (!otherOpen.value || scanning.value) return
+  scanning.value = true
+  try {
+    const res = await api.oauthAuth({ provider: otherOpen.value as 'wechat' | 'alipay' })
+    store.setAuth(res.token, res.user)
+    store.showToast(`${PROVIDER_META[otherOpen.value].name}授权成功，欢迎 ${res.user.nickname}`, 'success')
+    closeOther()
+    goIn()
+  } catch (e: any) {
+    store.showToast(e?.message || '授权失败', 'error')
+  } finally {
+    scanning.value = false
+  }
+}
+
+/** 模拟二维码图案（固定伪随机，视觉用） */
+const pseudoQr = (n: number) => {
+  const x = (n * 2654435761) % 4294967296
+  return (x ^ (n * 97)) % 3 !== 0
 }
 
 /** 底部 AI 提示轮播 */
@@ -258,12 +372,12 @@ onBeforeUnmount(() => timer && clearInterval(timer))
         </div>
 
         <div class="lg-other">
-          <small>—— 其他方式（演示环境可选体验） ——</small>
+          <small>—— 其他方式登录 / 注册 ——</small>
           <div class="lg-other__btns">
-            <button class="lg-other__btn" title="微信登录" @click="otherLogin('微信')">💬</button>
-            <button class="lg-other__btn" title="支付宝登录" @click="otherLogin('支付宝')">🅰️</button>
-            <button class="lg-other__btn" title="Google 登录" @click="otherLogin('Google')">🇬</button>
-            <button class="lg-other__btn" title="扫码登录" @click="otherLogin('扫码')">▦</button>
+            <button class="lg-other__btn" title="微信登录" @click="otherLogin('wechat')">💬</button>
+            <button class="lg-other__btn" title="支付宝登录" @click="otherLogin('alipay')">🅰️</button>
+            <button class="lg-other__btn" title="邮箱登录 / 注册" @click="otherLogin('email')">✉️</button>
+            <button class="lg-other__btn" title="手机号登录 / 注册" @click="otherLogin('phone')">📱</button>
           </div>
         </div>
 
@@ -276,6 +390,88 @@ onBeforeUnmount(() => timer && clearInterval(timer))
         </Transition>
       </div>
     </div>
+
+    <!-- 其他方式弹层 -->
+    <Teleport to="body">
+      <Transition name="tipfade">
+        <div v-if="otherOpen" class="om-mask" @click.self="closeOther">
+          <!-- 微信 / 支付宝：模拟扫码授权 -->
+          <div v-if="otherOpen === 'wechat' || otherOpen === 'alipay'" class="om">
+            <header class="om__head">
+              <b>{{ PROVIDER_META[otherOpen].icon }} {{ PROVIDER_META[otherOpen].name }}授权登录</b>
+              <button class="om__close" @click="closeOther">✕</button>
+            </header>
+            <div class="om__body om__body--qr">
+              <div class="qr" :class="{ 'is-done': scanning }">
+                <div class="qr__grid">
+                  <i v-for="n in 49" :key="n" :class="{ on: pseudoQr(n) }" />
+                </div>
+                <div class="qr__scan">{{ scanning ? '✓ 已授权' : '请使用' + PROVIDER_META[otherOpen].name + '扫一扫' }}</div>
+              </div>
+              <p class="om__note">演示环境：点击下方按钮模拟扫码授权，将自动创建/登录绑定账号</p>
+              <button class="lg-btn om__btn" :disabled="scanning" @click="oauthSubmit">
+                {{ scanning ? '✓ 授权成功，正在进入…' : `模拟${PROVIDER_META[otherOpen].name}扫码成功` }}
+              </button>
+            </div>
+          </div>
+
+          <!-- 邮箱 / 手机号：验证码快捷登录注册 -->
+          <div v-else class="om">
+            <header class="om__head">
+              <b>{{ PROVIDER_META[otherOpen].icon }} {{ PROVIDER_META[otherOpen].name }}{{ quickMode === 'login' ? '登录' : '注册' }}</b>
+              <button class="om__close" @click="closeOther">✕</button>
+            </header>
+            <div class="om__body">
+              <div class="om__tabs">
+                <button class="om__tab" :class="{ 'is-on': quickMode === 'login' }" @click="quickMode = 'login'">登录</button>
+                <button class="om__tab" :class="{ 'is-on': quickMode === 'register' }" @click="quickMode = 'register'">注册</button>
+              </div>
+
+              <label class="lg-field">
+                <span class="lg-field__label">{{ PROVIDER_META[otherOpen].name }}账号</span>
+                <input
+                  v-model="quickTarget"
+                  class="lg-field__input"
+                  :type="PROVIDER_META[otherOpen].type || 'text'"
+                  :placeholder="PROVIDER_META[otherOpen].ph"
+                />
+              </label>
+
+              <label class="lg-field">
+                <span class="lg-field__label">验证码</span>
+                <div class="lg-code-row">
+                  <input v-model="quickCode" class="lg-field__input" maxlength="6" placeholder="6 位验证码" />
+                  <button class="lg-code-btn" :disabled="countdown > 0 || !quickTarget.trim()" @click="getCode">
+                    {{ countdown > 0 ? `${countdown}s 后重发` : '获取验证码' }}
+                  </button>
+                </div>
+                <em v-if="codeHint" class="lg-code-hint">演示环境验证码：<b>{{ codeHint }}</b>（真实环境将通过短信/邮件下发）</em>
+              </label>
+
+              <template v-if="quickMode === 'register'">
+                <label class="lg-field">
+                  <span class="lg-field__label">昵称</span>
+                  <input v-model="quickNickname" class="lg-field__input" placeholder="怎么称呼您" />
+                </label>
+                <div class="lg-roles">
+                  <button class="lg-role" :class="{ 'is-on': quickRole === 'user' }" @click="quickRole = 'user'">🌾 农户</button>
+                  <button class="lg-role" :class="{ 'is-on': quickRole === 'expert' }" @click="quickRole = 'expert'">🎓 专家</button>
+                </div>
+                <label v-if="quickRole === 'expert'" class="lg-field">
+                  <span class="lg-field__label">📍 驻点地区</span>
+                  <input v-model="quickRegion" class="lg-field__input" placeholder="如：文山市" />
+                </label>
+              </template>
+
+              <button class="lg-btn om__btn" :disabled="!canQuick" @click="quickSubmit">
+                {{ quickBusy ? '⏳ 处理中…' : quickMode === 'login' ? '登录' : '注册并加入' }}
+              </button>
+              <p class="om__note">{{ quickMode === 'login' ? '尚未注册？切换到「注册」将自动创建账号' : '已注册？切换到「登录」直接进入' }}</p>
+            </div>
+          </div>
+        </div>
+      </Transition>
+    </Teleport>
 
     <!-- 底部版权 -->
     <footer class="lg__foot">云岭农诊 · 山地特色经济作物病虫害多 Agent 诊断系统</footer>
@@ -706,6 +902,170 @@ onBeforeUnmount(() => timer && clearInterval(timer))
   font-size: 11px;
   color: rgba(255, 255, 255, 0.55);
   letter-spacing: 1px;
+}
+
+/* ===== 其他方式弹层 ===== */
+.om-mask {
+  position: fixed;
+  inset: 0;
+  z-index: 300;
+  background: rgba(6, 18, 10, 0.6);
+  backdrop-filter: blur(4px);
+  display: grid;
+  place-items: center;
+  padding: 20px;
+}
+
+.om {
+  width: min(400px, 100%);
+  max-height: 86vh;
+  overflow-y: auto;
+  border-radius: 20px;
+  background: rgba(16, 36, 24, 0.92);
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  box-shadow: 0 24px 60px rgba(0, 0, 0, 0.45);
+  color: #fff;
+}
+
+.om__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 15px 18px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.12);
+  font-size: 14.5px;
+}
+
+.om__close {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.1);
+  color: rgba(255, 255, 255, 0.8);
+  font-size: 13px;
+}
+
+.om__body {
+  padding: 16px 18px 20px;
+}
+
+.om__body--qr {
+  text-align: center;
+}
+
+/* 模拟二维码 */
+.qr {
+  width: 190px;
+  margin: 6px auto 12px;
+  padding: 12px;
+  border-radius: 14px;
+  background: #fff;
+  position: relative;
+}
+
+.qr__grid {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 2px;
+}
+
+.qr__grid i {
+  aspect-ratio: 1;
+  border-radius: 1px;
+  background: #d8e4da;
+}
+
+.qr__grid i.on {
+  background: #12331f;
+}
+
+.qr__scan {
+  position: absolute;
+  inset: auto 12px 12px;
+  background: linear-gradient(135deg, #1f8a4c, #166532);
+  color: #fff;
+  border-radius: 8px;
+  font-size: 11px;
+  font-weight: 700;
+  padding: 5px;
+}
+
+.qr.is-done {
+  outline: 3px solid #58c878;
+}
+
+.om__note {
+  font-size: 11.5px;
+  color: rgba(255, 255, 255, 0.65);
+  line-height: 1.7;
+  margin-bottom: 12px;
+}
+
+.om__btn {
+  height: 44px;
+  font-size: 14px;
+  letter-spacing: 1px;
+}
+
+.om__tabs {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+  margin-bottom: 14px;
+}
+
+.om__tab {
+  padding: 9px;
+  border-radius: 11px;
+  border: 1px solid rgba(255, 255, 255, 0.22);
+  background: rgba(255, 255, 255, 0.06);
+  color: rgba(255, 255, 255, 0.8);
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.om__tab.is-on {
+  background: rgba(88, 200, 120, 0.28);
+  border-color: #6fce8d;
+  color: #fff;
+}
+
+.lg-code-row {
+  display: flex;
+  gap: 8px;
+}
+
+.lg-code-row .lg-field__input {
+  flex: 1;
+}
+
+.lg-code-btn {
+  flex-shrink: 0;
+  padding: 0 14px;
+  border-radius: 12px;
+  border: 1px solid rgba(255, 255, 255, 0.28);
+  background: rgba(255, 255, 255, 0.1);
+  color: #fff;
+  font-size: 12.5px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.lg-code-btn:disabled {
+  opacity: 0.5;
+}
+
+.lg-code-hint {
+  display: block;
+  font-size: 11px;
+  color: #ffd9a0;
+  margin-top: 6px;
+  font-style: normal;
+}
+
+.lg-code-hint b {
+  color: #ffe9bd;
+  letter-spacing: 2px;
 }
 
 @media (max-width: 720px) {

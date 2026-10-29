@@ -754,6 +754,90 @@ app.post('/api/auth/login', (req, res) => {
   res.json({ ok: true, token, user: store.publicUser(user) })
 })
 
+// ==================== 多方式登录：验证码 / 快捷登录注册 / 模拟 OAuth ====================
+const codeStore = new Map() // target -> { code, exp }
+
+// 发送验证码（演示环境直接返回验证码；接入真实短信/邮件服务时替换此实现）
+app.post('/api/auth/sms-code', (req, res) => {
+  const { target } = req.body || {}
+  const t = String(target || '').trim().toLowerCase()
+  const isPhone = /^1\d{10}$/.test(t)
+  const isEmail = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(t)
+  if (!isPhone && !isEmail) {
+    return res.status(400).json({ error: '请输入正确的手机号或邮箱' })
+  }
+  const code = String(Math.floor(100000 + Math.random() * 900000))
+  codeStore.set(t, { code, exp: Date.now() + 5 * 60 * 1000 })
+  // 演示环境无短信/邮件通道，直接回显；生产环境请接入对应服务后改为 { ok: true }
+  res.json({ ok: true, channel: isPhone ? 'sms' : 'email', demoCode: code, ttl: 300 })
+})
+
+// 验证码快捷登录 / 注册（手机号 / 邮箱）
+app.post('/api/auth/quick', (req, res) => {
+  const { method, target, code, mode, nickname, role, title, specialty, region } = req.body || {}
+  const t = String(target || '').trim().toLowerCase()
+  const m = String(method || '')
+  if (m !== 'phone' && m !== 'email') return res.status(400).json({ error: '登录方式不正确' })
+  const rec = codeStore.get(t)
+  if (!rec || rec.exp < Date.now()) return res.status(401).json({ error: '验证码已过期，请重新获取' })
+  if (String(code || '').trim() !== rec.code) return res.status(401).json({ error: '验证码错误' })
+  codeStore.delete(t)
+
+  let user = store.findUserByAccount(t)
+  const wantRegister = mode === 'register'
+  if (user && wantRegister) {
+    return res.status(409).json({ error: '该账号已注册，请直接登录' })
+  }
+  if (!user && !wantRegister) {
+    return res.status(404).json({ error: '该账号尚未注册，请先注册' })
+  }
+  if (!user) {
+    const isExpert = role === 'expert'
+    try {
+      user = store.createUser({
+        account: t,
+        password: `qc_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
+        nickname: nickname || (m === 'phone' ? `机友${t.slice(-4)}` : `邮友${t.slice(1, 5)}`),
+        role: isExpert ? 'expert' : 'user',
+        title: isExpert ? title : '',
+        specialty: isExpert ? specialty : [],
+        region: isExpert ? region : '',
+        ...(m === 'email' ? { email: t } : { phone: t })
+      })
+    } catch (e) {
+      return res.status(400).json({ error: e.message })
+    }
+  }
+  const token = store.createSession(user.id)
+  res.json({ ok: true, token, user: store.publicUser(user) })
+})
+
+// 第三方授权登录（演示环境模拟扫码成功；接入真实开放平台后用 code 换 openid）
+app.post('/api/auth/oauth', (req, res) => {
+  const { provider, openid } = req.body || {}
+  if (provider !== 'wechat' && provider !== 'alipay') {
+    return res.status(400).json({ error: '不支持的登录方式' })
+  }
+  const oid = String(openid || '').trim() || `demo_${provider}_${Math.random().toString(36).slice(2, 10)}`
+  const account = `${provider === 'wechat' ? 'wx' : 'ali'}_${oid}`
+  let user = store.findUserByAccount(account)
+  if (!user) {
+    try {
+      user = store.createUser({
+        account,
+        password: `oauth_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
+        nickname: provider === 'wechat' ? '微信用户' : '支付宝用户',
+        role: 'user',
+        ...(provider === 'wechat' ? { wechatId: account } : {})
+      })
+    } catch (e) {
+      return res.status(400).json({ error: e.message })
+    }
+  }
+  const token = store.createSession(user.id)
+  res.json({ ok: true, token, user: store.publicUser(user) })
+})
+
 // 当前用户信息
 app.get('/api/auth/me', (req, res) => {
   const user = currentUser(req)
