@@ -6,6 +6,7 @@
 import { ref, computed, watch } from 'vue'
 import api from '@/api'
 import AppIcon from '@/components/AppIcon.vue'
+import { PROVINCES } from '@/data/regions'
 import { useAppStore } from '@/stores/app'
 
 const props = defineProps<{ open: boolean; initialMode?: 'login' | 'register' }>()
@@ -19,6 +20,19 @@ const account = ref('')
 const password = ref('')
 const nickname = ref('')
 const showPwd = ref(false)
+
+/* 注册身份：农户 / 专家（专家需填职称、擅长领域、驻点地区） */
+const regRole = ref<'user' | 'expert'>('user')
+const regTitle = ref('')
+const regRegion = ref('')
+const regSpecialty = ref<string[]>([])
+const EXPERT_FIELDS = ['三七', '重楼', '黄精', '蓝莓', '柑橘', '茶叶', '核桃', '花椒', '芒果', '咖啡', '食用玫瑰', '草果']
+const toggleSpecialty = (f: string) => {
+  const i = regSpecialty.value.indexOf(f)
+  if (i === -1) regSpecialty.value = [...regSpecialty.value, f].slice(0, 8)
+  else regSpecialty.value = regSpecialty.value.filter((x) => x !== f)
+}
+const regRegionOptions = PROVINCES.find((p) => p.name === '云南')!.groups.flatMap((g) => g.items)
 const busy = ref(false)
 const error = ref('')
 
@@ -48,7 +62,11 @@ const METHOD_PLACEHOLDER: Record<string, string> = {
 }
 
 const canGo = computed(() => {
-  if (mode.value === 'register') return account.value.trim().length >= 5 && password.value.length >= 6
+  if (mode.value === 'register') {
+    const base = account.value.trim().length >= 5 && password.value.length >= 6
+    if (regRole.value === 'expert') return base && regSpecialty.value.length > 0 && !!regRegion.value
+    return base
+  }
   return account.value.trim().length >= 4 && password.value.length >= 1
 })
 
@@ -70,7 +88,11 @@ const go = async () => {
         account: account.value.trim(),
         password: password.value,
         nickname: nickname.value.trim(),
-        method: method.value
+        method: method.value,
+        role: regRole.value,
+        title: regRole.value === 'expert' ? regTitle.value.trim() : undefined,
+        specialty: regRole.value === 'expert' ? regSpecialty.value : undefined,
+        region: regRole.value === 'expert' ? regRegion.value : undefined
       })
       store.setAuth(res.token, res.user)
       store.showToast('注册成功，已自动登录', 'success')
@@ -143,6 +165,52 @@ const fillDemo = (role: 'expert' | 'user') => {
                 <input v-model="nickname" class="au__input" placeholder="怎么称呼您？" maxlength="16" />
               </div>
             </label>
+
+            <!-- 注册身份 -->
+            <div v-if="mode === 'register'" class="au__field">
+              <span class="au__label">注册身份</span>
+              <div class="au__roles">
+                <button type="button" class="au__role" :class="{ 'is-on': regRole === 'user' }" @click="regRole = 'user'">
+                  <AppIcon name="user" :size="14" /> 我是农户
+                </button>
+                <button type="button" class="au__role" :class="{ 'is-on': regRole === 'expert' }" @click="regRole = 'expert'">
+                  <AppIcon name="settings" :size="14" /> 我是专家
+                </button>
+              </div>
+            </div>
+
+            <template v-if="mode === 'register' && regRole === 'expert'">
+              <label class="au__field">
+                <span class="au__label">职称</span>
+                <div class="au__input-wrap">
+                  <AppIcon name="book" :size="15" class="au__input-icon" />
+                  <input v-model="regTitle" class="au__input" placeholder="如：高级农艺师 / 植保专家" maxlength="12" />
+                </div>
+              </label>
+              <div class="au__field">
+                <span class="au__label">擅长领域 <i class="au__req">*</i></span>
+                <div class="au__chips">
+                  <button
+                    v-for="f in EXPERT_FIELDS"
+                    :key="f"
+                    type="button"
+                    class="au__chip"
+                    :class="{ 'is-on': regSpecialty.includes(f) }"
+                    @click="toggleSpecialty(f)"
+                  >
+                    {{ f }}
+                  </button>
+                </div>
+                <small class="au__hint">选 1–8 个最擅长的作物/领域，农户将据此找到您</small>
+              </div>
+              <label class="au__field">
+                <span class="au__label">驻点地区 <i class="au__req">*</i></span>
+                <select v-model="regRegion" class="au__region">
+                  <option value="">请选择州市</option>
+                  <option v-for="r in regRegionOptions" :key="r" :value="r">{{ r }}</option>
+                </select>
+              </label>
+            </template>
 
             <label class="au__field">
               <span class="au__label">密码</span>
@@ -349,6 +417,77 @@ const fillDemo = (role: 'expert' | 'user') => {
   color: var(--c-text-4);
   display: grid;
   place-items: center;
+}
+
+.au__req {
+  color: var(--c-danger);
+  font-style: normal;
+}
+
+.au__roles {
+  display: flex;
+  gap: 8px;
+}
+
+.au__role {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  height: 40px;
+  border-radius: 12px;
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--c-text-2);
+  background: var(--c-bg-muted);
+  border: 1.5px solid transparent;
+  transition: all var(--dur-fast);
+}
+
+.au__role.is-on {
+  color: var(--c-primary-700);
+  background: var(--c-primary-50);
+  border-color: var(--c-primary-500);
+}
+
+.au__chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.au__chip {
+  height: 28px;
+  padding: 0 12px;
+  border-radius: var(--r-full);
+  font-size: 12px;
+  color: var(--c-text-2);
+  background: var(--c-bg-muted);
+  border: 1px solid transparent;
+  transition: all var(--dur-fast);
+}
+
+.au__chip.is-on {
+  color: #fff;
+  font-weight: 700;
+  background: var(--c-primary-600);
+}
+
+.au__region {
+  width: 100%;
+  height: 42px;
+  padding: 0 12px;
+  border-radius: 12px;
+  border: 1px solid var(--c-line);
+  background: var(--c-bg-card);
+  font-size: 13.5px;
+  color: var(--c-text-1);
+}
+
+.au__region:focus {
+  outline: none;
+  border-color: var(--c-primary-500);
 }
 
 .au__hint {

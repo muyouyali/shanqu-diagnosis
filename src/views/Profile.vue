@@ -22,8 +22,17 @@ const form = ref({
   email: '',
   wechatId: '',
   region: '',
+  title: '',
   password: ''
 })
+/** 专家可编辑擅长领域 */
+const expertTags = ref<string[]>([])
+const EXPERT_FIELDS = ['三七', '重楼', '黄精', '蓝莓', '柑橘', '茶叶', '核桃', '花椒', '芒果', '咖啡', '食用玫瑰', '草果']
+const toggleTag = (f: string) => {
+  const i = expertTags.value.indexOf(f)
+  if (i === -1) expertTags.value = [...expertTags.value, f].slice(0, 8)
+  else expertTags.value = expertTags.value.filter((x) => x !== f)
+}
 const avatarFile = ref('')
 const saving = ref(false)
 const dangerOpen = ref(false)
@@ -48,8 +57,10 @@ const fillForm = () => {
     email: u.email,
     wechatId: u.wechatId,
     region: u.region || store.region,
+    title: (u as any).title || '',
     password: ''
   }
+  expertTags.value = (u as any).specialty || []
   avatarFile.value = u.avatar
 }
 
@@ -88,10 +99,12 @@ const pick = () => ({
   email: form.value.email.trim(),
   wechatId: form.value.wechatId.trim(),
   region: form.value.region,
+  ...(store.isExpert && { title: form.value.title, specialty: expertTags.value }),
   ...(form.value.password ? { password: form.value.password } : {})
 })
 
-const pickOf = (u: { nickname: string; phone: string; email: string; wechatId: string; region: string }) => ({
+const pickOf = (u: { nickname: string; phone: string; email: string; wechatId: string; region: string; title?: string; specialty?: string[] }) => ({
+  ...(store.isExpert && { title: u.title || '', specialty: u.specialty || [] }),
   nickname: u.nickname,
   phone: u.phone,
   email: u.email,
@@ -213,6 +226,29 @@ const avatarInitial = computed(() => (store.user?.nickname || '农')[0])
             <input v-model="form.region" maxlength="12" placeholder="如：文山市" />
           </label>
         </div>
+
+        <!-- 专家专属：职称与擅长领域 -->
+        <template v-if="store.isExpert">
+          <label class="pf-field">
+            <span>职称</span>
+            <input v-model="form.title" maxlength="12" placeholder="如：高级农艺师" />
+          </label>
+          <div class="pf-field">
+            <span>擅长领域（点选，农户将据此找到您）</span>
+            <div class="pf-tags">
+              <button
+                v-for="f in EXPERT_FIELDS"
+                :key="f"
+                type="button"
+                class="pf-tag"
+                :class="{ 'is-on': expertTags.includes(f) }"
+                @click="toggleTag(f)"
+              >
+                {{ f }}
+              </button>
+            </div>
+          </div>
+        </template>
 
         <label class="pf-field">
           <span>新密码（留空则不修改）</span>
@@ -695,5 +731,28 @@ const avatarInitial = computed(() => (store.user?.nickname || '农')[0])
   to {
     transform: rotate(360deg);
   }
+}
+.pf-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 7px;
+  margin-top: 8px;
+}
+
+.pf-tag {
+  height: 30px;
+  padding: 0 13px;
+  border-radius: var(--r-full);
+  font-size: 12px;
+  color: var(--c-text-2);
+  background: var(--c-bg-muted);
+  border: 1px solid transparent;
+  transition: all var(--dur-fast);
+}
+
+.pf-tag.is-on {
+  color: #fff;
+  font-weight: 700;
+  background: var(--c-primary-600);
 }
 </style>

@@ -538,7 +538,7 @@ app.get('/api/qa/history', (req, res) => {
 app.get('/api/experts', (req, res) => {
   const { cropId, region } = req.query
   const experts = store.listExperts()
-  const cropName = cropId ? CROP_NAME[cropId] || String(cropId) : ''
+  const cropName = cropId ? CROPS.find((c) => c.id === cropId)?.name || CROP_NAME[cropId] || String(cropId) : ''
   const items = experts
     .map((e) => {
       let match = 0
@@ -711,7 +711,7 @@ const requireExpert = (req, res) => {
 
 // 注册（支持手机号 / 邮箱 / 微信号注册）
 app.post('/api/auth/register', (req, res) => {
-  const { account, password, nickname, method } = req.body || {}
+  const { account, password, nickname, method, role, title, specialty, region } = req.body || {}
   if (!account || String(account).trim().length < 5) {
     return res.status(400).json({ error: '账号格式不正确（至少 5 位）' })
   }
@@ -724,7 +724,17 @@ app.post('/api/auth/register', (req, res) => {
   else if (method === 'wechat') extra.wechatId = a
   else extra.phone = a
   try {
-    const user = store.createUser({ account: a, password, nickname, ...extra })
+    const isExpert = role === 'expert'
+    const user = store.createUser({
+      account: a,
+      password,
+      nickname,
+      role: isExpert ? 'expert' : 'user',
+      title: isExpert ? title : '',
+      specialty: isExpert ? specialty : [],
+      region: isExpert ? region : '',
+      ...extra
+    })
     const token = store.createSession(user.id)
     res.json({ ok: true, token, user: store.publicUser(user) })
   } catch (e) {
@@ -755,7 +765,7 @@ app.get('/api/auth/me', (req, res) => {
 app.put('/api/auth/profile', (req, res) => {
   const user = requireUser(req, res)
   if (!user) return
-  const { nickname, avatar, region, phone, email, wechatId, password } = req.body || {}
+  const { nickname, avatar, region, phone, email, wechatId, password, title, specialty } = req.body || {}
   if (avatar && String(avatar).length > 1_600_000) {
     return res.status(413).json({ error: '头像过大，请更换图片后重试' })
   }
@@ -765,6 +775,12 @@ app.put('/api/auth/profile', (req, res) => {
     ...(region !== undefined && { region }),
     ...(phone !== undefined && { phone: String(phone).trim() }),
     ...(email !== undefined && { email: String(email).trim() }),
+    ...(title !== undefined && { title: String(title).trim().slice(0, 20) }),
+    ...(specialty !== undefined && {
+      specialty: Array.isArray(specialty)
+        ? specialty.map((x) => String(x).trim().slice(0, 12)).filter(Boolean).slice(0, 8)
+        : []
+    }),
     ...(wechatId !== undefined && { wechatId: String(wechatId).trim() }),
     ...(password && { password: String(password) })
   })

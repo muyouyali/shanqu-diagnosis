@@ -120,7 +120,7 @@ export const findUserById = (id) => {
   return db.users.find((u) => u.id === Number(id)) || null
 }
 
-export const createUser = ({ account, password, nickname, role = 'user', phone = '', email = '', wechatId = '' }) => {
+export const createUser = ({ account, password, nickname, role = 'user', phone = '', email = '', wechatId = '', title = '', specialty = [], region = '' }) => {
   const db = load()
   if (findUserByAccount(account)) throw new Error('该账号已注册，请直接登录')
   const salt = crypto.randomBytes(8).toString('hex')
@@ -135,7 +135,11 @@ export const createUser = ({ account, password, nickname, role = 'user', phone =
     email: String(email).trim(),
     wechatId: String(wechatId).trim(),
     avatar: '',
-    region: '',
+    title: String(title).trim().slice(0, 20),
+    specialty: Array.isArray(specialty)
+      ? specialty.map((x) => String(x).trim().slice(0, 12)).filter(Boolean).slice(0, 8)
+      : [],
+    region: String(region).trim().slice(0, 20),
     createdAt: new Date().toISOString()
   }
   db.users.push(user)

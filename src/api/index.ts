@@ -87,7 +87,7 @@ export const api = {
     http.delete(`/crops/submissions/${id}`).then((r) => r.data),
 
   // ==================== 用户认证 ====================
-  register: (payload: { account: string; password: string; nickname?: string; method?: string }) =>
+  register: (payload: { account: string; password: string; nickname?: string; method?: string; role?: 'user' | 'expert'; title?: string; specialty?: string[]; region?: string }) =>
     http.post<{ ok: boolean; token: string; user: User }>('/auth/register', payload).then((r) => r.data),
 
   login: (payload: { account: string; password: string; method?: string }) =>
