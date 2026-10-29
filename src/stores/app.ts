@@ -60,18 +60,22 @@ export const useAppStore = defineStore('app', () => {
 
   const isExpert = computed(() => user.value?.role === 'expert')
 
-  /** 应用启动时恢复登录态（token 失效则静默清掉） */
+  /** 应用启动时恢复登录态（token 失效则静默清掉）；并发调用共享同一次请求 */
+  let restorePromise: Promise<void> | null = null
   const restoreUser = async () => {
-    if (userLoaded.value) return
+    if (restorePromise) return restorePromise
     userLoaded.value = true
-    if (!localStorage.getItem('ylnz_token')) return
-    try {
-      user.value = await api.me()
-      await loadUnread()
-    } catch {
-      localStorage.removeItem('ylnz_token')
-      user.value = null
-    }
+    restorePromise = (async () => {
+      if (!localStorage.getItem('ylnz_token')) return
+      try {
+        user.value = await api.me()
+        await loadUnread()
+      } catch {
+        localStorage.removeItem('ylnz_token')
+        user.value = null
+      }
+    })()
+    return restorePromise
   }
 
   const setAuth = (token: string, u: User) => {

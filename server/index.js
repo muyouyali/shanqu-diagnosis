@@ -629,6 +629,22 @@ app.get('/api/messages', (req, res) => {
   })
 })
 
+// 全部已读
+app.post('/api/messages/read-all', (req, res) => {
+  const user = requireUser(req, res)
+  if (!user) return
+  const n = store.markAllRead(user.id)
+  res.json({ ok: true, marked: n, unread: 0 })
+})
+
+// 清空我的消息
+app.delete('/api/messages', (req, res) => {
+  const user = requireUser(req, res)
+  if (!user) return
+  const n = store.clearMessages(user.id)
+  res.json({ ok: true, removed: n, unread: 0 })
+})
+
 app.post('/api/messages/:id/read', (req, res) => {
   const user = requireUser(req, res)
   if (!user) return

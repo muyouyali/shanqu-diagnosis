@@ -240,6 +240,28 @@ export const markMessageRead = (id, userId) => {
   return m
 }
 
+export const markAllRead = (userId) => {
+  const db = load()
+  let n = 0
+  for (const m of db.messages) {
+    if (!m.read && (m.userId === Number(userId) || m.userId === 'all')) {
+      m.read = true
+      n++
+    }
+  }
+  if (n) persist()
+  return n
+}
+
+/** 清空我的消息中心（删除本人私信与针对本人的公告副本不影响他人） */
+export const clearMessages = (userId) => {
+  const db = load()
+  const before = db.messages.length
+  db.messages = db.messages.filter((m) => m.userId !== Number(userId))
+  persist()
+  return before - db.messages.length
+}
+
 export const unreadCount = (userId) => {
   const db = load()
   return db.messages.filter((m) => !m.read && (m.userId === Number(userId) || m.userId === 'all')).length

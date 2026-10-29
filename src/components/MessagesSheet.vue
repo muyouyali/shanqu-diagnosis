@@ -42,6 +42,38 @@ const load = async () => {
   }
 }
 
+const confirming = ref(false)
+
+const readAll = async () => {
+  try {
+    await api.readAllMessages()
+    items.value.forEach((m) => (m.read = true))
+    store.unread = 0
+    unread.value = 0
+    store.showToast('已全部标记为已读', 'success')
+  } catch (e: any) {
+    store.showToast(e?.message || '操作失败', 'error')
+  }
+}
+
+const clearAll = async () => {
+  if (!confirming.value) {
+    confirming.value = true
+    setTimeout(() => (confirming.value = false), 3000)
+    return
+  }
+  try {
+    const r = await api.clearMessages()
+    items.value = []
+    unread.value = 0
+    store.unread = 0
+    confirming.value = false
+    store.showToast(`已清理 ${r.removed} 条消息`, 'success')
+  } catch (e: any) {
+    store.showToast(e?.message || '清理失败', 'error')
+  }
+}
+
 const openMsg = async (m: Message) => {
   expanded.value = expanded.value === m.id ? null : m.id
   if (!m.read) {
@@ -83,7 +115,21 @@ const fmt = (iso: string) => {
               </p>
               <p v-else class="msg__read-tip">全部消息已读</p>
             </div>
-            <button class="msg__close" @click="emit('close')"><AppIcon name="x" :size="15" /></button>
+            <div class="msg__ops">
+              <button v-if="items.length" class="msg__op" @click="readAll">
+                <AppIcon name="check-circle" :size="12" /> 全部已读
+              </button>
+              <button
+                v-if="items.length"
+                class="msg__op msg__op--danger"
+                :class="{ 'is-confirming': confirming }"
+                @click="clearAll"
+              >
+                <AppIcon name="trash" :size="12" />
+                {{ confirming ? '再点确认清空' : '清理消息' }}
+              </button>
+              <button class="msg__close" @click="emit('close')"><AppIcon name="x" :size="15" /></button>
+            </div>
           </header>
 
           <div class="msg__body">
@@ -204,6 +250,44 @@ const fmt = (iso: string) => {
 
 .msg__read-tip {
   color: var(--c-text-4);
+}
+
+.msg__ops {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.msg__op {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  height: 28px;
+  padding: 0 10px;
+  border-radius: var(--r-full);
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--c-primary-700);
+  background: var(--c-primary-50);
+  border: 1px solid var(--c-primary-200);
+  white-space: nowrap;
+  transition: all var(--dur-fast);
+}
+
+.msg__op:active {
+  transform: scale(0.95);
+}
+
+.msg__op--danger {
+  color: var(--c-danger);
+  background: #fdeceb;
+  border-color: #f8c9c6;
+}
+
+.msg__op--danger.is-confirming {
+  background: var(--c-danger);
+  color: #fff;
+  border-color: var(--c-danger);
 }
 
 .msg__close {

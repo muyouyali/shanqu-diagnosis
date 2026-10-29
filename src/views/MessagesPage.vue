@@ -25,6 +25,36 @@ onMounted(async () => {
   }
 })
 
+const readAll = async () => {
+  try {
+    await api.readAllMessages()
+    items.value.forEach((m) => (m.read = true))
+    store.unread = 0
+    store.showToast('已全部标记为已读', 'success')
+  } catch (e: any) {
+    store.showToast(e?.message || '操作失败', 'error')
+  }
+}
+
+const confirming = ref(false)
+
+const clearAll = async () => {
+  if (!confirming.value) {
+    confirming.value = true
+    setTimeout(() => (confirming.value = false), 3000)
+    return
+  }
+  try {
+    const res = await api.clearMessages()
+    items.value = []
+    store.unread = 0
+    confirming.value = false
+    store.showToast(`已清理 ${res.removed} 条消息`, 'success')
+  } catch (e: any) {
+    store.showToast(e?.message || '清理失败', 'error')
+  }
+}
+
 const openMsg = async (m: Message) => {
   expanded.value = expanded.value === m.id ? null : m.id
   if (!m.read) {
@@ -54,6 +84,20 @@ const fmt = (iso: string) => {
     <header class="mp__head">
       <button class="mp__back" @click="router.back()"><AppIcon name="arrow-left" :size="17" /></button>
       <h1>我的消息</h1>
+      <div class="mp-head__ops">
+        <button v-if="items.length" class="mp-op" @click="readAll">
+          <AppIcon name="check-circle" :size="12" /> 全部已读
+        </button>
+        <button
+          v-if="items.length"
+          class="mp-op mp-op--danger"
+          :class="{ 'is-confirming': confirming }"
+          @click="clearAll"
+        >
+          <AppIcon name="trash" :size="12" />
+          {{ confirming ? '再点确认清空' : '清理消息' }}
+        </button>
+      </div>
     </header>
 
     <div v-if="loading" class="mp__empty">正在加载…</div>
@@ -125,6 +169,39 @@ const fmt = (iso: string) => {
   font-size: 17px;
   font-weight: 800;
   color: var(--c-text-1);
+}
+
+.mp-head__ops {
+  margin-left: auto;
+  display: flex;
+  gap: 6px;
+}
+
+.mp-op {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  height: 28px;
+  padding: 0 10px;
+  border-radius: var(--r-full);
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--c-primary-700);
+  background: var(--c-primary-50);
+  border: 1px solid var(--c-primary-200);
+  white-space: nowrap;
+}
+
+.mp-op--danger {
+  color: var(--c-danger);
+  background: #fdeceb;
+  border-color: #f8c9c6;
+}
+
+.mp-op--danger.is-confirming {
+  background: var(--c-danger);
+  color: #fff;
+  border-color: var(--c-danger);
 }
 
 .mp__empty {
