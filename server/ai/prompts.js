@@ -9,7 +9,8 @@
 
 import { CROPS, getDiseasesByCrop } from '../kb/diseases.js'
 
-const CROP_NAME = { sanqi: '文山三七', blueberry: '高原蓝莓', citrus: '柑橘' }
+// 作物名称映射：从知识库动态生成（新增作物无需改这里）
+const CROP_NAME = Object.fromEntries(CROPS.map((c) => [c.id, c.name]))
 
 /**
  * 构建作物候选病害列表（约束模型输出空间，显著降低幻觉）
