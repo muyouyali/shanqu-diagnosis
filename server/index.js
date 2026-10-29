@@ -4,6 +4,7 @@
  */
 
 import 'dotenv/config'
+import crypto from 'node:crypto'
 import express from 'express'
 import cors from 'cors'
 import path from 'node:path'
@@ -813,6 +814,81 @@ app.post('/api/auth/quick', (req, res) => {
 })
 
 // 第三方授权登录（演示环境模拟扫码成功；接入真实开放平台后用 code 换 openid）
+// ==================== 微信开放平台真实扫码登录（网站应用 snsapi_login） ====================
+// 配置 .env：WECHAT_APP_ID / WECHAT_APP_SECRET / PUBLIC_BASE_URL 后自动启用；
+// 未配置时 /api/auth/wechat/config 返回 enabled:false，前端降级为演示模拟。
+const WECHAT_APP_ID = process.env.WECHAT_APP_ID || ''
+const WECHAT_APP_SECRET = process.env.WECHAT_APP_SECRET || ''
+const PUBLIC_BASE_URL = process.env.PUBLIC_BASE_URL || ''
+const wechatStates = new Map() // state -> { exp }
+
+app.get('/api/auth/wechat/config', (req, res) => {
+  res.json({
+    enabled: !!(WECHAT_APP_ID && WECHAT_APP_SECRET && PUBLIC_BASE_URL),
+    appId: WECHAT_APP_ID || ''
+  })
+})
+
+// 生成微信扫码地址（前端整页跳转或 iframe 嵌入均可）
+app.get('/api/auth/wechat/qr', (req, res) => {
+  if (!WECHAT_APP_ID || !PUBLIC_BASE_URL) {
+    return res.status(400).json({ error: '微信登录未配置（需 WECHAT_APP_ID / PUBLIC_BASE_URL）' })
+  }
+  const state = crypto.randomBytes(10).toString('hex')
+  wechatStates.set(state, { exp: Date.now() + 5 * 60 * 1000 })
+  const redirectUri = encodeURIComponent(`${PUBLIC_BASE_URL.replace(/\/$/, '')}/api/auth/wechat/callback`)
+  const url =
+    `https://open.weixin.qq.com/connect/qrconnect?appid=${WECHAT_APP_ID}` +
+    `&redirect_uri=${redirectUri}&response_type=code&scope=snsapi_login&state=${state}#wechat_redirect`
+  res.json({ ok: true, url, state })
+})
+
+// 微信回调：code 换 access_token → 拉取用户信息 → 按openid绑定/建号 → 带token回前端
+app.get('/api/auth/wechat/callback', async (req, res) => {
+  const { code, state } = req.query
+  const frontBase = (process.env.FRONT_BASE_URL || PUBLIC_BASE_URL || '').replace(/\/$/, '')
+  const back = (err, token) => {
+    if (!frontBase) return res.status(200).json({ err, token })
+    const q = err ? `?oauth_error=${encodeURIComponent(err)}` : `?token=${token}`
+    res.redirect(302, `${frontBase}/oauth/callback${q}`)
+  }
+  if (!WECHAT_APP_ID || !WECHAT_APP_SECRET) return back('未配置微信开放平台')
+  if (!state || !wechatStates.has(state)) return back('state 已失效，请重新扫码')
+  wechatStates.delete(state)
+  if (!code) return back('微信授权未完成')
+  try {
+    // 1. code 换 token
+    const tokRes = await fetch(
+      `https://api.weixin.qq.com/sns/oauth2/access_token?appid=${WECHAT_APP_ID}&secret=${WECHAT_APP_SECRET}&code=${code}&grant_type=authorization_code`
+    )
+    const tok = await tokRes.json()
+    if (tok.errcode) return back(`微信授权失败：${tok.errmsg || tok.errcode}`)
+    // 2. 拉取用户信息（snsapi_login scope）
+    const uiRes = await fetch(
+      `https://api.weixin.qq.com/sns/userinfo?access_token=${tok.access_token}&openid=${tok.openid}`
+    )
+    const ui = await uiRes.json()
+    if (ui.errcode) return back(`获取微信用户信息失败：${ui.errmsg || ui.errcode}`)
+    // 3. 按 unionid/openid 绑定账号
+    const openid = ui.unionid || ui.openid
+    const account = `wx_${openid}`
+    let user = store.findUserByAccount(account)
+    if (!user) {
+      user = store.createUser({
+        account,
+        password: `wechat_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
+        nickname: ui.nickname || '微信用户',
+        role: 'user',
+        wechatId: account
+      })
+    }
+    const token = store.createSession(user.id)
+    back(null, token)
+  } catch (e) {
+    back(`微信登录异常：${e.message}`)
+  }
+})
+
 app.post('/api/auth/oauth', (req, res) => {
   const { provider, openid } = req.body || {}
   if (provider !== 'wechat' && provider !== 'alipay') {

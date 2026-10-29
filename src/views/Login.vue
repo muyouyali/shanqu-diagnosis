@@ -99,6 +99,9 @@ const demo = async (role: 'user' | 'expert') => {
 /** 其他登录方式 */
 type QuickProvider = 'wechat' | 'alipay' | 'email' | 'phone'
 const otherOpen = ref<QuickProvider | null>(null)
+const wechatReal = ref(false)
+const wechatQrUrl = ref('')
+const wechatErr = ref('')
 const quickMode = ref<'login' | 'register'>('login')
 const quickTarget = ref('')
 const quickCode = ref('')
@@ -117,19 +120,37 @@ const PROVIDER_META: Record<QuickProvider, { name: string; icon: string; ph: str
   phone: { name: '手机号', icon: '📱', ph: '13800000000', type: 'tel' }
 }
 
-const otherLogin = (p: QuickProvider) => {
-  if (p === 'wechat' || p === 'alipay') {
+const otherLogin = async (p: QuickProvider) => {
+  if (p === 'wechat') {
+    // 查询服务端是否配置了微信开放平台：配置→真实扫码；未配置→演示模拟
+    wechatReal.value = false
+    wechatQrUrl.value = ''
+    wechatErr.value = ''
     otherOpen.value = p
-  } else {
-    quickMode.value = 'login'
-    quickTarget.value = ''
-    quickCode.value = ''
-    quickNickname.value = ''
-    quickRole.value = 'user'
-    codeSent.value = false
-    codeHint.value = ''
-    otherOpen.value = p
+    try {
+      const cfg = await api.wechatConfig()
+      if (cfg.enabled) {
+        const qr = await api.wechatQr()
+        wechatQrUrl.value = qr.url
+        wechatReal.value = true
+      }
+    } catch {
+      /* 保持演示模式 */
+    }
+    return
   }
+  if (p === 'alipay') {
+    otherOpen.value = p
+    return
+  }
+  quickMode.value = 'login'
+  quickTarget.value = ''
+  quickCode.value = ''
+  quickNickname.value = ''
+  quickRole.value = 'user'
+  codeSent.value = false
+  codeHint.value = ''
+  otherOpen.value = p
 }
 
 const closeOther = () => {
@@ -224,12 +245,41 @@ const TIPS = [
 ]
 const tipIdx = ref(0)
 let timer: number | undefined
+
+/** 真实微信扫码：iframe 内回调页 postMessage 通知登录成功 */
+const onOauthMessage = (e: MessageEvent) => {
+  if (e.origin !== window.location.origin) return
+  const d = e.data as { type?: string; token?: string; error?: string }
+  if (d?.type !== 'ylnz-oauth') return
+  if (d.token) {
+    finishWechat(d.token)
+  } else {
+    wechatErr.value = d.error || '微信授权失败'
+  }
+}
+
+const finishWechat = async (token: string) => {
+  try {
+    const user = await api.meWithToken(token)
+    store.setAuth(token, user)
+    store.showToast(`微信登录成功，欢迎 ${user.nickname}`, 'success')
+    closeOther()
+    goIn()
+  } catch {
+    wechatErr.value = '登录态获取失败，请重试'
+  }
+}
+
 onMounted(() => {
   timer = window.setInterval(() => {
     tipIdx.value = (tipIdx.value + 1) % TIPS.length
   }, 4200)
+  window.addEventListener('message', onOauthMessage)
 })
-onBeforeUnmount(() => timer && clearInterval(timer))
+onBeforeUnmount(() => {
+  if (timer) clearInterval(timer)
+  window.removeEventListener('message', onOauthMessage)
+})
 </script>
 
 <template>
@@ -395,8 +445,46 @@ onBeforeUnmount(() => timer && clearInterval(timer))
     <Teleport to="body">
       <Transition name="tipfade">
         <div v-if="otherOpen" class="om-mask" @click.self="closeOther">
-          <!-- 微信 / 支付宝：模拟扫码授权 -->
-          <div v-if="otherOpen === 'wechat' || otherOpen === 'alipay'" class="om">
+          <!-- 微信：真实扫码（已配置开放平台） -->
+          <div v-if="otherOpen === 'wechat'" class="om">
+            <header class="om__head">
+              <b>💬 微信授权登录</b>
+              <button class="om__close" @click="closeOther">✕</button>
+            </header>
+            <div class="om__body om__body--qr">
+              <template v-if="wechatReal">
+                <iframe
+                  :src="wechatQrUrl"
+                  class="wx-iframe"
+                  frameborder="0"
+                  allowtransparency="true"
+                  scrolling="no"
+                  title="微信扫码登录"
+                />
+                <p class="om__note">请使用微信扫描二维码确认登录，授权后将自动绑定并进入系统</p>
+                <button class="om__refresh" @click="otherLogin('wechat')">刷新二维码</button>
+              </template>
+              <template v-else>
+                <div class="qr" :class="{ 'is-done': scanning }">
+                  <div class="qr__grid">
+                    <i v-for="n in 49" :key="n" :class="{ on: pseudoQr(n) }" />
+                  </div>
+                  <div class="qr__scan">{{ scanning ? '✓ 已授权' : '请使用微信扫一扫' }}</div>
+                </div>
+                <p class="om__note">
+                  ⚠️ 未配置微信开放平台（.env 的 WECHAT_APP_ID / WECHAT_APP_SECRET / PUBLIC_BASE_URL），当前为演示模拟；
+                  配置后此处将展示微信官方真实二维码
+                </p>
+                <button class="lg-btn om__btn" :disabled="scanning" @click="oauthSubmit">
+                  {{ scanning ? '✓ 授权成功，正在进入…' : '模拟微信扫码成功' }}
+                </button>
+              </template>
+              <p v-if="wechatErr" class="om__note" style="color: #ffb3ab">{{ wechatErr }}</p>
+            </div>
+          </div>
+
+          <!-- 支付宝：演示模拟 -->
+          <div v-else-if="otherOpen === 'alipay'" class="om">
             <header class="om__head">
               <b>{{ PROVIDER_META[otherOpen].icon }} {{ PROVIDER_META[otherOpen].name }}授权登录</b>
               <button class="om__close" @click="closeOther">✕</button>
@@ -999,6 +1087,26 @@ onBeforeUnmount(() => timer && clearInterval(timer))
   color: rgba(255, 255, 255, 0.65);
   line-height: 1.7;
   margin-bottom: 12px;
+}
+
+.wx-iframe {
+  width: 300px;
+  height: 400px;
+  max-width: 100%;
+  border: none;
+  border-radius: 12px;
+  background: #fff;
+  margin-bottom: 10px;
+}
+
+.om__refresh {
+  padding: 7px 16px;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, 0.28);
+  background: rgba(255, 255, 255, 0.1);
+  color: #fff;
+  font-size: 12px;
+  font-weight: 700;
 }
 
 .om__btn {

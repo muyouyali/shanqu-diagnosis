@@ -114,6 +114,24 @@ export const api = {
   oauthAuth: (payload: { provider: 'wechat' | 'alipay'; openid?: string }) =>
     http.post<{ ok: boolean; token: string; user: User }>('/auth/oauth', payload).then((r) => r.data),
 
+  /** 微信开放平台配置状态（是否启用真实扫码） */
+  wechatConfig: () =>
+    http.get<{ enabled: boolean; appId: string }>('/auth/wechat/config').then((r) => r.data),
+
+  /** 获取微信扫码地址（真实接入） */
+  wechatQr: () =>
+    http.get<{ ok: boolean; url: string; state: string }>('/auth/wechat/qr').then((r) => r.data),
+
+  /** 顶层 OAuth 回调场景：带 token 拉取当前用户（绕过 localStorage 拦截器） */
+  meWithToken: async (token: string): Promise<User> => {
+    const res = await fetch(`/api/auth/me?token=${encodeURIComponent(token)}`, {
+      headers: { 'X-Token': token }
+    })
+    if (!res.ok) throw new Error('登录态校验失败')
+    const data = await res.json()
+    return data.user
+  },
+
   me: () => http.get<{ user: User }>('/auth/me').then((r) => r.data.user),
 
   updateProfile: (payload: Partial<User> & { password?: string }) =>

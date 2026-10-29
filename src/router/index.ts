@@ -125,6 +125,12 @@ const routes = [
     component: () => import('@/views/Login.vue'),
     meta: { title: '登录' }
   },
+  {
+    path: '/oauth/callback',
+    name: 'oauth-callback',
+    component: () => import('@/views/OAuthCallback.vue'),
+    meta: { title: '授权回调' }
+  },
   { path: '/:pathMatch(.*)*', redirect: '/' }
 ]
 
@@ -136,6 +142,8 @@ const router = createRouter({
 
 /** 全局登录守卫：未登录一律先进登录页，登录后回到原目标 */
 router.beforeEach((to) => {
+  // OAuth 回调页必须放行（此时尚未有 token）
+  if (to.path === '/oauth/callback') return true
   const hasToken = !!localStorage.getItem('ylnz_token')
   if (!hasToken && to.path !== '/login') {
     return { path: '/login', query: { redirect: to.fullPath } }
