@@ -289,7 +289,7 @@ export const notifyExpertsAsk = ({ user, question, cropName, region }) => {
   const title = `${who} 向您提问`
   const content = `${prefix ? `【${prefix}】` : ''}${String(question).slice(0, 300)}`
   return ids.map((id) =>
-    createMessage({ userId: id, from: 'user', fromName: who, title, content })
+    createMessage({ userId: id, from: 'user', fromId: user?.id, fromName: who, title, content })
   )
 }
 

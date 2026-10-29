@@ -6,6 +6,7 @@
 import { ref, computed, watch } from 'vue'
 import api from '@/api'
 import AppIcon from '@/components/AppIcon.vue'
+import MessageDetailSheet from '@/components/MessageDetailSheet.vue'
 import { useAppStore } from '@/stores/app'
 import type { Message } from '@/types'
 
@@ -16,7 +17,6 @@ const store = useAppStore()
 const items = ref<Message[]>([])
 const unread = ref(0)
 const loading = ref(false)
-const expanded = ref<number | null>(null)
 
 /** 未读排最前，其余按时间倒序 */
 const sorted = computed(() =>
@@ -72,7 +72,7 @@ const enterSelect = () => {
   selecting.value = true
   checked.value = new Set()
   confirmClearAll.value = false
-  expanded.value = null
+  exitSelect()
 }
 const exitSelect = () => {
   selecting.value = false
@@ -128,17 +128,21 @@ const clearEverything = async () => {
 
 const openMsg = async (m: Message) => {
   if (selecting.value) return toggleCheck(m.id)
-  expanded.value = expanded.value === m.id ? null : m.id
+  detail.value = m
   if (!m.read) {
     m.read = true
     try {
       const r = await api.readMessage(m.id)
       store.unread = r.unread
+      unread.value = r.unread
     } catch {
       /* 静默 */
     }
   }
 }
+
+/** 详情弹层 */
+const detail = ref<Message | null>(null)
 
 const tone = (m: Message) =>
   m.from === 'system'
@@ -213,7 +217,7 @@ const fmt = (iso: string) => {
                 class="msg-item"
                 :class="{
                   'is-unread': !m.read,
-                  'is-open': expanded === m.id,
+                  
                   'is-selected': selecting && checked.has(m.id)
                 }"
                 @click="openMsg(m)"
@@ -242,11 +246,10 @@ const fmt = (iso: string) => {
                     </span>
                   </span>
                   <span class="msg-item__from">{{ m.fromName }} · {{ tone(m).label }}</span>
-                  <span class="msg-item__preview" v-if="expanded !== m.id">{{ m.content.slice(0, 44) }}…</span>
-                  <span class="msg-item__content" v-else>{{ m.content }}</span>
+                  <span class="msg-item__preview">{{ m.content.slice(0, 44) }}{{ m.content.length > 44 ? '…' : '' }}</span>
                   <span class="msg-item__detail-btn">
-                    {{ expanded === m.id ? '收起详情' : '查看详情' }}
-                    <AppIcon :name="expanded === m.id ? 'chevron-down' : 'arrow-right'" :size="11" />
+                    查看详情
+                    <AppIcon name="arrow-right" :size="11" />
                   </span>
                 </span>
               </button>
@@ -255,6 +258,9 @@ const fmt = (iso: string) => {
         </div>
       </div>
     </Transition>
+
+    <!-- 消息详情弹层（专家可在此直接回复农户提问） -->
+    <MessageDetailSheet :open="!!detail" :message="detail" @close="detail = null" />
   </Teleport>
 </template>
 

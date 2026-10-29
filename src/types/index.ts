@@ -37,12 +37,14 @@ export interface User {
   createdAt: string
 }
 
-/** 站内消息（专家回复 / 系统公告） */
+/** 站内消息（专家回复 / 系统公告 / 农户提问） */
 export interface Message {
   id: number
   userId: number | 'all'
-  from: 'expert' | 'system'
+  from: 'expert' | 'system' | 'user'
   fromName: string
+  /** 发送者用户 id（农户提问时携带，专家可直接回复） */
+  fromId?: number
   title: string
   content: string
   read: boolean
