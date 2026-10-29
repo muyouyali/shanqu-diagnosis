@@ -5,6 +5,7 @@ import AppIcon from '@/components/AppIcon.vue'
 import api from '@/api'
 
 interface Msg {
+  id?: number
   role: 'user' | 'assistant'
   content: string
   sources?: { name: string; score: number; type: string; symptoms: string[] }[]
@@ -60,14 +61,14 @@ const send = async (text?: string) => {
   await scrollToBottom()
 
   sending.value = true
-  const placeholder: Msg = { role: 'assistant', content: '', pending: true, streaming: true }
+  const placeholder: Msg = { role: 'assistant', id: Date.now(), content: '', pending: true, streaming: true }
   messages.value.push(placeholder)
   await scrollToBottom()
 
   let full = ''
   const finalize = (patch: Partial<Msg>) => {
     const idx = messages.value.indexOf(placeholder)
-    if (idx !== -1) messages.value[idx] = { role: 'assistant', content: full, ...patch }
+    if (idx !== -1) messages.value[idx] = { id: placeholder.id, role: 'assistant', content: full, sources: placeholder.sources, ...patch }
   }
 
   try {
@@ -97,18 +98,38 @@ const send = async (text?: string) => {
   }
 }
 
-const speak = (text: string) => {
+/** 朗读状态：记录正在朗读的消息 id，再次点击停止 */
+const speakingId = ref<number | null>(null)
+
+const stopSpeak = () => {
+  window.speechSynthesis?.cancel()
+  speakingId.value = null
+}
+
+const toggleSpeak = (m: any) => {
   if (!('speechSynthesis' in window)) {
     store.showToast('当前浏览器不支持语音播报', 'error')
     return
   }
+  // 正在朗读这条 → 停止
+  if (speakingId.value !== null) return stopSpeak()
   window.speechSynthesis.cancel()
-  const u = new SpeechSynthesisUtterance(text.replace(/[*#]/g, ''))
+  const u = new SpeechSynthesisUtterance(m.content.replace(/[*#]/g, ''))
   u.lang = 'zh-CN'
   u.rate = 0.94
   const zh = window.speechSynthesis.getVoices().find((v) => v.lang.includes('zh'))
   if (zh) u.voice = zh
+  u.onend = () => (speakingId.value = null)
+  u.onerror = () => (speakingId.value = null)
+  speakingId.value = m.id ?? -1
   window.speechSynthesis.speak(u)
+}
+
+/** 「知识库直答」展开引用来源 */
+const kbOpenId = ref<number | null>(null)
+const toggleKb = (m: any) => {
+  kbOpenId.value = kbOpenId.value === (m.id ?? -1) ? null : (m.id ?? -1)
+  if (kbOpenId.value !== null) stopSpeak()
 }
 </script>
 
@@ -179,10 +200,34 @@ const speak = (text: string) => {
             </div>
 
             <div v-if="m.role === 'assistant' && !m.pending" class="msg__tools">
-              <button class="msg__tool" @click="speak(m.content)">
-                <AppIcon name="volume" :size="12" /> 朗读
+              <button class="msg__tool" :class="{ 'is-speaking': speakingId === (m.id ?? -1) }" @click="toggleSpeak(m)">
+                <AppIcon :name="speakingId === (m.id ?? -1) ? 'volume' : 'volume-off'" :size="12" />
+                {{ speakingId === (m.id ?? -1) ? '停止' : '朗读' }}
               </button>
-              <span v-if="m.usedFallback" class="msg__fallback">知识库直答</span>
+              <button
+                v-if="m.usedFallback"
+                class="msg__fallback"
+                :class="{ 'is-open': kbOpenId === (m.id ?? -1) }"
+                @click="toggleKb(m)"
+              >
+                {{ kbOpenId === (m.id ?? -1) ? '收起知识来源 ▴' : '知识库直答 ▾' }}
+              </button>
+            </div>
+
+            <!-- 知识库来源详情 -->
+            <div v-if="kbOpenId === (m.id ?? -1) && m.sources?.length" class="kb-panel">
+              <p class="kb-panel__head">
+                <AppIcon name="book" :size="13" />
+                本回答引用了 {{ m.sources.length }} 条知识库资料
+              </p>
+              <div v-for="s in m.sources" :key="s.name" class="kb-panel__item">
+                <div class="kb-panel__top">
+                  <strong>{{ s.name }}</strong>
+                  <span class="kb-panel__score">{{ Math.round(s.score * 100) }}% 匹配</span>
+                </div>
+                <p class="kb-panel__sym">{{ s.symptoms?.join('；') || '暂无症状描述' }}</p>
+              </div>
+              <p class="kb-panel__note">以上内容来自平台植保知识库，如需人工复核请在智能诊断后咨询专家。</p>
             </div>
           </template>
         </div>
@@ -500,6 +545,77 @@ const speak = (text: string) => {
   background: var(--c-warning-bg);
   color: #92400e;
   font-weight: 600;
+  border: 1px solid transparent;
+  cursor: pointer;
+  transition: all var(--dur-fast);
+}
+
+.msg__fallback:hover {
+  border-color: #f0d9a8;
+}
+
+.msg__fallback.is-open {
+  border-color: #f0d9a8;
+}
+
+/* 朗读中状态 */
+.msg__tool.is-speaking {
+  color: var(--c-primary-700);
+  background: var(--c-primary-50);
+  border-color: var(--c-primary-200);
+}
+
+/* 知识库来源面板 */
+.kb-panel {
+  margin-top: 8px;
+  padding: 12px 13px;
+  border-radius: 11px;
+  background: #fffdf5;
+  border: 1px dashed #ecd9a0;
+}
+
+.kb-panel__head {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11.5px;
+  font-weight: 800;
+  color: #92400e;
+  margin-bottom: 9px;
+}
+
+.kb-panel__item {
+  padding: 8px 0;
+  border-top: 1px solid #f3e8c8;
+}
+
+.kb-panel__top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  font-size: 12px;
+  color: var(--c-text-1);
+}
+
+.kb-panel__score {
+  font-size: 10px;
+  font-weight: 700;
+  color: #b45309;
+  flex-shrink: 0;
+}
+
+.kb-panel__sym {
+  margin-top: 3px;
+  font-size: 11px;
+  line-height: 1.6;
+  color: var(--c-text-3);
+}
+
+.kb-panel__note {
+  margin-top: 8px;
+  font-size: 10px;
+  color: var(--c-text-4);
 }
 
 /* 快捷问题 */
