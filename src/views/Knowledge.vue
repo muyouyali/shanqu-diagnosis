@@ -4,6 +4,7 @@ import { useRouter } from 'vue-router'
 import { useAppStore } from '@/stores/app'
 import AppIcon from '@/components/AppIcon.vue'
 import PageHero from '@/components/PageHero.vue'
+import QuickLookup from '@/components/QuickLookup.vue'
 import api from '@/api'
 import type { Disease } from '@/types'
 
@@ -13,6 +14,7 @@ const store = useAppStore()
 const diseases = ref<Disease[]>([])
 const loading = ref(true)
 const keyword = ref('')
+const lookupOpen = ref(false)
 
 const severityMeta: Record<string, { label: string; color: string; bg: string }> = {
   critical: { label: '毁灭性', color: '#b91c1c', bg: '#fee2e2' },
@@ -57,7 +59,11 @@ watch(() => store.selectedCropId, load)
       desc="云南特色作物常见病虫害 · 图文对照速查，选作物或直接搜索症状"
       badge="图文速查"
       badge-icon="book"
+      @badge-click="lookupOpen = true"
     />
+
+    <!-- 图文速查弹层 -->
+    <QuickLookup :open="lookupOpen" :diseases="diseases" @close="lookupOpen = false" />
 
     <!-- 搜索 -->
     <div class="search">

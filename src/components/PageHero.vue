@@ -2,6 +2,7 @@
 /**
  * PageHero · 用户端页面统一渐变横幅
  * 与首页主视觉同款配色，支持右侧徽章与装饰波纹
+ * badge 传入 onClick 后变为可点击按钮（如「图文速查」入口）
  */
 import AppIcon from '@/components/AppIcon.vue'
 
@@ -14,6 +15,8 @@ defineProps<{
   /** 仅宽屏（≥960px）显示，用于与移动端原有顶栏共存 */
   wideOnly?: boolean
 }>()
+
+const emit = defineEmits<{ badgeClick: [] }>()
 </script>
 
 <template>
@@ -29,10 +32,11 @@ defineProps<{
         <p v-if="desc" class="ph__desc">{{ desc }}</p>
         <div v-if="$slots.default" class="ph__extra"><slot /></div>
       </div>
-      <div v-if="badge" class="ph__badge">
+      <button v-if="badge" class="ph__badge" @click="emit('badgeClick')">
         <AppIcon v-if="badgeIcon" :name="badgeIcon" :size="16" />
         <span>{{ badge }}</span>
-      </div>
+        <i class="ph__badge-arrow">›</i>
+      </button>
     </div>
   </header>
 </template>
@@ -123,6 +127,19 @@ defineProps<{
   font-size: 13px;
   font-weight: 700;
   border: 1px solid rgba(255, 255, 255, 0.18);
+  transition: background 0.18s, transform 0.18s;
+}
+
+.ph__badge:hover {
+  background: rgba(255, 255, 255, 0.28);
+  transform: translateY(-1px);
+}
+
+.ph__badge-arrow {
+  font-style: normal;
+  font-size: 15px;
+  line-height: 1;
+  opacity: 0.8;
 }
 
 @media (max-width: 720px) {

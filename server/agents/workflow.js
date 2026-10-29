@@ -193,6 +193,11 @@ const runTriageAgent = async ({ cropId, imageBase64, symptomsText, altitude, wea
         maxTokens: 1600
       })
       raw = extractJSON(res.content)
+      // 模型正常返回但没识别到病斑（如健康植株/非病害照片）→ results 为空，走降级而非报错
+      if (raw && (!Array.isArray(raw.results) || !raw.results.length)) {
+        console.warn('[TriageAgent] 视觉模型未识别到病斑，转规则兜底:', raw.observations || '')
+        raw = null
+      }
     } catch (err) {
       aiError = err instanceof AIServiceError ? err.code : 'UNKNOWN'
       console.warn('[TriageAgent] 视觉调用失败，转规则兜底:', err.message)
@@ -204,11 +209,11 @@ const runTriageAgent = async ({ cropId, imageBase64, symptomsText, altitude, wea
     usedFallback = true
     const ruleResults = ruleBasedDiagnose(cropId, symptomsText || '')
     if (!ruleResults.length) {
-      throw new AIServiceError(
-        aiError || 'NO_INPUT',
-        'DIAGNOSIS_UNAVAILABLE',
-        '无法完成诊断：AI 服务未配置或不可用，且未提供足够的症状描述'
-      )
+      // 有图但没识别到病斑 vs 无图无描述，给不同的友好提示
+      const friendly = imageBase64
+        ? '照片中未识别到明显病斑。请拍摄有病斑的叶/果/根部位并尽量清晰，或在下方补充症状描述后再试'
+        : '无法完成诊断：AI 服务未配置或不可用，且未提供足够的症状描述'
+      throw new AIServiceError(friendly, 'DIAGNOSIS_UNAVAILABLE', aiError || 'NO_INPUT')
     }
     raw = {
       observations: '基于您描述的症状特征进行规则匹配（当前未启用图像识别）',
