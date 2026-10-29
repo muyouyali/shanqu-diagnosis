@@ -15,6 +15,7 @@ const form = ref({ userId: 'all', title: '', content: '' })
 const sending = ref(false)
 const sent = ref<Message[]>([])
 const loading = ref(true)
+const active = ref<Message | null>(null)
 
 /** 历史消息里筛出本专家发出的 */
 const load = async () => {
@@ -105,18 +106,39 @@ const fmt = (iso: string) => {
         <h3 class="nt-card__title"><AppIcon name="list" :size="14" /> 已发送（{{ sent.length }}）</h3>
         <div v-if="loading" class="nt-empty">加载中…</div>
         <div v-else-if="!sent.length" class="nt-empty">还没有发送过消息</div>
-        <article v-for="m in sent" v-else :key="m.id" class="nt-msg">
+        <article v-for="m in sent" v-else :key="m.id" class="nt-msg" role="button" @click="active = m">
           <div class="nt-msg__top">
             <span class="nt-msg__to" :class="{ 'is-all': m.userId === 'all' }">
               {{ m.userId === 'all' ? '全体公告' : `用户 #${m.userId}` }}
             </span>
             <small>{{ fmt(m.createdAt) }}</small>
           </div>
-          <h4>{{ m.title }}</h4>
+          <h4>{{ m.title }}<AppIcon name="arrow-right" :size="13" class="nt-msg__arrow" /></h4>
           <p>{{ m.content }}</p>
         </article>
       </section>
     </div>
+
+    <!-- 消息详情弹层 -->
+    <Teleport to="body">
+      <Transition name="fade">
+        <div v-if="active" class="nd-mask" @click.self="active = null">
+          <div class="nd">
+            <header class="nd__head">
+              <div>
+                <span class="nd__to" :class="{ 'is-all': active.userId === 'all' }">
+                  {{ active.userId === 'all' ? '📢 全体公告' : `发送给用户 #${active.userId}` }}
+                </span>
+                <h3>{{ active.title }}</h3>
+                <small>{{ fmt(active.createdAt) }}</small>
+              </div>
+              <button class="nd__close" @click="active = null"><AppIcon name="x" :size="15" /></button>
+            </header>
+            <div class="nd__body">{{ active.content }}</div>
+          </div>
+        </div>
+      </Transition>
+    </Teleport>
   </div>
 </template>
 
@@ -282,6 +304,28 @@ const fmt = (iso: string) => {
 .nt-msg {
   padding: 14px 0;
   border-bottom: 1px solid var(--c-line-soft);
+  cursor: pointer;
+  border-radius: 8px;
+  transition: background var(--dur-fast);
+}
+
+.nt-msg:hover {
+  background: var(--c-bg-subtle);
+}
+
+.nt-msg:hover h4 {
+  color: var(--c-primary-700);
+}
+
+.nt-msg__arrow {
+  margin-left: 5px;
+  opacity: 0;
+  transition: opacity var(--dur-fast);
+  vertical-align: -2px;
+}
+
+.nt-msg:hover .nt-msg__arrow {
+  opacity: 1;
 }
 
 .nt-msg:last-child {
@@ -353,5 +397,96 @@ const fmt = (iso: string) => {
     align-items: flex-start;
     padding: 20px 18px;
   }
+}
+
+/* 消息详情弹层 */
+.nd-mask {
+  position: fixed;
+  inset: 0;
+  z-index: 200;
+  background: rgba(16, 30, 22, 0.44);
+  backdrop-filter: blur(3px);
+  display: grid;
+  place-items: center;
+  padding: 20px;
+}
+
+.nd {
+  width: min(560px, 100%);
+  max-height: 80vh;
+  display: flex;
+  flex-direction: column;
+  border-radius: 16px;
+  background: var(--c-bg-card);
+  box-shadow: 0 24px 60px rgba(0, 0, 0, 0.24);
+  overflow: hidden;
+}
+
+.nd__head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 20px 22px 14px;
+  border-bottom: 1px solid var(--c-line-soft);
+}
+
+.nd__to {
+  display: inline-block;
+  font-size: 11.5px;
+  font-weight: 800;
+  padding: 3px 10px;
+  border-radius: var(--r-full);
+  background: #e8f2ff;
+  color: #2563eb;
+  margin-bottom: 8px;
+}
+
+.nd__to.is-all {
+  background: var(--c-accent-100);
+  color: var(--c-accent-600);
+}
+
+.nd__head h3 {
+  font-size: 18px;
+  font-weight: 800;
+  color: var(--c-text-1);
+  line-height: 1.4;
+}
+
+.nd__head small {
+  display: block;
+  font-size: 12px;
+  color: var(--c-text-4);
+  margin-top: 5px;
+}
+
+.nd__close {
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  color: var(--c-text-3);
+  background: var(--c-bg-muted);
+  flex-shrink: 0;
+}
+
+.nd__body {
+  padding: 18px 22px 24px;
+  font-size: 14.5px;
+  line-height: 1.85;
+  color: var(--c-text-2);
+  white-space: pre-wrap;
+  overflow-y: auto;
+}
+
+.fade-enter-active,
+.fade-leave-active {
+  transition: opacity 0.22s var(--ease-out);
+}
+.fade-enter-from,
+.fade-leave-to {
+  opacity: 0;
 }
 </style>
