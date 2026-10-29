@@ -34,6 +34,44 @@ export interface User {
   wechatId: string
   avatar: string
   region: string
+  title?: string
+  specialty?: string[]
+  createdAt: string
+}
+
+/** 专家（含擅长领域与推荐匹配度） */
+export interface Expert extends User {
+  match: number
+  hitCrop: boolean
+  hitRegion: boolean
+}
+
+/** 农户 → 专家咨询单 */
+export interface Consult {
+  id: number
+  userId: number
+  userName: string
+  expertId: number
+  cropId: string | null
+  region: string
+  question: string
+  status: 'pending' | 'done'
+  reply: string
+  createdAt: string
+}
+
+/** 人工复核请求 */
+export interface ReviewRequest {
+  id: number
+  userId: number
+  userName: string
+  recordId: number
+  cropId: string | null
+  region: string
+  question: string
+  status: 'pending' | 'done'
+  opinion: string
+  expertId: number | null
   createdAt: string
 }
 

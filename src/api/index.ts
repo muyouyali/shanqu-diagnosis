@@ -13,7 +13,7 @@ import type {
   ReviewResponse,
   HealthResponse,
   MetricsResponse
-} from '@/types'
+, Expert, Consult, ReviewRequest } from '@/types'
 
 const http = axios.create({
   baseURL: '/api',
@@ -154,6 +154,26 @@ export const api = {
     http.get<StatsResponse>('/stats', { params }).then((r) => r.data),
 
   alerts: (days = 14) => http.get<AlertResponse>('/alerts', { params: { days } }).then((r) => r.data),
+
+  experts: (params: { cropId?: string; region?: string }) =>
+    http.get<{ items: Expert[] }>('/experts', { params }).then((r) => r.data),
+
+  sendConsult: (payload: { expertId: number; cropId?: string | null; region?: string; question: string }) =>
+    http.post<{ ok: boolean; consultId: number }>('/consult', payload).then((r) => r.data),
+
+  consults: () => http.get<{ items: Consult[] }>('/consults').then((r) => r.data),
+
+  closeConsult: (id: number, reply: string) =>
+    http.patch<{ ok: boolean }>(`/consults/${id}`, { reply }).then((r) => r.data),
+
+  reviewRequests: () =>
+    http.get<{ items: ReviewRequest[] }>('/review-requests').then((r) => r.data),
+
+  createReviewRequest: (payload: { recordId: number; cropId?: string | null; region?: string; question?: string }) =>
+    http.post<{ ok: boolean; requestId: number }>('/review-requests', payload).then((r) => r.data),
+
+  resolveReviewRequest: (id: number, opinion: string) =>
+    http.patch<{ ok: boolean; item: ReviewRequest }>(`/review-requests/${id}`, { opinion }).then((r) => r.data),
 
   publishAlert: (title: string, content: string) =>
     http

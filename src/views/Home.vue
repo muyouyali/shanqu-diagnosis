@@ -441,6 +441,17 @@ const hueOf = (name: string) => {
           </span>
           <AppIcon name="arrow-right" :size="16" class="feature__arrow" />
         </button>
+
+        <button class="feature" @click="router.push('/ask-expert')">
+          <span class="feature__icon feature__icon--blue">
+            <AppIcon name="user" :size="19" />
+          </span>
+          <span class="feature__body">
+            <strong>向专家提问</strong>
+            <small>按作物与地区推荐对口专家，一对一咨询</small>
+          </span>
+          <AppIcon name="arrow-right" :size="16" class="feature__arrow" />
+        </button>
       </div>
     </section>
 

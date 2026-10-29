@@ -114,6 +114,42 @@ onMounted(async () => {
     loading.value = false
   }
 })
+/** 申请人工复核：推送给全部专家，处理结果私信到消息中心 */
+const showReview = ref(false)
+const reviewQ = ref('')
+const reviewSending = ref(false)
+const reviewDone = ref(false)
+const reviewRecordId = computed(() => String(result.value?.recordId || record.value?.id || ''))
+
+const openReview = () => {
+  if (!store.user) {
+    store.showToast('请先登录后再申请人工复核', 'error')
+    router.push('/')
+    return
+  }
+  reviewQ.value = ''
+  reviewDone.value = false
+  showReview.value = true
+}
+
+const submitReview = async () => {
+  if (reviewSending.value || !reviewRecordId.value) return
+  reviewSending.value = true
+  try {
+    await api.createReviewRequest({
+      recordId: Number(reviewRecordId.value),
+      cropId: result.value?.cropId || null,
+      region: store.user?.region || '',
+      question: reviewQ.value.trim()
+    })
+    reviewDone.value = true
+    store.showToast('已提交人工复核，专家处理结果将在「我的消息」通知您', 'success')
+  } catch (e: any) {
+    store.showToast(e?.message || '提交失败', 'error')
+  } finally {
+    reviewSending.value = false
+  }
+}
 </script>
 
 <template>
@@ -420,7 +456,44 @@ onMounted(async () => {
         <button class="btn btn--primary" style="flex: 1" @click="router.push('/qa')">
           <AppIcon name="chat" :size="17" /> 还有疑问？问 AI
         </button>
+        <button class="btn btn--outline" style="flex: 1" @click="openReview">
+          <AppIcon name="user" :size="17" /> 申请人工复核
+        </button>
       </div>
+
+      <!-- 人工复核弹层 -->
+      <Teleport to="body">
+        <Transition name="fade">
+          <div v-if="showReview" class="review-mask" @click.self="showReview = false">
+            <div class="review-dialog">
+              <header class="review-dialog__head">
+                <strong>{{ reviewDone ? '复核已提交' : '申请人工复核' }}</strong>
+                <button class="review-dialog__close" @click="showReview = false"><AppIcon name="x" :size="14" /></button>
+              </header>
+              <template v-if="!reviewDone">
+                <p class="review-dialog__sub">
+                  诊断记录 #{{ reviewRecordId }} · {{ result?.cropName || '' }}<br />
+                  专家将在人工复核后把结论私信到您的「我的消息」
+                </p>
+                <textarea
+                  v-model="reviewQ"
+                  rows="4"
+                  maxlength="300"
+                  class="review-dialog__input"
+                  placeholder="补充说明：如发病面积、用药史、照片拍不清的细节…（选填）"
+                />
+                <button class="review-dialog__btn" :disabled="reviewSending" @click="submitReview">
+                  {{ reviewSending ? '提交中…' : '提交复核请求' }}
+                </button>
+              </template>
+              <div v-else class="review-dialog__done">
+                <AppIcon name="check-circle" :size="32" />
+                <p>已推送给全部驻点专家，请留意消息中心通知</p>
+              </div>
+            </div>
+          </div>
+        </Transition>
+      </Teleport>
 
       <p class="disclaimer">
         <AppIcon name="alert" :size="12" />
@@ -1515,5 +1588,109 @@ onMounted(async () => {
     padding: 22px 0 0;
     width: calc(100% - 64px);
   }
+}
+</style>
+
+<style scoped>
+/* 人工复核弹层 */
+.review-mask {
+  position: fixed;
+  inset: 0;
+  z-index: 150;
+  background: rgba(14, 30, 22, 0.5);
+  backdrop-filter: blur(3px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+}
+
+.review-dialog {
+  width: min(480px, 100%);
+  background: var(--c-bg-page);
+  border-radius: var(--r-xl);
+  padding: 18px;
+}
+
+.review-dialog__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 10px;
+}
+
+.review-dialog__head strong {
+  font-size: 15.5px;
+  font-weight: 800;
+  color: var(--c-text-1);
+}
+
+.review-dialog__close {
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  background: var(--c-bg-muted);
+  color: var(--c-text-3);
+}
+
+.review-dialog__sub {
+  font-size: 12px;
+  line-height: 1.8;
+  color: var(--c-text-3);
+  background: var(--c-bg-muted);
+  border-radius: 10px;
+  padding: 10px 12px;
+  margin-bottom: 10px;
+}
+
+.review-dialog__input {
+  width: 100%;
+  padding: 11px 13px;
+  border-radius: 12px;
+  border: 1px solid var(--c-line);
+  background: var(--c-bg-card);
+  font-size: 13px;
+  line-height: 1.7;
+  color: var(--c-text-1);
+  resize: vertical;
+  font-family: inherit;
+}
+
+.review-dialog__input:focus {
+  outline: none;
+  border-color: var(--c-primary-500);
+}
+
+.review-dialog__btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  height: 40px;
+  margin-top: 12px;
+  border-radius: var(--r-full);
+  font-size: 13px;
+  font-weight: 700;
+  color: #fff;
+  background: var(--c-primary-600);
+  border: none;
+}
+
+.review-dialog__btn:disabled {
+  opacity: 0.5;
+}
+
+.review-dialog__done {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 9px;
+  padding: 18px 0 6px;
+  color: var(--c-primary-600);
+  font-size: 13.5px;
+  font-weight: 700;
+  text-align: center;
 }
 </style>

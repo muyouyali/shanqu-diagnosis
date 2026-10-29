@@ -43,9 +43,56 @@ const load = () => {
   if (!Array.isArray(cache.consultations)) cache.consultations = []
   if (!Array.isArray(cache.users)) cache.users = seedUsers()
   if (!Array.isArray(cache.messages)) cache.messages = seedMessages()
+  if (!Array.isArray(cache.consults)) cache.consults = []
+  if (!Array.isArray(cache.reviewRequests)) cache.reviewRequests = []
   if (!cache.sessions) cache.sessions = {}
   if (typeof cache.nextId !== 'number') cache.nextId = 1
+  ensureExperts(cache)
   return cache
+}
+
+/** 专家团队演示数据（含擅长领域，用于按作物/地区推荐） */
+export const EXPERT_SEEDS = [
+  { id: 9001, account: '13800000001', nickname: '张启铭', title: '高级农艺师', specialty: ['三七', '重楼', '黄精'], region: '文山市' },
+  { id: 9003, account: '13800000003', nickname: '李春兰', title: '植保专家', specialty: ['蓝莓', '草莓', '树莓'], region: '曲靖市' },
+  { id: 9004, account: '13800000004', nickname: '王建国', title: '果树专家', specialty: ['柑橘', '芒果', '柠檬'], region: '保山市' },
+  { id: 9005, account: '13800000005', nickname: '杨茶花', title: '茶叶专家', specialty: ['普洱茶树', '滇红', '白茶'], region: '普洱市' },
+  { id: 9006, account: '13800000006', nickname: '赵天禄', title: '经济林专家', specialty: ['核桃', '花椒', '天麻'], region: '昭通市' }
+]
+
+/** 老数据文件缺专家团队时自动补齐（保留原有用户） */
+const ensureExperts = (db) => {
+  let dirty = false
+  for (const e of EXPERT_SEEDS) {
+    const exist = db.users.find((u) => u.id === e.id)
+    if (!exist) {
+      const salt = crypto.randomBytes(8).toString('hex')
+      db.users.push({
+        id: e.id,
+        account: e.account,
+        salt,
+        passwordHash: hashPassword('demo123', salt),
+        nickname: e.nickname,
+        role: 'expert',
+        phone: e.account,
+        email: '',
+        wechatId: '',
+        avatar: '',
+        title: e.title,
+        specialty: e.specialty,
+        region: e.region,
+        createdAt: '2026-10-01T08:00:00.000Z'
+      })
+      dirty = true
+    } else if (exist.role === 'expert' && !Array.isArray(exist.specialty)) {
+      // 老数据专家补充擅长领域字段
+      exist.title = e.title
+      exist.specialty = e.specialty
+      exist.region = e.region
+      dirty = true
+    }
+  }
+  if (dirty) persist(true)
 }
 
 // ==================== 用户与认证 ====================
@@ -180,6 +227,8 @@ export const publicUser = (u) =>
     wechatId: u.wechatId,
     avatar: u.avatar,
     region: u.region,
+    title: u.title || '',
+    specialty: u.specialty || [],
     createdAt: u.createdAt
   }
 
@@ -281,6 +330,12 @@ export const listExpertIds = () => {
   return db.users.filter((u) => u.role === 'expert').map((u) => u.id)
 }
 
+/** 专家团队（含擅长领域） */
+export const listExperts = () => {
+  const db = load()
+  return db.users.filter((u) => u.role === 'expert')
+}
+
 /** 农户提问 → 推送给所有专家（专家端消息中心可见） */
 export const notifyExpertsAsk = ({ user, question, cropName, region }) => {
   const ids = listExpertIds()
@@ -296,6 +351,76 @@ export const notifyExpertsAsk = ({ user, question, cropName, region }) => {
 /** 灾害预警公告 → 推送给全员（专家端与农户端都收到） */
 export const broadcastAlert = ({ title, content }) => {
   return createMessage({ userId: 'all', from: 'system', fromName: '平台公告', title, content })
+}
+
+// ==================== 专家咨询 / 人工复核 ====================
+
+/** 农户向指定专家发起咨询 */
+export const saveConsult = (item) => {
+  const db = load()
+  const full = {
+    id: nextId(),
+    status: 'pending',
+    reply: '',
+    createdAt: new Date().toISOString(),
+    ...item
+  }
+  db.consults.unshift(full)
+  persist()
+  return full
+}
+
+export const listConsults = ({ expertId, userId, status } = {}) => {
+  const db = load()
+  return db.consults.filter((c) => {
+    if (expertId && c.expertId !== Number(expertId)) return false
+    if (userId && c.userId !== Number(userId)) return false
+    if (status && c.status !== status) return false
+    return true
+  })
+}
+
+export const updateConsult = (id, patch) => {
+  const db = load()
+  const c = db.consults.find((x) => x.id === Number(id))
+  if (!c) return null
+  Object.assign(c, patch)
+  persist()
+  return c
+}
+
+/** 农户对诊断结果发起人工复核 */
+export const saveReviewRequest = (item) => {
+  const db = load()
+  const full = {
+    id: nextId(),
+    status: 'pending',
+    opinion: '',
+    expertId: null,
+    createdAt: new Date().toISOString(),
+    ...item
+  }
+  db.reviewRequests.unshift(full)
+  persist()
+  return full
+}
+
+export const listReviewRequests = ({ userId, status } = {}) => {
+  const db = load()
+  return db.reviewRequests.filter((r) => {
+    if (userId && r.userId !== Number(userId)) return false
+    if (status && r.status !== status) return false
+    return true
+  })
+}
+
+export const updateReviewRequest = (id, patch) => {
+  const db = load()
+  const r = db.reviewRequests.find((x) => x.id === Number(id))
+  if (!r) return null
+  Object.assign(r, patch)
+  persist()
+  return r
 }
 
 const seedMessages = () => [

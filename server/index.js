@@ -532,6 +532,144 @@ app.get('/api/qa/history', (req, res) => {
   res.json({ items: store.listConsultations(Number(req.query.limit) || 20) })
 })
 
+// ==================== 向专家提问 / 人工复核 ====================
+
+/** 专家团队列表：按作物与地区计算匹配度排序 */
+app.get('/api/experts', (req, res) => {
+  const { cropId, region } = req.query
+  const experts = store.listExperts()
+  const cropName = cropId ? CROP_NAME[cropId] || String(cropId) : ''
+  const items = experts
+    .map((e) => {
+      let match = 0
+      const hitCrop = cropName && (e.specialty || []).some((s) => cropName.includes(s) || s.includes(cropName))
+      const hitRegion = region && e.region && (e.region.includes(region) || region.includes(e.region))
+      if (hitCrop) match += 2
+      if (hitRegion) match += 1
+      return { ...store.publicUser(e), match, hitCrop, hitRegion }
+    })
+    .sort((a, b) => b.match - a.match)
+  res.json({ items })
+})
+
+/** 农户向指定专家发起咨询（写入咨询单并推送专家端消息） */
+app.post('/api/consult', (req, res) => {
+  const user = requireUser(req, res)
+  if (!user) return
+  const { expertId, cropId, region, question } = req.body || {}
+  if (!expertId || !question || !String(question).trim()) {
+    return res.status(400).json({ error: '请选择专家并填写问题' })
+  }
+  const expert = store.findUserById(Number(expertId))
+  if (!expert || expert.role !== 'expert') return res.status(404).json({ error: '专家不存在' })
+
+  const c = store.saveConsult({
+    userId: user.id,
+    userName: user.nickname || user.account,
+    expertId: expert.id,
+    cropId: cropId || null,
+    region: region || '',
+    question: String(question).trim().slice(0, 500)
+  })
+
+  const cropName = cropId ? CROP_NAME[cropId] || '' : ''
+  const prefix = [cropName, region].filter(Boolean).join(' · ')
+  store.createMessage({
+    userId: expert.id,
+    from: 'user',
+    fromId: user.id,
+    fromName: user.nickname || user.account,
+    title: `${user.nickname || user.account} 向您咨询`,
+    content: `${prefix ? `【${prefix}】` : ''}${String(question).trim()}`
+  })
+
+  res.json({ ok: true, consultId: c.id, expert: store.publicUser(expert) })
+})
+
+/** 专家：收到的咨询列表 */
+app.get('/api/consults', (req, res) => {
+  const user = requireUser(req, res)
+  if (!user) return
+  if (user.role !== 'expert') return res.status(403).json({ error: '仅专家可查看' })
+  res.json({ items: store.listConsults({ expertId: user.id }) })
+})
+
+/** 专家：回复完成咨询（状态置 done） */
+app.patch('/api/consults/:id', (req, res) => {
+  const user = requireUser(req, res)
+  if (!user) return
+  if (user.role !== 'expert') return res.status(403).json({ error: '仅专家可操作' })
+  const c = store.updateConsult(req.params.id, {
+    status: 'done',
+    reply: String(req.body?.reply || '').slice(0, 600),
+    expertId: user.id
+  })
+  if (!c) return res.status(404).json({ error: '咨询单不存在' })
+  res.json({ ok: true, item: c })
+})
+
+/** 农户：对诊断记录发起人工复核（推送给全部专家） */
+app.post('/api/review-requests', (req, res) => {
+  const user = requireUser(req, res)
+  if (!user) return
+  const { recordId, cropId, region, question } = req.body || {}
+  if (!recordId) return res.status(400).json({ error: '缺少诊断记录' })
+  const r = store.saveReviewRequest({
+    userId: user.id,
+    userName: user.nickname || user.account,
+    recordId: Number(recordId),
+    cropId: cropId || null,
+    region: region || '',
+    question: String(question || '').trim().slice(0, 300)
+  })
+
+  const cropName = cropId ? CROP_NAME[cropId] || '作物' : '作物'
+  store.listExpertIds().forEach((id) => {
+    store.createMessage({
+      userId: id,
+      from: 'user',
+      fromId: user.id,
+      fromName: user.nickname || user.account,
+      title: `人工复核请求：${cropName}诊断`,
+      content: `农户 ${user.nickname || user.account} 对诊断记录 #${recordId} 申请人工复核。${r.question ? `补充说明：${r.question}` : ''}`
+    })
+  })
+  res.json({ ok: true, requestId: r.id })
+})
+
+/** 专家：复核请求队列 */
+app.get('/api/review-requests', (req, res) => {
+  const user = requireUser(req, res)
+  if (!user) return
+  if (user.role !== 'expert') return res.status(403).json({ error: '仅专家可查看' })
+  res.json({ items: store.listReviewRequests() })
+})
+
+/** 专家：完成复核 → 意见自动私信农户 */
+app.patch('/api/review-requests/:id', (req, res) => {
+  const user = requireUser(req, res)
+  if (!user) return
+  if (user.role !== 'expert') return res.status(403).json({ error: '仅专家可操作' })
+  const { opinion } = req.body || {}
+  if (!opinion || !String(opinion).trim()) return res.status(400).json({ error: '请填写复核意见' })
+  const r = store.updateReviewRequest(req.params.id, {
+    status: 'done',
+    opinion: String(opinion).trim().slice(0, 600),
+    expertId: user.id
+  })
+  if (!r) return res.status(404).json({ error: '复核请求不存在' })
+
+  store.createMessage({
+    userId: r.userId,
+    from: 'expert',
+    fromId: user.id,
+    fromName: user.nickname || '专家',
+    title: `人工复核结果：${CROP_NAME[r.cropId] || '诊断'} #${r.recordId}`,
+    content: String(opinion).trim()
+  })
+  res.json({ ok: true, item: r })
+})
+
 // ==================== 用户认证 ====================
 
 /**

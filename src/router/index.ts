@@ -43,6 +43,12 @@ const routes = [
         meta: { title: '个人中心' }
       },
       {
+        path: 'ask-expert',
+        name: 'ask-expert',
+        component: () => import('@/views/AskExpert.vue'),
+        meta: { title: '向专家提问' }
+      },
+      {
         path: 'messages-page',
         name: 'messages-page',
         component: () => import('@/views/MessagesPage.vue'),
@@ -92,6 +98,12 @@ const routes = [
         name: 'admin-alert',
         component: () => import('@/views/admin/Alert.vue'),
         meta: { title: '区域预警' }
+      },
+      {
+        path: 'review',
+        name: 'admin-review',
+        component: () => import('@/views/admin/Review.vue'),
+        meta: { title: '人工复核' }
       },
       {
         path: 'notify',
