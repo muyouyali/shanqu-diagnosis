@@ -110,6 +110,22 @@ export const api = {
     region?: string
   }) => http.post<{ ok: boolean; token: string; user: User }>('/auth/quick', payload).then((r) => r.data),
 
+  /** 跨设备真实扫码登录：生成二维码 */
+  scanQr: () =>
+    http.post<{ ok: boolean; ticket: string; qrDataUrl: string; url: string; ttl: number }>('/auth/scan/qr').then((r) => r.data),
+
+  /** 轮询扫码状态 */
+  scanPoll: (ticket: string) =>
+    http.get<{ ok: boolean; status: 'pending' | 'scanned' | 'confirmed' | 'expired'; token?: string }>('/auth/scan/poll', { params: { ticket } }).then((r) => r.data),
+
+  /** 手机确认页标记已扫码 */
+  scanTouch: (ticket: string) =>
+    http.post<{ ok: boolean }>('/auth/scan/touch', { ticket }).then((r) => r.data),
+
+  /** 手机确认页：确认登录 */
+  scanConfirm: (payload: { ticket: string; phone: string; nickname?: string }) =>
+    http.post<{ ok: boolean; token: string; user: User }>('/auth/scan/confirm', payload).then((r) => r.data),
+
   /** 第三方授权登录（演示环境模拟扫码） */
   oauthAuth: (payload: { provider: 'wechat' | 'alipay'; openid?: string }) =>
     http.post<{ ok: boolean; token: string; user: User }>('/auth/oauth', payload).then((r) => r.data),

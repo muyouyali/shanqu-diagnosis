@@ -889,6 +889,67 @@ app.get('/api/auth/wechat/callback', async (req, res) => {
   }
 })
 
+// ==================== 跨设备真实扫码登录（无需第三方平台，手机扫码确认即登录） ====================
+import QRCode from 'qrcode'
+
+const scanSessions = new Map() // ticket -> { status: pending|scanned|confirmed, token, exp, phone }
+
+// 生成登录二维码（内容为站点 /scan-login?ticket=xxx，手机扫码打开确认页）
+app.post('/api/auth/scan/qr', async (req, res) => {
+  const ticket = crypto.randomBytes(12).toString('hex')
+  scanSessions.set(ticket, { status: 'pending', token: null, exp: Date.now() + 5 * 60 * 1000, phone: '' })
+  const base = (process.env.PUBLIC_BASE_URL || `${req.protocol}://${req.get('host')}`).replace(/\/$/, '')
+  const url = `${base}/scan-login?ticket=${ticket}`
+  try {
+    const dataUrl = await QRCode.toDataURL(url, { width: 360, margin: 1, color: { dark: '#12331f' } })
+    res.json({ ok: true, ticket, qrDataUrl: dataUrl, url, ttl: 300 })
+  } catch (e) {
+    res.status(500).json({ error: '二维码生成失败' })
+  }
+})
+
+// 电脑端轮询扫码状态
+app.get('/api/auth/scan/poll', (req, res) => {
+  const s = scanSessions.get(String(req.query.ticket || ''))
+  if (!s || s.exp < Date.now()) return res.json({ ok: true, status: 'expired' })
+  res.json({ ok: true, status: s.status, token: s.token || undefined })
+})
+
+// 手机确认页：确认登录（绑定手机号，未注册自动建号）
+app.post('/api/auth/scan/confirm', (req, res) => {
+  const { ticket, phone, nickname } = req.body || {}
+  const s = scanSessions.get(String(ticket || ''))
+  if (!s || s.exp < Date.now()) return res.status(410).json({ error: '二维码已过期，请在电脑端刷新' })
+  if (s.status === 'confirmed') return res.json({ ok: true, token: s.token })
+  const p = String(phone || '').trim()
+  if (!/^1\d{10}$/.test(p)) return res.status(400).json({ error: '请输入正确的手机号' })
+  let user = store.findUserByAccount(p)
+  if (!user) {
+    try {
+      user = store.createUser({
+        account: p,
+        password: `scan_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
+        nickname: String(nickname || '').trim() || `机友${p.slice(-4)}`,
+        role: 'user',
+        phone: p
+      })
+    } catch (e) {
+      return res.status(400).json({ error: e.message })
+    }
+  }
+  s.status = 'confirmed'
+  s.token = store.createSession(user.id)
+  s.phone = p
+  res.json({ ok: true, token: s.token, user: store.publicUser(user) })
+})
+
+// 手机端打开确认页时标记「已扫码」
+app.post('/api/auth/scan/touch', (req, res) => {
+  const s = scanSessions.get(String(req.body?.ticket || ''))
+  if (s && s.status === 'pending' && s.exp > Date.now()) s.status = 'scanned'
+  res.json({ ok: true })
+})
+
 app.post('/api/auth/oauth', (req, res) => {
   const { provider, openid } = req.body || {}
   if (provider !== 'wechat' && provider !== 'alipay') {

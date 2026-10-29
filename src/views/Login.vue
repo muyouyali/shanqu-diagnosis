@@ -97,7 +97,7 @@ const demo = async (role: 'user' | 'expert') => {
 }
 
 /** 其他登录方式 */
-type QuickProvider = 'wechat' | 'alipay' | 'email' | 'phone'
+type QuickProvider = 'wechat' | 'alipay' | 'email' | 'phone' | 'scan'
 const otherOpen = ref<QuickProvider | null>(null)
 const wechatReal = ref(false)
 const wechatQrUrl = ref('')
@@ -117,10 +117,20 @@ const PROVIDER_META: Record<QuickProvider, { name: string; icon: string; ph: str
   wechat: { name: '微信', icon: '💬', ph: '' },
   alipay: { name: '支付宝', icon: '🅰️', ph: '' },
   email: { name: '邮箱', icon: '✉️', ph: 'you@example.com', type: 'email' },
-  phone: { name: '手机号', icon: '📱', ph: '13800000000', type: 'tel' }
+  phone: { name: '手机号', icon: '📱', ph: '13800000000', type: 'tel' },
+  scan: { name: '扫码', icon: '▦', ph: '' }
 }
 
 const otherLogin = async (p: QuickProvider) => {
+  if (p === 'scan') {
+    // 真实跨设备扫码登录：生成二维码并轮询
+    scanQrImg.value = ''
+    scanTicket.value = ''
+    scanStatus.value = 'loading'
+    otherOpen.value = p
+    await startScan()
+    return
+  }
   if (p === 'wechat') {
     // 查询服务端是否配置了微信开放平台：配置→真实扫码；未配置→演示模拟
     wechatReal.value = false
@@ -157,6 +167,7 @@ const closeOther = () => {
   otherOpen.value = null
   if (cdTimer) clearInterval(cdTimer)
   countdown.value = 0
+  if (scanTimer) clearInterval(scanTimer)
 }
 
 const getCode = async () => {
@@ -227,6 +238,52 @@ const oauthSubmit = async () => {
     store.showToast(e?.message || '授权失败', 'error')
   } finally {
     scanning.value = false
+  }
+}
+
+/** ===== 跨设备真实扫码登录 ===== */
+const scanQrImg = ref('')
+const scanTicket = ref('')
+const scanStatus = ref<'loading' | 'pending' | 'scanned' | 'confirmed' | 'expired'>('loading')
+let scanTimer: number | undefined
+
+const startScan = async () => {
+  scanStatus.value = 'loading'
+  try {
+    const res = await api.scanQr()
+    scanQrImg.value = res.qrDataUrl
+    scanTicket.value = res.ticket
+    scanStatus.value = 'pending'
+    if (scanTimer) clearInterval(scanTimer)
+    scanTimer = window.setInterval(pollScan, 1500)
+  } catch (e: any) {
+    store.showToast(e?.message || '二维码生成失败', 'error')
+    scanStatus.value = 'expired'
+  }
+}
+
+const pollScan = async () => {
+  if (!scanTicket.value) return
+  try {
+    const res = await api.scanPoll(scanTicket.value)
+    if (res.status === 'expired') {
+      scanStatus.value = 'expired'
+      if (scanTimer) clearInterval(scanTimer)
+      return
+    }
+    if (res.status === 'confirmed' && res.token) {
+      scanStatus.value = 'confirmed'
+      if (scanTimer) clearInterval(scanTimer)
+      const user = await api.meWithToken(res.token)
+      store.setAuth(res.token, user)
+      store.showToast(`扫码登录成功，欢迎 ${user.nickname}`, 'success')
+      closeOther()
+      goIn()
+    } else if (res.status === 'scanned') {
+      scanStatus.value = 'scanned'
+    }
+  } catch {
+    /* 轮询失败静默重试 */
   }
 }
 
@@ -428,6 +485,7 @@ onBeforeUnmount(() => {
             <button class="lg-other__btn" title="支付宝登录" @click="otherLogin('alipay')">🅰️</button>
             <button class="lg-other__btn" title="邮箱登录 / 注册" @click="otherLogin('email')">✉️</button>
             <button class="lg-other__btn" title="手机号登录 / 注册" @click="otherLogin('phone')">📱</button>
+            <button class="lg-other__btn lg-other__btn--scan" title="真实扫码登录（手机扫码确认）" @click="otherLogin('scan')">▦</button>
           </div>
         </div>
 
@@ -445,6 +503,32 @@ onBeforeUnmount(() => {
     <Teleport to="body">
       <Transition name="tipfade">
         <div v-if="otherOpen" class="om-mask" @click.self="closeOther">
+          <!-- 真实跨设备扫码登录 -->
+          <div v-if="otherOpen === 'scan'" class="om">
+            <header class="om__head">
+              <b>▦ 扫码登录</b>
+              <button class="om__close" @click="closeOther">✕</button>
+            </header>
+            <div class="om__body om__body--qr">
+              <div class="scan-qr">
+                <img v-if="scanQrImg" :src="scanQrImg" alt="登录二维码" class="scan-qr__img" :class="{ 'is-dim': scanStatus === 'expired' }" />
+                <div v-else class="scan-qr__loading">生成中…</div>
+                <div v-if="scanStatus === 'expired'" class="scan-qr__mask">
+                  <span>二维码已过期</span>
+                  <button class="om__refresh" @click="startScan">刷新二维码</button>
+                </div>
+                <div v-if="scanStatus === 'confirmed'" class="scan-qr__mask scan-qr__mask--ok">✓ 已确认</div>
+              </div>
+              <p class="om__note" v-if="scanStatus === 'pending'">请用手机「扫一扫」识别二维码，在手机上确认后本机将自动登录</p>
+              <p class="om__note" v-else-if="scanStatus === 'scanned'" style="color: #9fd8ae; font-weight: 700">
+                ✓ 手机已打开确认页，请在手机上点击「确认登录」
+              </p>
+              <p class="om__note" v-else-if="scanStatus === 'confirmed'">登录成功，正在进入系统…</p>
+              <p class="om__note" v-else-if="scanStatus === 'loading'">正在生成二维码…</p>
+              <p class="om__note" style="opacity: 0.75">无需任何第三方账号资质 · 手机与电脑处于同一登录体系</p>
+            </div>
+          </div>
+
           <!-- 微信：真实扫码（已配置开放平台） -->
           <div v-if="otherOpen === 'wechat'" class="om">
             <header class="om__head">
@@ -1107,6 +1191,54 @@ onBeforeUnmount(() => {
   color: #fff;
   font-size: 12px;
   font-weight: 700;
+}
+
+/* 真实扫码 */
+.scan-qr {
+  position: relative;
+  width: 220px;
+  margin: 6px auto 12px;
+}
+
+.scan-qr__img {
+  width: 100%;
+  border-radius: 14px;
+  background: #fff;
+  padding: 8px;
+}
+
+.scan-qr__img.is-dim {
+  filter: blur(3px) grayscale(0.6);
+  opacity: 0.6;
+}
+
+.scan-qr__loading {
+  height: 200px;
+  display: grid;
+  place-items: center;
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.1);
+  color: rgba(255, 255, 255, 0.7);
+  font-size: 13px;
+}
+
+.scan-qr__mask {
+  position: absolute;
+  inset: 0;
+  border-radius: 14px;
+  background: rgba(10, 28, 17, 0.82);
+  display: grid;
+  place-content: center;
+  justify-items: center;
+  gap: 10px;
+  color: #fff;
+  font-size: 13.5px;
+  font-weight: 700;
+}
+
+.scan-qr__mask--ok {
+  background: rgba(31, 138, 76, 0.9);
+  font-size: 16px;
 }
 
 .om__btn {

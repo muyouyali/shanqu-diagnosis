@@ -131,6 +131,12 @@ const routes = [
     component: () => import('@/views/OAuthCallback.vue'),
     meta: { title: '授权回调' }
   },
+  {
+    path: '/scan-login',
+    name: 'scan-login',
+    component: () => import('@/views/ScanLogin.vue'),
+    meta: { title: '扫码确认登录' }
+  },
   { path: '/:pathMatch(.*)*', redirect: '/' }
 ]
 
@@ -142,8 +148,8 @@ const router = createRouter({
 
 /** 全局登录守卫：未登录一律先进登录页，登录后回到原目标 */
 router.beforeEach((to) => {
-  // OAuth 回调页必须放行（此时尚未有 token）
-  if (to.path === '/oauth/callback') return true
+  // OAuth 回调页 / 手机扫码确认页必须放行（此时尚未有 token）
+  if (to.path === '/oauth/callback' || to.path === '/scan-login') return true
   const hasToken = !!localStorage.getItem('ylnz_token')
   if (!hasToken && to.path !== '/login') {
     return { path: '/login', query: { redirect: to.fullPath } }
