@@ -1,11 +1,12 @@
 <script setup lang="ts">
 /** 向专家提问：按作物/地区推荐擅长领域的专家 */
-import { ref, onMounted, computed } from 'vue'
+import { ref, computed, watch, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import api from '@/api'
 import AppIcon from '@/components/AppIcon.vue'
 import { useAppStore } from '@/stores/app'
 import { PROVINCES } from '@/data/regions'
+import RegionPicker from '@/components/RegionPicker.vue'
 import type { Expert } from '@/types'
 
 const router = useRouter()
@@ -15,8 +16,7 @@ const loading = ref(true)
 const cropName = ref('')
 
 /** 云南州市选项（取自地区数据） */
-const regionOptions = PROVINCES.find((p) => p.name === '云南')!.groups.flatMap((g) => g.items)
-const selRegion = ref(store.user?.region || '')
+const selRegion = computed(() => store.region || '')
 
 const reload = async () => {
   loading.value = true
@@ -38,9 +38,7 @@ const pickCrop = async (id: string) => {
   store.setCrop(id)
   await reload()
 }
-const pickRegion = async () => {
-  await reload()
-}
+
 
 const initials = (n: string) => n.slice(0, 1)
 
@@ -49,7 +47,14 @@ const toneColor = (i: number) =>
 
 /** 推荐标：匹配度 >=2 视为强相关 */
 const matched = computed(() => experts.value.filter((e) => e.match >= 2))
-const others = computed(() => experts.value.filter((e) => e.match < 2))
+/** 本地专家：驻点即当前所选地区 */
+const localExperts = computed(() =>
+  selRegion.value ? experts.value.filter((e) => (e.region || '').includes(selRegion.value) && e.match < 2) : []
+)
+/** 其他地区专家 */
+const others = computed(() =>
+  experts.value.filter((e) => !matched.value.includes(e) && !localExperts.value.includes(e))
+)
 
 /* ---------- 咨询弹层 ---------- */
 const target = ref<Expert | null>(null)
@@ -94,6 +99,9 @@ onMounted(async () => {
   }
   await reload()
 })
+
+// 地区切换（RegionPicker 全局定位）→ 重新推荐
+watch(selRegion, () => reload())
 </script>
 
 <template>
@@ -121,16 +129,16 @@ onMounted(async () => {
       </div>
       <div class="ax__pick-row">
         <span class="ax__pick-label">地区</span>
-        <select v-model="selRegion" class="ax__region" @change="pickRegion">
-          <option value="">全部州市</option>
-          <option v-for="r in regionOptions" :key="r" :value="r">{{ r }}</option>
-        </select>
+        <div class="ax__rp">
+          <RegionPicker />
+          <button v-if="selRegion" class="ax__rp-clear" @click="store.setRegion('')">清除</button>
+        </div>
       </div>
     </div>
 
     <div class="ax__intro">
       <AppIcon name="user" :size="14" />
-      <span v-if="cropName">已根据你选择的「{{ cropName }}」和所在地区<em>优先推荐</em>对口专家</span>
+      <span v-if="cropName">已根据你选择的「{{ cropName }}」<template v-if="selRegion">和地区「{{ selRegion }}」</template><em>优先推荐</em>对口专家</span>
       <span v-else>选择擅长对应作物领域的专家，获得更有针对性的解答</span>
     </div>
 
@@ -169,9 +177,35 @@ onMounted(async () => {
         </div>
       </div>
 
-      <!-- 其他专家 -->
+      <!-- 本地专家 -->
+      <div v-if="localExperts.length" class="ax__group">
+        <h2 class="ax__group-title">
+          <AppIcon name="map-pin" :size="13" /> {{ selRegion }}本地专家
+        </h2>
+        <div v-for="(e, i) in localExperts" :key="e.id" class="ex-card" @click="openAsk(e)">
+          <span class="ex-card__avatar" :style="{ background: '#eef3f0', color: toneColor(i + 2) }">
+            {{ initials(e.nickname) }}
+          </span>
+          <div class="ex-card__main">
+            <div class="ex-card__top">
+              <strong>{{ e.nickname }}</strong>
+              <span class="ex-card__title">{{ e.title || '农技专家' }}</span>
+              <span class="ex-card__match ex-card__match--local">本地</span>
+            </div>
+            <div class="ex-card__tags">
+              <span v-for="t in e.specialty" :key="t" class="ex-card__tag">{{ t }}</span>
+            </div>
+            <p class="ex-card__meta"><AppIcon name="home" :size="11" /> 驻点 {{ e.region }}</p>
+          </div>
+          <button class="ex-card__btn">咨询</button>
+        </div>
+      </div>
+
+      <!-- 其他地区专家 -->
       <div v-if="others.length" class="ax__group">
-        <h2 class="ax__group-title">全部专家</h2>
+        <h2 class="ax__group-title">
+          {{ selRegion ? '其他地区专家（可远程咨询）' : '全部专家' }}
+        </h2>
         <div v-for="(e, i) in others" :key="e.id" class="ex-card" @click="openAsk(e)">
           <span class="ex-card__avatar" :style="{ background: '#eef3f0', color: toneColor(i + 2) }">
             {{ initials(e.nickname) }}
@@ -312,19 +346,29 @@ onMounted(async () => {
   background: var(--c-primary-600);
 }
 
-.ax__region {
-  height: 30px;
-  padding: 0 10px;
-  border-radius: 9px;
-  border: 1px solid var(--c-line);
-  background: var(--c-bg-muted);
-  font-size: 12.5px;
-  color: var(--c-text-1);
+.ax__rp {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: 1;
 }
 
-.ax__region:focus {
-  outline: none;
-  border-color: var(--c-primary-500);
+.ax__rp-clear {
+  height: 28px;
+  padding: 0 11px;
+  border-radius: var(--r-full);
+  font-size: 11.5px;
+  font-weight: 700;
+  color: var(--c-text-3);
+  background: var(--c-bg-muted);
+  border: 1px solid var(--c-line-soft);
+  flex-shrink: 0;
+}
+
+.ax__rp :deep(.region-btn) {
+  color: var(--c-text-1);
+  background: var(--c-bg-muted);
+  border: 1px solid var(--c-line);
 }
 
 .ax__intro {
@@ -416,6 +460,10 @@ onMounted(async () => {
 .ex-card__title {
   font-size: 10px;
   color: var(--c-text-4);
+}
+
+.ex-card__match--local {
+  background: #b45309;
 }
 
 .ex-card__match {

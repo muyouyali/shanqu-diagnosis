@@ -205,10 +205,16 @@ const fillDemo = (role: 'expert' | 'user') => {
               </div>
               <label class="au__field">
                 <span class="au__label">驻点地区 <i class="au__req">*</i></span>
-                <select v-model="regRegion" class="au__region">
-                  <option value="">请选择州市</option>
-                  <option v-for="r in regRegionOptions" :key="r" :value="r">{{ r }}</option>
-                </select>
+                <input
+                  v-model="regRegion"
+                  class="au__region"
+                  list="reg-region-list"
+                  placeholder="输入可搜索，如：文山、普洱…"
+                  maxlength="12"
+                />
+                <datalist id="reg-region-list">
+                  <option v-for="r in regRegionOptions" :key="r" :value="r" />
+                </datalist>
               </label>
             </template>
 
