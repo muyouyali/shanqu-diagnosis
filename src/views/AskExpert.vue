@@ -5,6 +5,7 @@ import { useRouter } from 'vue-router'
 import api from '@/api'
 import AppIcon from '@/components/AppIcon.vue'
 import { useAppStore } from '@/stores/app'
+import { PROVINCES } from '@/data/regions'
 import type { Expert } from '@/types'
 
 const router = useRouter()
@@ -12,6 +13,34 @@ const store = useAppStore()
 const experts = ref<Expert[]>([])
 const loading = ref(true)
 const cropName = ref('')
+
+/** 云南州市选项（取自地区数据） */
+const regionOptions = PROVINCES.find((p) => p.name === '云南')!.groups.flatMap((g) => g.items)
+const selRegion = ref(store.user?.region || '')
+
+const reload = async () => {
+  loading.value = true
+  try {
+    cropName.value = store.crops.find((c) => c.id === store.selectedCropId)?.name || ''
+    const res = await api.experts({
+      cropId: store.selectedCropId || undefined,
+      region: selRegion.value || undefined
+    })
+    experts.value = res.items
+  } catch (e: any) {
+    store.showToast(e?.message || '专家列表加载失败', 'error')
+  } finally {
+    loading.value = false
+  }
+}
+
+const pickCrop = async (id: string) => {
+  store.setCrop(id)
+  await reload()
+}
+const pickRegion = async () => {
+  await reload()
+}
 
 const initials = (n: string) => n.slice(0, 1)
 
@@ -44,7 +73,7 @@ const submitAsk = async () => {
     await api.sendConsult({
       expertId: target.value.id,
       cropId: store.selectedCropId || null,
-      region: store.user?.region || '',
+      region: selRegion.value || '',
       question: question.value.trim()
     })
     sent.value = true
@@ -63,20 +92,7 @@ onMounted(async () => {
   } catch {
     /* ignore */
   }
-  try {
-    cropName.value = store.selectedCropId
-      ? (store.crops.find((c) => c.id === store.selectedCropId)?.name || '')
-      : ''
-    const res = await api.experts({
-      cropId: store.selectedCropId || undefined,
-      region: store.user?.region || undefined
-    })
-    experts.value = res.items
-  } catch (e: any) {
-    store.showToast(e?.message || '专家列表加载失败', 'error')
-  } finally {
-    loading.value = false
-  }
+  await reload()
 })
 </script>
 
@@ -86,6 +102,31 @@ onMounted(async () => {
       <button class="ax__back" @click="router.back()"><AppIcon name="arrow-left" :size="17" /></button>
       <h1>向专家提问</h1>
     </header>
+
+    <!-- 作物与地区选择 -->
+    <div class="ax__pick">
+      <div class="ax__pick-row">
+        <span class="ax__pick-label">作物</span>
+        <div class="ax__chips">
+          <button
+            v-for="c in store.crops.slice(0, 12)"
+            :key="c.id"
+            class="ax__chip"
+            :class="{ 'is-on': store.selectedCropId === c.id }"
+            @click="pickCrop(c.id)"
+          >
+            {{ c.name }}
+          </button>
+        </div>
+      </div>
+      <div class="ax__pick-row">
+        <span class="ax__pick-label">地区</span>
+        <select v-model="selRegion" class="ax__region" @change="pickRegion">
+          <option value="">全部州市</option>
+          <option v-for="r in regionOptions" :key="r" :value="r">{{ r }}</option>
+        </select>
+      </div>
+    </div>
 
     <div class="ax__intro">
       <AppIcon name="user" :size="14" />
@@ -220,6 +261,70 @@ onMounted(async () => {
   font-size: 17px;
   font-weight: 800;
   color: var(--c-text-1);
+}
+
+/* 作物/地区选择器 */
+.ax__pick {
+  padding: 12px 14px;
+  border-radius: 14px;
+  background: var(--c-bg-card);
+  border: 1px solid var(--c-line-soft);
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-bottom: 12px;
+}
+
+.ax__pick-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+}
+
+.ax__pick-label {
+  font-size: 12px;
+  font-weight: 800;
+  color: var(--c-text-3);
+  line-height: 28px;
+  flex-shrink: 0;
+}
+
+.ax__chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.ax__chip {
+  height: 28px;
+  padding: 0 12px;
+  border-radius: var(--r-full);
+  font-size: 12px;
+  color: var(--c-text-2);
+  background: var(--c-bg-muted);
+  border: 1px solid transparent;
+  transition: all var(--dur-fast);
+}
+
+.ax__chip.is-on {
+  color: #fff;
+  font-weight: 700;
+  background: var(--c-primary-600);
+}
+
+.ax__region {
+  height: 30px;
+  padding: 0 10px;
+  border-radius: 9px;
+  border: 1px solid var(--c-line);
+  background: var(--c-bg-muted);
+  font-size: 12.5px;
+  color: var(--c-text-1);
+}
+
+.ax__region:focus {
+  outline: none;
+  border-color: var(--c-primary-500);
 }
 
 .ax__intro {
