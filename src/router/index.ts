@@ -119,6 +119,12 @@ const routes = [
       }
     ]
   },
+  {
+    path: '/login',
+    name: 'login',
+    component: () => import('@/views/Login.vue'),
+    meta: { title: '登录' }
+  },
   { path: '/:pathMatch(.*)*', redirect: '/' }
 ]
 
@@ -126,6 +132,18 @@ const router = createRouter({
   history: createWebHistory(),
   routes,
   scrollBehavior: () => ({ top: 0 })
+})
+
+/** 全局登录守卫：未登录一律先进登录页，登录后回到原目标 */
+router.beforeEach((to) => {
+  const hasToken = !!localStorage.getItem('ylnz_token')
+  if (!hasToken && to.path !== '/login') {
+    return { path: '/login', query: { redirect: to.fullPath } }
+  }
+  if (hasToken && to.path === '/login') {
+    return { path: '/' }
+  }
+  return true
 })
 
 router.afterEach((to) => {
