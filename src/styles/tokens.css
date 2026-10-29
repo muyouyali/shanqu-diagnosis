@@ -94,10 +94,20 @@
   --tabbar-h: 60px;
 }
 
-/* 宽屏（网页版）：内容区放宽，布局更舒展对齐 */
+/* 宽屏（网页版）：内容区放宽铺满，布局更舒展对齐 */
 @media (min-width: 960px) {
   :root {
-    --max-w-mobile: 760px;
+    --max-w-mobile: 1200px;
+    --fs-base: 16px;
+    --fs-md: 18px;
+    --fs-lg: 22px;
+  }
+}
+
+/* 超宽屏：限制上限避免拉伸过度，保持居中美观 */
+@media (min-width: 1440px) {
+  :root {
+    --max-w-mobile: 1280px;
   }
 }
 
