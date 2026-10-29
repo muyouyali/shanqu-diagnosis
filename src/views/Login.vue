@@ -102,6 +102,7 @@ const otherOpen = ref<QuickProvider | null>(null)
 const wechatReal = ref(false)
 const wechatQrUrl = ref('')
 const wechatErr = ref('')
+const wechatMissing = ref<string[]>([])
 const quickMode = ref<'login' | 'register'>('login')
 const quickTarget = ref('')
 const quickCode = ref('')
@@ -136,9 +137,11 @@ const otherLogin = async (p: QuickProvider) => {
     wechatReal.value = false
     wechatQrUrl.value = ''
     wechatErr.value = ''
+    wechatMissing.value = []
     otherOpen.value = p
     try {
       const cfg = await api.wechatConfig()
+      wechatMissing.value = cfg.missing || []
       if (cfg.enabled) {
         const qr = await api.wechatQr()
         wechatQrUrl.value = qr.url
@@ -325,6 +328,12 @@ const finishWechat = async (token: string) => {
   } catch {
     wechatErr.value = '登录态获取失败，请重试'
   }
+}
+
+/** 整页跳转微信授权（iframe 被 X-Frame-Options 拦截时的兜底，也是移动端微信内唯一可行方式） */
+const gotoWechat = () => {
+  if (!wechatQrUrl.value) return
+  window.location.href = wechatQrUrl.value
 }
 
 onMounted(() => {
@@ -546,7 +555,10 @@ onBeforeUnmount(() => {
                   title="微信扫码登录"
                 />
                 <p class="om__note">请使用微信扫描二维码确认登录，授权后将自动绑定并进入系统</p>
-                <button class="om__refresh" @click="otherLogin('wechat')">刷新二维码</button>
+                <div class="wx-actions">
+                  <button class="om__refresh" @click="gotoWechat">在新页面打开微信授权</button>
+                  <button class="om__refresh" @click="otherLogin('wechat')">刷新二维码</button>
+                </div>
               </template>
               <template v-else>
                 <div class="qr" :class="{ 'is-done': scanning }">
@@ -556,8 +568,9 @@ onBeforeUnmount(() => {
                   <div class="qr__scan">{{ scanning ? '✓ 已授权' : '请使用微信扫一扫' }}</div>
                 </div>
                 <p class="om__note">
-                  ⚠️ 未配置微信开放平台（.env 的 WECHAT_APP_ID / WECHAT_APP_SECRET / PUBLIC_BASE_URL），当前为演示模拟；
-                  配置后此处将展示微信官方真实二维码
+                  ⚠️ 未配置微信开放平台网站应用
+                  <template v-if="wechatMissing.length">，缺少：<b style="color: #ffd9a0">{{ wechatMissing.join(' / ') }}</b></template>
+                  。当前为演示模拟；在 <code>.env</code> 填入企业主体的 AppID / Secret / 回调域名后，此处自动切换为微信官方真实二维码。
                 </p>
                 <button class="lg-btn om__btn" :disabled="scanning" @click="oauthSubmit">
                   {{ scanning ? '✓ 授权成功，正在进入…' : '模拟微信扫码成功' }}
@@ -1191,6 +1204,13 @@ onBeforeUnmount(() => {
   color: #fff;
   font-size: 12px;
   font-weight: 700;
+}
+
+.wx-actions {
+  display: flex;
+  gap: 9px;
+  justify-content: center;
+  flex-wrap: wrap;
 }
 
 /* 真实扫码 */

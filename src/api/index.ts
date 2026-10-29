@@ -132,7 +132,9 @@ export const api = {
 
   /** 微信开放平台配置状态（是否启用真实扫码） */
   wechatConfig: () =>
-    http.get<{ enabled: boolean; appId: string }>('/auth/wechat/config').then((r) => r.data),
+    http
+      .get<{ enabled: boolean; appId: string; redirectUri?: string; missing?: string[] }>('/auth/wechat/config')
+      .then((r) => r.data),
 
   /** 获取微信扫码地址（真实接入） */
   wechatQr: () =>
