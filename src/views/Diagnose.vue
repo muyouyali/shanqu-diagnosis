@@ -904,17 +904,15 @@ const submit = async () => {
 <style scoped>
 @media (min-width: 960px) {
   .scroll-area {
-    max-width: 680px;
+    max-width: var(--max-w-mobile);
     margin: 0 auto;
     width: 100%;
     padding-top: 26px;
   }
   .submit-bar {
-    max-width: 680px;
+    max-width: var(--max-w-mobile);
     margin: 0 auto;
     width: 100%;
-    left: 50%;
-    transform: translateX(-50%);
   }
 }
 </style>

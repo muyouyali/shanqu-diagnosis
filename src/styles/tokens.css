@@ -94,6 +94,13 @@
   --tabbar-h: 60px;
 }
 
+/* 宽屏（网页版）：内容区放宽，布局更舒展对齐 */
+@media (min-width: 960px) {
+  :root {
+    --max-w-mobile: 760px;
+  }
+}
+
 /* ===== 重置 ===== */
 *,
 *::before,
