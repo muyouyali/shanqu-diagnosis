@@ -59,10 +59,14 @@ const fmt = (iso: string) => {
 
 <template>
   <div class="nt">
-    <header class="nt__head">
-      <div>
+    <header class="nt__hero">
+      <div class="nt__hero-text">
         <h1>消息通知</h1>
         <p>以专家身份回复农户问诊，或向全体用户发布农事公告</p>
+      </div>
+      <div class="nt__hero-badge">
+        <AppIcon name="bell" :size="18" />
+        <span>已发送 {{ sent.length }} 条</span>
       </div>
     </header>
 
@@ -118,32 +122,73 @@ const fmt = (iso: string) => {
 
 <style scoped>
 .nt {
-  padding: 24px 28px 60px;
-  max-width: 1080px;
+  padding: 26px 34px 64px;
 }
 
-.nt__head h1 {
-  font-size: 21px;
+/* 页头横幅 */
+.nt__hero {
+  position: relative;
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20px;
+  padding: 30px 32px;
+  border-radius: 18px;
+  background:
+    radial-gradient(120% 180% at 100% 0%, rgba(255, 255, 255, 0.14), transparent 55%),
+    linear-gradient(120deg, #14532d, #1a7f45 70%, #2f9e5f);
+  color: #fff;
+  margin-bottom: 18px;
+}
+
+.nt__hero::after {
+  content: '';
+  position: absolute;
+  right: -40px;
+  bottom: -70px;
+  width: 220px;
+  height: 220px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.08);
+  pointer-events: none;
+}
+
+.nt__hero h1 {
+  font-size: 25px;
   font-weight: 800;
-  color: var(--c-text-1);
+  letter-spacing: 0.5px;
 }
 
-.nt__head p {
-  font-size: 12.5px;
-  color: var(--c-text-4);
-  margin-top: 5px;
-  margin-bottom: 20px;
+.nt__hero p {
+  font-size: 14px;
+  opacity: 0.85;
+  margin-top: 7px;
+  line-height: 1.65;
+}
+
+.nt__hero-badge {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 11px 20px;
+  border-radius: var(--r-full);
+  background: rgba(255, 255, 255, 0.16);
+  backdrop-filter: blur(4px);
+  font-size: 14px;
+  font-weight: 700;
 }
 
 .nt__grid {
   display: grid;
   grid-template-columns: minmax(0, 5fr) minmax(0, 6fr);
-  gap: 16px;
+  gap: 18px;
   align-items: start;
 }
 
 .nt-card {
-  padding: 18px;
+  padding: 22px 24px;
   border-radius: var(--r-md);
   background: var(--c-bg-card);
   border: 1px solid var(--c-line-soft);
@@ -153,23 +198,23 @@ const fmt = (iso: string) => {
 .nt-card__title {
   display: flex;
   align-items: center;
-  gap: 6px;
-  font-size: 13.5px;
+  gap: 7px;
+  font-size: 15.5px;
   font-weight: 800;
   color: var(--c-text-1);
-  margin-bottom: 14px;
+  margin-bottom: 16px;
 }
 
 .nt-field {
   display: flex;
   flex-direction: column;
-  gap: 5px;
-  margin-bottom: 12px;
+  gap: 6px;
+  margin-bottom: 14px;
   position: relative;
 }
 
 .nt-field span {
-  font-size: 11.5px;
+  font-size: 13px;
   font-weight: 700;
   color: var(--c-text-3);
 }
@@ -178,11 +223,11 @@ const fmt = (iso: string) => {
 .nt-field input,
 .nt-field textarea {
   width: 100%;
-  padding: 10px 12px;
+  padding: 12px 14px;
   border-radius: var(--r-sm);
   border: 1.5px solid var(--c-line);
   background: var(--c-bg-subtle);
-  font-size: 13px;
+  font-size: 14px;
   color: var(--c-text-1);
   transition: border-color var(--dur-fast);
 }
@@ -197,22 +242,23 @@ const fmt = (iso: string) => {
 .nt-field textarea {
   resize: none;
   line-height: 1.65;
+  min-height: 140px;
 }
 
 .nt-count {
   position: absolute;
-  right: 10px;
-  bottom: 10px;
-  font-size: 10px;
+  right: 12px;
+  bottom: 12px;
+  font-size: 11px;
   font-style: normal;
   color: var(--c-text-4);
 }
 
 .nt-send {
   width: 100%;
-  height: 42px;
+  height: 48px;
   border-radius: var(--r-full);
-  font-size: 13.5px;
+  font-size: 15px;
   font-weight: 800;
   color: #fff;
   background: linear-gradient(135deg, var(--c-primary-500), var(--c-primary-700));
@@ -227,14 +273,14 @@ const fmt = (iso: string) => {
 }
 
 .nt-empty {
-  padding: 34px 12px;
+  padding: 48px 12px;
   text-align: center;
-  font-size: 12px;
+  font-size: 13.5px;
   color: var(--c-text-4);
 }
 
 .nt-msg {
-  padding: 12px 0;
+  padding: 14px 0;
   border-bottom: 1px solid var(--c-line-soft);
 }
 
@@ -246,13 +292,13 @@ const fmt = (iso: string) => {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  margin-bottom: 5px;
+  margin-bottom: 6px;
 }
 
 .nt-msg__to {
-  font-size: 10px;
+  font-size: 11.5px;
   font-weight: 800;
-  padding: 2px 8px;
+  padding: 3px 10px;
   border-radius: var(--r-full);
   background: #e8f2ff;
   color: #2563eb;
@@ -264,21 +310,21 @@ const fmt = (iso: string) => {
 }
 
 .nt-msg__top small {
-  font-size: 10.5px;
+  font-size: 12px;
   color: var(--c-text-4);
 }
 
 .nt-msg h4 {
-  font-size: 13px;
+  font-size: 15px;
   font-weight: 800;
   color: var(--c-text-1);
 }
 
 .nt-msg p {
-  font-size: 12px;
+  font-size: 13.5px;
   line-height: 1.7;
   color: var(--c-text-3);
-  margin-top: 3px;
+  margin-top: 4px;
   display: -webkit-box;
   -webkit-line-clamp: 2;
   -webkit-box-orient: vertical;
@@ -301,6 +347,11 @@ const fmt = (iso: string) => {
   }
   .nt {
     padding: 16px 14px 50px;
+  }
+  .nt__hero {
+    flex-direction: column;
+    align-items: flex-start;
+    padding: 20px 18px;
   }
 }
 </style>
