@@ -108,11 +108,14 @@ const fmt = (iso: string) => {
                 </span>
                 <span class="msg-item__body">
                   <span class="msg-item__top">
-                    <strong>{{ m.title }}</strong>
-                    <span class="msg-item__state" :class="m.read ? 'is-read' : 'is-unread-tag'">
-                      {{ m.read ? '已读' : '未读' }}
+                    <i v-if="!m.read" class="msg-item__reddot" />
+                    <strong class="msg-item__title">{{ m.title }}</strong>
+                    <span class="msg-item__right">
+                      <span class="msg-item__state" :class="m.read ? 'is-read' : 'is-unread-tag'">
+                        {{ m.read ? '已读' : '未读' }}
+                      </span>
+                      <small class="msg-item__time">{{ fmt(m.createdAt) }}</small>
                     </span>
-                    <small>{{ fmt(m.createdAt) }}</small>
                   </span>
                   <span class="msg-item__from">{{ m.fromName }} · {{ tone(m).label }}</span>
                   <span class="msg-item__preview" v-if="expanded !== m.id">{{ m.content.slice(0, 44) }}…</span>
@@ -285,22 +288,43 @@ const fmt = (iso: string) => {
 
 .msg-item__top {
   display: flex;
-  align-items: baseline;
-  justify-content: space-between;
-  gap: 8px;
+  align-items: center;
+  gap: 7px;
 }
 
-.msg-item__top strong {
+.msg-item__reddot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--c-danger);
+  flex-shrink: 0;
+  box-shadow: 0 0 0 3px rgba(224, 82, 82, 0.14);
+}
+
+.msg-item__title {
   font-size: 13px;
   font-weight: 800;
   color: var(--c-text-1);
   line-height: 1.35;
+  flex: 1;
+  min-width: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
-.msg-item__top small {
+.msg-item__right {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+}
+
+.msg-item__time {
   font-size: 10px;
   color: var(--c-text-4);
-  flex-shrink: 0;
+  min-width: 52px;
+  text-align: right;
 }
 
 .msg-item__from {

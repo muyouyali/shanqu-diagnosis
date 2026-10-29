@@ -76,11 +76,14 @@ const fmt = (iso: string) => {
         </span>
         <span class="mp-item__body">
           <span class="mp-item__top">
-            <strong>{{ m.title }}</strong>
-            <span class="mp-item__state" :class="m.read ? 'is-read' : 'is-unread-tag'">
-              {{ m.read ? '已读' : '未读' }}
+            <i v-if="!m.read" class="mp-item__reddot" />
+            <strong class="mp-item__title">{{ m.title }}</strong>
+            <span class="mp-item__right">
+              <span class="mp-item__state" :class="m.read ? 'is-read' : 'is-unread-tag'">
+                {{ m.read ? '已读' : '未读' }}
+              </span>
+              <small class="mp-item__time">{{ fmt(m.createdAt) }}</small>
             </span>
-            <small>{{ fmt(m.createdAt) }}</small>
           </span>
           <span class="mp-item__from">{{ m.fromName }} · {{ tone(m).label }}</span>
           <span class="mp-item__preview" v-if="expanded !== m.id">{{ m.content.slice(0, 48) }}…</span>
@@ -189,22 +192,43 @@ const fmt = (iso: string) => {
 
 .mp-item__top {
   display: flex;
-  align-items: baseline;
-  justify-content: space-between;
-  gap: 8px;
+  align-items: center;
+  gap: 7px;
 }
 
-.mp-item__top strong {
+.mp-item__reddot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--c-danger);
+  flex-shrink: 0;
+  box-shadow: 0 0 0 3px rgba(224, 82, 82, 0.14);
+}
+
+.mp-item__title {
   font-size: 13.5px;
   font-weight: 800;
   color: var(--c-text-1);
   line-height: 1.35;
+  flex: 1;
+  min-width: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
-.mp-item__top small {
+.mp-item__right {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+}
+
+.mp-item__time {
   font-size: 10px;
   color: var(--c-text-4);
-  flex-shrink: 0;
+  min-width: 52px;
+  text-align: right;
 }
 
 .mp-item__from {
