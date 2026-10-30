@@ -268,10 +268,14 @@ app.post('/api/diagnose', async (req, res) => {
 // ==================== AI 工具集成：气象 + Function Calling ====================
 
 // 天气工具直查（前端天气卡片使用）
-app.get('/api/weather', (req, res) => {
+app.get('/api/weather', async (req, res) => {
   const { region, cropId } = req.query
   if (!region) return res.status(400).json({ error: '缺少 region 参数' })
-  res.json(getWeatherForecast(String(region), cropId || null))
+  try {
+    res.json(await getWeatherForecast(String(region), cropId || null))
+  } catch (e) {
+    res.status(500).json({ error: '天气查询失败' })
+  }
 })
 
 // Function Calling 咨询：模型自主决定调用天气/农药工具后作答
@@ -283,7 +287,7 @@ app.post('/api/advisory', async (req, res) => {
 
   if (!isConfigured()) {
     // 降级：本地直接执行工具 + 知识库组装
-    const weather = getWeatherForecast(region || '文山', cropId)
+    const weather = await getWeatherForecast(region || '文山', cropId)
     const d0 = weather.days[0]
     const answer = [
       `**${weather.region}天气与农事参考**`,

@@ -57,18 +57,60 @@ const hash = (s) => {
 const dayNames = ['今天', '明天', '后天']
 const conds = ['多云', '小雨', '阴', '阵雨', '晴', '中雨']
 
-export const getWeatherForecast = (region, cropId) => {
-  const base = hash(region + new Date().toISOString().slice(0, 10))
+/**
+ * 真实天气源：Open-Meteo 免费气象 API（无需密钥）
+ * 云南主要农区坐标映射；失败（超时/限流/断网）自动降级为本地模拟源
+ */
+const REGION_COORDS = {
+  文山: [23.37, 104.25], 普洱: [22.79, 100.97], 昭通: [27.34, 103.72],
+  曲靖: [25.49, 103.8], 昆明: [25.04, 102.68], 大理: [25.6, 100.27],
+  保山: [25.11, 99.16], 丽江: [26.86, 100.23], 红河: [23.36, 103.38],
+  玉溪: [24.35, 102.55], 楚雄: [25.04, 101.55], 临沧: [23.88, 100.09],
+  西双版纳: [22.0, 100.8], 德宏: [24.43, 98.59], 怒江: [25.85, 98.85],
+  迪庆: [27.83, 99.7], 富源: [25.68, 104.32], 蒙自: [23.37, 103.39]
+}
+
+const matchCoord = (region) => {
+  const r = String(region || '')
+  for (const [name, c] of Object.entries(REGION_COORDS)) {
+    if (r.includes(name)) return c
+  }
+  return REGION_COORDS['文山'] // 默认文山
+}
+
+/** 从真实预报计算 7 天风险指数（与模拟源同构的输出） */
+const buildFromRealWeather = async (region, cropId) => {
+  const [lat, lon] = matchCoord(region)
+  const url =
+    `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}` +
+    `&daily=weather_code,precipitation_sum,temperature_2m_max,temperature_2m_min,relative_humidity_2m_mean` +
+    `&current=precipitation&timezone=Asia%2FShanghai&forecast_days=7`
+  const resp = await fetch(url, { signal: AbortSignal.timeout(6000) })
+  if (!resp.ok) throw new Error(`weather http ${resp.status}`)
+  const data = await resp.json()
+  const d = data.daily
+  if (!d?.time?.length) throw new Error('weather empty')
+
+  const conds = ['晴', '多云', '阴', '小雨', '中雨', '大雨']
+  // Open-Meteo weather_code 粗映射：0晴 1-2多云 3阴 51-67雨 80-82阵雨 95-99雷暴
+  const condOf = (code) => {
+    if (code === 0) return '晴'
+    if (code <= 2) return '多云'
+    if (code === 3) return '阴'
+    if (code >= 80) return '阵雨'
+    if (code >= 51) return '中雨'
+    return '多云'
+  }
+  const dayNames = ['今天', '明天', '后天']
   const days = []
   let riskPeak = 0
-  for (let i = 0; i < 7; i++) {
-    const r = hash(`${region}-${i}`) % 100
-    const cond = conds[(base + i * 7) % conds.length]
-    const rainProb = cond.includes('雨') ? 60 + (r % 40) : 5 + (r % 30)
-    const tempLow = 12 + (r % 6)
-    const tempHigh = tempLow + 8 + (r % 7)
-    const humidity = cond.includes('雨') ? 78 + (r % 18) : 55 + (r % 25)
-    // 病害风险指数：高温高湿 + 连续降雨 → 风险升高
+  for (let i = 0; i < d.time.length; i++) {
+    const mm = d.precipitation_sum?.[i] ?? 0
+    const cond = condOf(d.weather_code?.[i] ?? 1)
+    const rainProb = Math.min(96, Math.round(mm > 10 ? 90 : mm > 2 ? 72 : mm > 0 ? 45 : 10))
+    const humidity = Math.round(d.relative_humidity_2m_mean?.[i] ?? 70)
+    const tempLow = Math.round(d.temperature_2m_min?.[i] ?? 14)
+    const tempHigh = Math.round(d.temperature_2m_max?.[i] ?? 24)
     const risk = Math.min(95, Math.round(humidity * 0.6 + rainProb * 0.35))
     riskPeak = Math.max(riskPeak, risk)
     days.push({
@@ -78,9 +120,53 @@ export const getWeatherForecast = (region, cropId) => {
       tempLow,
       tempHigh,
       humidity,
-      risk
+      risk,
+      precipitationMm: Math.round(mm * 10) / 10
     })
   }
+  return { days, riskPeak }
+}
+
+export const getWeatherForecast = async (region, cropId) => {
+  let realDays = null
+  let riskPeak = 0
+  let source = ''
+  try {
+    const real = await buildFromRealWeather(region, cropId)
+    realDays = real.days
+    riskPeak = real.riskPeak
+    source = 'Open-Meteo 真实气象 API（open-meteo.com）'
+  } catch (e) {
+    console.warn('[Weather] 真实气象源不可用，降级模拟数据:', e.message)
+  }
+
+  if (!realDays) {
+    // ===== 模拟源（确定性伪随机，断网/限流兜底） =====
+    const base = hash(region + new Date().toISOString().slice(0, 10))
+    const days = []
+    for (let i = 0; i < 7; i++) {
+      const r = hash(`${region}-${i}`) % 100
+      const cond = conds[(base + i * 7) % conds.length]
+      const rainProb = cond.includes('雨') ? 60 + (r % 40) : 5 + (r % 30)
+      const tempLow = 12 + (r % 6)
+      const tempHigh = tempLow + 8 + (r % 7)
+      const humidity = cond.includes('雨') ? 78 + (r % 18) : 55 + (r % 25)
+      const risk = Math.min(95, Math.round(humidity * 0.6 + rainProb * 0.35))
+      riskPeak = Math.max(riskPeak, risk)
+      days.push({
+        day: i < 3 ? dayNames[i] : `第${i + 1}天`,
+        cond,
+        rainProb,
+        tempLow,
+        tempHigh,
+        humidity,
+        risk
+      })
+    }
+    realDays = days
+    source = '模拟气象数据（真实气象源不可用，已自动降级）'
+  }
+  const days = realDays
 
   // 结合作物给出针对性提示
   const cropRiskNote = {
@@ -169,7 +255,7 @@ export const getWeatherForecast = (region, cropId) => {
   return {
     region,
     updated: new Date().toISOString(),
-    source: '模拟气象数据（演示环境，可替换为真实气象 API）',
+    source,
     days,
     warnings,
     riskPeak,
