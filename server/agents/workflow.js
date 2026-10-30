@@ -137,7 +137,7 @@ const safetyGate = (diagnosis) => {
  * 农药安全硬校验：在模型输出之后再过一遍规则
  * 防止模型推荐了不在安全数据中的药剂或漏掉安全间隔期
  */
-const validateChemicalPlan = (plan, cropId) => {
+export const validateChemicalPlan = (plan, cropId) => {
   if (!Array.isArray(plan)) return { plan: [], violations: [] }
 
   const violations = []
@@ -421,4 +421,4 @@ export const runDiagnosisWorkflow = async (input) => {
   }
 }
 
-export { safetyGate, normalizeDiagnosis, validateChemicalPlan }
+export { safetyGate, normalizeDiagnosis }
