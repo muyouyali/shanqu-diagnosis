@@ -1,0 +1,24 @@
+<Slide style={{ width: 1280, height: 720, background: '#f6faf7', padding: '48px 60px' }}>
+  <Text style={{ fontSize: 30, fontWeight: 'bold', color: '#0f3d22' }}>AI 安全可控：竞品没有的「安全闸门」</Text>
+  <Text style={{ fontSize: 14, color: '#6b7280', marginTop: 6 }}>AI 输出不直接等于医嘱——三道确定性硬校验，每一道可独立演示</Text>
+  <Box style={{ flexDirection: 'row', gap: 18, marginTop: 26, flex: 1 }}>
+    {[
+      { icon: '🚫', title: '禁药黑名单硬拦截', desc: '甲胺磷等 8 类国家禁用农药，模型一旦推荐自动移除并告警。单元测试断言：甲胺磷方案 → plan=0 + 「属国家禁用农药」违规记录', tag: '单元测试覆盖' },
+      { icon: '👩‍🌾', title: '低置信度强制转人工', desc: '置信度低于阈值 → needHumanReview 标记 → 自动进入农技站复核队列，专家在后台逐条处理，闭环到农户', tag: '农技站后台演示' },
+      { icon: '⚠️', title: '检疫性病害最高级警示', desc: '命中检疫对象（如柑橘黄龙病）→ 最高级警示标记，指导区域统防统治决策', tag: '区域预警联动' },
+      { icon: '⏱️', title: '安全间隔期强制提示', desc: '方案缺安全间隔期 → 自动补充「采收前务必停药」通用提示；每条方案带配伍禁忌', tag: 'validateChemicalPlan' }
+    ].map((c) => (
+      <Box style={{ flex: 1, background: '#fff', borderRadius: 14, border: '1px solid #e2ece5', padding: 20, gap: 10 }}>
+        <Text style={{ fontSize: 32 }}>{c.icon}</Text>
+        <Text style={{ fontSize: 15, fontWeight: 'bold', color: '#0f3d22' }}>{c.title}</Text>
+        <Text style={{ fontSize: 11.5, color: '#4b5563', lineHeight: 1.8 }}>{c.desc}</Text>
+        <Box style={{ background: '#e8f7ec', borderRadius: 999, padding: '4px 12px', alignSelf: 'flex-start' }}>
+          <Text style={{ fontSize: 10.5, color: '#14532d', fontWeight: 'bold' }}>✓ {c.tag}</Text>
+        </Box>
+      </Box>
+    ))}
+  </Box>
+  <Box style={{ background: '#0f2a1a', borderRadius: 12, padding: '14px 20px', marginTop: 20 }}>
+    <Text style={{ fontSize: 13, color: '#d5ecd9' }}>🛡️ 这套机制对应对评分表「AI 安全与可控性」4 分，也是与拍照识虫类产品拉开差距的核心差异点——<span style={{ color: '#ffd9a0', fontWeight: 'bold' }}>我们敢把「拦截了什么」展示给用户看</span></Text>
+  </Box>
+</Slide>

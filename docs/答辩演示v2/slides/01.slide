@@ -1,0 +1,18 @@
+<Slide style={{ width: 1280, height: 720, background: 'linear-gradient(135deg, #0a2e17 0%, #14562e 55%, #2f9e5f 100%)', padding: 60, justifyContent: 'center', position: 'relative', overflow: 'hidden' }}>
+  <Box style={{ position: 'absolute', width: 420, height: 420, borderRadius: 999, background: 'rgba(255,255,255,0.06)', top: -160, right: -120 }} />
+  <Box style={{ position: 'absolute', width: 300, height: 300, borderRadius: 999, background: 'rgba(255,255,255,0.05)', bottom: -120, right: 160 }} />
+  <Box style={{ position: 'relative', gap: 18 }}>
+    <Text style={{ fontSize: 60, color: '#f2e8c9', fontWeight: 'bold', letterSpacing: 6 }}>🌿 云岭农诊</Text>
+    <Text style={{ fontSize: 25, color: '#ffffff', fontWeight: 'bold' }}>山地特色经济作物病虫害多 Agent 诊断系统</Text>
+    <Box style={{ flexDirection: 'row', gap: 12, marginTop: 14 }}>
+      <Box style={{ background: 'rgba(255,255,255,0.14)', border: '1px solid rgba(255,255,255,0.3)', borderRadius: 999, padding: '8px 20px' }}>
+        <Text style={{ fontSize: 14, color: '#fff' }}>拍一张病叶照片 · 48 秒出具分级诊疗报告</Text>
+      </Box>
+      <Box style={{ background: 'rgba(255,255,255,0.14)', border: '1px solid rgba(255,255,255,0.3)', borderRadius: 999, padding: '8px 20px' }}>
+        <Text style={{ fontSize: 14, color: '#fff' }}>单次诊断成本 ≈ ¥0.01</Text>
+      </Box>
+    </Box>
+    <Text style={{ fontSize: 14, color: 'rgba(255,255,255,0.75)', marginTop: 30 }}>全国高校 AI Web 开发挑战赛 · AI-Web 应用开发赛道</Text>
+    <Text style={{ fontSize: 13, color: 'rgba(255,255,255,0.6)' }}>10 种作物 · 34 种病虫害 · Vue3 + TS + Node.js + Qwen3-VL / DeepSeek-V3.2</Text>
+  </Box>
+</Slide>

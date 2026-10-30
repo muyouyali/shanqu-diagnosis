@@ -1,0 +1,32 @@
+<Slide style={{ width: 1280, height: 720, background: '#f6faf7', padding: '48px 60px', position: 'relative' }}>
+  <Text style={{ fontSize: 30, fontWeight: 'bold', color: '#0f3d22' }}>痛点 → 方案：让农户拍一张照片就能问诊</Text>
+  <Box style={{ flexDirection: 'row', gap: 20, marginTop: 26, flex: 1 }}>
+    <Box style={{ flex: 1, background: '#fff', borderRadius: 14, padding: 22, border: '1px solid #e2ece5', gap: 12 }}>
+      <Text style={{ fontSize: 16, fontWeight: 'bold', color: '#b91c1c' }}> mountain 三大痛点</Text>
+      <Text style={{ fontSize: 13.5, color: '#374151', lineHeight: 1.9 }}>
+        <span style={{ fontWeight: 'bold' }}>① 农技资源匮乏</span>：云南山地农户分散，农技员下乡一次 50–200 元，响应以天计<br />
+        <span style={{ fontWeight: 'bold' }}>② 资料稀缺</span>：三七、天麻等特色作物病害资料少，凭经验乱打药<br />
+        <span style={{ fontWeight: 'bold' }}>③ 直接问大模型不安全</span>：可能幻觉出禁用药，无安全间隔期提醒
+      </Text>
+    </Box>
+    <Box style={{ width: 60, justifyContent: 'center', alignItems: 'center' }}>
+      <Text style={{ fontSize: 34, color: '#2f9e5f', fontWeight: 'bold' }}>→</Text>
+    </Box>
+    <Box style={{ flex: 1, background: '#0f3d22', borderRadius: 14, padding: 22, gap: 12 }}>
+      <Text style={{ fontSize: 16, fontWeight: 'bold', color: '#9fd8ae' }}>✨ 云岭农诊的解法</Text>
+      <Text style={{ fontSize: 13.5, color: '#e8f5ec', lineHeight: 1.9 }}>
+        拍一张病部照片 → <span style={{ color: '#9fd8ae', fontWeight: 'bold' }}>初诊 Agent</span> 视觉识别病斑<br />
+        → <span style={{ color: '#9fd8ae', fontWeight: 'bold' }}>安全闸门</span> 三道硬校验（置信度/禁药/检疫）<br />
+        → <span style={{ color: '#9fd8ae', fontWeight: 'bold' }}>用药指导 Agent</span> 基于专属知识库出方案<br />
+        → 分级报告（立即处置 / 3 日内 / 观察），低置信自动转农技站人工复核
+      </Text>
+    </Box>
+  </Box>
+  <Box style={{ flexDirection: 'row', gap: 14, marginTop: 20 }}>
+    {['🌿 10 种山地作物', '📖 34 种病虫害知识', '💊 19 条农药安全数据', '🤖 4 个 AI Agent'].map((t) => (
+      <Box style={{ flex: 1, background: '#e8f7ec', borderRadius: 10, padding: '10px 0', alignItems: 'center' }}>
+        <Text style={{ fontSize: 13.5, fontWeight: 'bold', color: '#14532d' }}>{t}</Text>
+      </Box>
+    ))}
+  </Box>
+</Slide>

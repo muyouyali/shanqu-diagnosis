@@ -1,0 +1,37 @@
+<Slide style={{ width: 1280, height: 720, background: '#f6faf7', padding: '48px 60px' }}>
+  <Text style={{ fontSize: 30, fontWeight: 'bold', color: '#0f3d22' }}>工程保障：评委可当场验证的每一项</Text>
+  <Box style={{ flexDirection: 'row', gap: 18, marginTop: 24, flex: 1 }}>
+    <Box style={{ flex: 1, gap: 12 }}>
+      <Box style={{ background: '#fff', borderRadius: 12, border: '1px solid #e2ece5', padding: 16, gap: 6 }}>
+        <Text style={{ fontSize: 14.5, fontWeight: 'bold', color: '#0f3d22' }}>🧪 测试</Text>
+        <Text style={{ fontSize: 12, color: '#4b5563', lineHeight: 1.8 }}>18 例服务端单元测试全通过（npm test）：RAG 检索 / 禁药校验 / JSON 容错解析 / 规则引擎 / 数据完整性。前端 vue-tsc 全量类型检查作为构建门禁。</Text>
+      </Box>
+      <Box style={{ background: '#fff', borderRadius: 12, border: '1px solid #e2ece5', padding: 16, gap: 6 }}>
+        <Text style={{ fontSize: 14.5, fontWeight: 'bold', color: '#0f3d22' }}>🏗️ 架构</Text>
+        <Text style={{ fontSize: 12, color: '#4b5563', lineHeight: 1.8 }}>Vue3 + TS + Pinia（30+ 组件、tokens.css 设计系统）· Node/Express AI 接入层 · Provider 无关适配（换服务商只改 .env 三行）· JSON 文件持久化零运维</Text>
+      </Box>
+      <Box style={{ background: '#fff', borderRadius: 12, border: '1px solid #e2ece5', padding: 16, gap: 6 }}>
+        <Text style={{ fontSize: 14.5, fontWeight: 'bold', color: '#0f3d22' }}>🤝 可交接</Text>
+        <Text style={{ fontSize: 12, color: '#4b5563', lineHeight: 1.8 }}>陌生人 clone → npm install && npm run dev 即跑通（AI 未配置自动降级演示模式）· README 含架构图/目录/API 一览</Text>
+      </Box>
+    </Box>
+    <Box style={{ flex: 1, gap: 12 }}>
+      <Text style={{ fontSize: 15, fontWeight: 'bold', color: '#0f3d22' }}>📋 评分维度 → 证据索引</Text>
+      {[
+        ['AI 技术深度', '架构图 + 分层提示词 + 检索实测 + 工具轨迹'],
+        ['创新性', '竞品对比表 + 安全闸门 + 轨迹可视化'],
+        ['前端工程质量', '18 例单测 + 构建零告警 + 目录说明'],
+        ['实用性', '268 条诊断记录 + 20 条检索实测'],
+        ['用户体验', '四态截图 + 断网 30 秒演示'],
+        ['社会价值', '价值测算 + 无补贴成本模型']
+      ].map(([k, v]) => (
+        <Box style={{ background: '#fff', borderRadius: 10, border: '1px solid #e2ece5', padding: '10px 14px', flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+          <Box style={{ background: '#e8f7ec', borderRadius: 6, padding: '4px 10px' }}>
+            <Text style={{ fontSize: 11.5, fontWeight: 'bold', color: '#14532d' }}>{k}</Text>
+          </Box>
+          <Text style={{ fontSize: 11.5, color: '#4b5563', flex: 1 }}>{v}</Text>
+        </Box>
+      ))}
+    </Box>
+  </Box>
+</Slide>

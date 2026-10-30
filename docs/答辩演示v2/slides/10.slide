@@ -1,0 +1,16 @@
+<Slide style={{ width: 1280, height: 720, background: 'linear-gradient(135deg, #0a2e17, #14562e 60%, #2f9e5f)', padding: 60, justifyContent: 'center', alignItems: 'center', position: 'relative', overflow: 'hidden' }}>
+  <Box style={{ position: 'absolute', width: 460, height: 460, borderRadius: 999, background: 'rgba(255,255,255,0.05)', bottom: -200, left: -140 }} />
+  <Box style={{ alignItems: 'center', gap: 16, position: 'relative' }}>
+    <Text style={{ fontSize: 52, fontWeight: 'bold', color: '#f2e8c9', letterSpacing: 4 }}>🌿 谢谢聆听</Text>
+    <Text style={{ fontSize: 18, color: '#fff' }}>让每一部手机，都是山区的植保站</Text>
+    <Box style={{ flexDirection: 'row', gap: 14, marginTop: 20 }}>
+      <Box style={{ background: 'rgba(255,255,255,0.14)', border: '1px solid rgba(255,255,255,0.3)', borderRadius: 999, padding: '9px 22px' }}>
+        <Text style={{ fontSize: 13, color: '#fff' }}>🖥️ 线上演示：aa0fc86c7c38842d0.app.workbuddy.host</Text>
+      </Box>
+      <Box style={{ background: 'rgba(255,255,255,0.14)', border: '1px solid rgba(255,255,255,0.3)', borderRadius: 999, padding: '9px 22px' }}>
+        <Text style={{ fontSize: 13, color: '#fff' }}>👤 演示账号：13800000002 / demo123</Text>
+      </Box>
+    </Box>
+    <Text style={{ fontSize: 12, color: 'rgba(255,255,255,0.65)', marginTop: 16 }}>欢迎现场拔网线 · 欢迎现场调 /api/retrieve 验证检索 · 欢迎追问任何一层实现</Text>
+  </Box>
+</Slide>

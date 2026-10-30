@@ -1,0 +1,36 @@
+<Slide style={{ width: 1280, height: 720, background: '#f6faf7', padding: '48px 60px' }}>
+  <Text style={{ fontSize: 30, fontWeight: 'bold', color: '#0f3d22' }}>RAG 实测：20 条真实场景查询，Top-1 命中 20/20</Text>
+  <Text style={{ fontSize: 14, color: '#6b7280', marginTop: 6 }}>覆盖症状描述 / 俗称 / 口语化表达 / 病害名直查四类农户输入，10 种作物全覆盖</Text>
+  <Box style={{ flexDirection: 'row', gap: 20, marginTop: 22, flex: 1 }}>
+    <Box style={{ flex: 1.3, background: '#fff', borderRadius: 14, border: '1px solid #e2ece5', padding: 16, flexWrap: 'wrap', flexDirection: 'row', gap: 8, alignContent: 'flex-start' }}>
+      {[
+        ['三七', '根部变褐腐烂发臭', '三七根腐病'], ['三七', '叶片圆形褐色斑点轮纹', '三七黑斑病'],
+        ['三七', '植株蔫了叶子耷拉', '三七根腐病'], ['茶树', '叶背白色粉末', '茶饼病'],
+        ['茶树', '嫩叶卷曲小虫', '茶小绿叶蝉'], ['咖啡', '果实有褐色斑点', '咖啡浆果病'],
+        ['核桃', '果实发黑脱落', '核桃举肢蛾'], ['蓝莓', '叶子上有灰霉', '蓝莓灰霉病'],
+        ['柑橘', '叶片黄化果实畸形', '柑橘黄龙病'], ['天麻', '块茎腐烂发软', '天麻块茎腐烂病'],
+        ['魔芋', '软腐有臭味', '魔芋软腐病'], ['石榴', '果实腐烂发黑', '石榴干腐病'],
+        ['花椒', '叶片枯萎流胶', '花椒锈病'], ['柑橘', '树皮开裂流胶', '柑橘炭疽病'],
+        ['蓝莓', '枝条枯死', '蓝莓茎溃疡病'], ['咖啡', '叶子上锈色粉末', '咖啡锈病']
+      ].map(([crop, q, hit]) => (
+        <Box style={{ width: '48%', background: '#f0f7f2', borderRadius: 8, padding: '6px 10px', marginBottom: 2 }}>
+          <Text style={{ fontSize: 10.5, color: '#374151' }}><span style={{ color: '#2f9e5f', fontWeight: 'bold' }}>{crop}</span> · {q} <br /><span style={{ color: '#14532d', fontWeight: 'bold' }}>→ {hit} ✅</span></Text>
+        </Box>
+      ))}
+    </Box>
+    <Box style={{ flex: 0.7, gap: 12 }}>
+      <Box style={{ background: '#0f3d22', borderRadius: 12, padding: 18, alignItems: 'center' }}>
+        <Text style={{ fontSize: 44, fontWeight: 'bold', color: '#9fd8ae' }}>20/20</Text>
+        <Text style={{ fontSize: 13, color: '#e8f5ec' }}>Top-1 命中率 100%</Text>
+      </Box>
+      <Box style={{ background: '#fff', borderRadius: 12, border: '1px solid #e2ece5', padding: 16, gap: 8 }}>
+        <Text style={{ fontSize: 13, fontWeight: 'bold', color: '#0f3d22' }}>🛡️ 无命中兜底（防幻觉关键）</Text>
+        <Text style={{ fontSize: 11.5, color: '#4b5563', lineHeight: 1.8 }}>「量子纠缠波动方程」→ 返回空数组，不强行匹配；上层明确告知知识库无命中并要求专家复核。单元测试断言。</Text>
+      </Box>
+      <Box style={{ background: '#fff', borderRadius: 12, border: '1px solid #e2ece5', padding: 16, gap: 8 }}>
+        <Text style={{ fontSize: 13, fontWeight: 'bold', color: '#0f3d22' }}>🔍 可现场验证</Text>
+        <Text style={{ fontSize: 11.5, color: '#4b5563', lineHeight: 1.8 }}>GET /api/retrieve?q=调试端点，打分明细实时可查；检索函数为纯接口，向量检索可无缝替换</Text>
+      </Box>
+    </Box>
+  </Box>
+</Slide>

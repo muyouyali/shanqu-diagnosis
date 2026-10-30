@@ -1,0 +1,31 @@
+<Slide style={{ width: 1280, height: 720, background: 'linear-gradient(135deg, #0a2e17, #14562e)', padding: '48px 60px', position: 'relative', overflow: 'hidden' }}>
+  <Box style={{ position: 'absolute', width: 380, height: 380, borderRadius: 999, background: 'rgba(255,255,255,0.05)', top: -140, right: -100 }} />
+  <Text style={{ fontSize: 30, fontWeight: 'bold', color: '#f2e8c9' }}>社会价值：1 分钱的农技服务，无补贴可持续</Text>
+  <Box style={{ flexDirection: 'row', gap: 18, marginTop: 26 }}>
+    {[
+      { num: '¥0.01', label: '单次诊断成本', sub: '农技员下乡 ¥50–200' },
+      { num: '48秒', label: '出具分级报告', sub: '传统等排期数天' },
+      { num: '7×24', label: '手机即达', sub: '不限于农技站人力半径' },
+      { num: '1000+', label: '免费额度可诊断次数', sub: '注册赠送额度即可运转' }
+    ].map((s) => (
+      <Box style={{ flex: 1, background: 'rgba(255,255,255,0.1)', border: '1px solid rgba(255,255,255,0.2)', borderRadius: 14, padding: '18px 16px', alignItems: 'center', gap: 6 }}>
+        <Text style={{ fontSize: 30, fontWeight: 'bold', color: '#9fd8ae' }}>{s.num}</Text>
+        <Text style={{ fontSize: 13, color: '#fff', fontWeight: 'bold' }}>{s.label}</Text>
+        <Text style={{ fontSize: 10.5, color: 'rgba(255,255,255,0.7)' }}>{s.sub}</Text>
+      </Box>
+    ))}
+  </Box>
+  <Box style={{ flexDirection: 'row', gap: 18, marginTop: 22, flex: 1 }}>
+    {[
+      { icon: '👨‍🌾', t: '山地散户农户', d: '拍照即得分级诊疗报告，适老化交互，不再「凭经验乱打药」' },
+      { icon: '🏫', t: '基层农技站', d: '后台六大模块：低置信复核、区域预警、流行趋势看板——一人服务十倍半径' },
+      { icon: '🏛️', t: '区域植保部门', d: '诊断数据沉淀为区域热力与趋势，辅助统防统治决策' }
+    ].map((c) => (
+      <Box style={{ flex: 1, background: 'rgba(255,255,255,0.08)', borderRadius: 14, padding: 18, gap: 8 }}>
+        <Text style={{ fontSize: 26 }}>{c.icon}</Text>
+        <Text style={{ fontSize: 15, fontWeight: 'bold', color: '#fff' }}>{c.t}</Text>
+        <Text style={{ fontSize: 12, color: 'rgba(255,255,255,0.8)', lineHeight: 1.8 }}>{c.d}</Text>
+      </Box>
+    ))}
+  </Box>
+</Slide>

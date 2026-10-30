@@ -1,0 +1,48 @@
+<Slide style={{ width: 1280, height: 720, background: '#f6faf7', padding: '48px 60px' }}>
+  <Text style={{ fontSize: 30, fontWeight: 'bold', color: '#0f3d22' }}>AI 技术架构：三级诊疗工作流 + 工具自主调用</Text>
+  <Box style={{ flexDirection: 'row', gap: 16, marginTop: 26, flex: 1 }}>
+    <Box style={{ flex: 1.15, gap: 10 }}>
+      <Box style={{ background: '#fff', borderRadius: 12, border: '1.5px solid #2f9e5f', padding: '14px 18px', gap: 4 }}>
+        <Text style={{ fontSize: 15, fontWeight: 'bold', color: '#14532d' }}>① 初诊 Agent · Qwen3-VL-8B 视觉模型</Text>
+        <Text style={{ fontSize: 12, color: '#4b5563' }}>分层提示词（角色 / 候选病害约束 / JSON 输出契约），输出空间被知识库约束防幻觉</Text>
+      </Box>
+      <Box style={{ alignItems: 'center' }}><Text style={{ fontSize: 18, color: '#2f9e5f' }}>↓</Text></Box>
+      <Box style={{ background: '#fff8e6', borderRadius: 12, border: '1.5px solid #d9a23a', padding: '14px 18px', gap: 4 }}>
+        <Text style={{ fontSize: 15, fontWeight: 'bold', color: '#92600a' }}>② 安全闸门 · 规则引擎（不经 LLM）</Text>
+        <Text style={{ fontSize: 12, color: '#4b5563' }}>置信度阈值 → 转人工复核；禁药黑名单 → 硬拦截；检疫性病害 → 最高级警示</Text>
+      </Box>
+      <Box style={{ alignItems: 'center' }}><Text style={{ fontSize: 18, color: '#2f9e5f' }}>↓</Text></Box>
+      <Box style={{ background: '#fff', borderRadius: 12, border: '1.5px solid #2f9e5f', padding: '14px 18px', gap: 4 }}>
+        <Text style={{ fontSize: 15, fontWeight: 'bold', color: '#14532d' }}>③ 用药指导 Agent · DeepSeek-V3.2 + RAG</Text>
+        <Text style={{ fontSize: 12, color: '#4b5563' }}>注入知识库检索上下文生成方案，输出再过一道禁药硬校验</Text>
+      </Box>
+      <Box style={{ alignItems: 'center' }}><Text style={{ fontSize: 18, color: '#2f9e5f' }}>↓</Text></Box>
+      <Box style={{ background: '#e8f7ec', borderRadius: 12, padding: '14px 18px', gap: 4 }}>
+        <Text style={{ fontSize: 15, fontWeight: 'bold', color: '#14532d' }}>④ QA 问答 · Function Calling 工具循环</Text>
+        <Text style={{ fontSize: 12, color: '#4b5563' }}>模型自主决策调用：Open-Meteo 真实气象 API（17 农区坐标）+ 农药安全库</Text>
+      </Box>
+    </Box>
+    <Box style={{ flex: 1, gap: 12 }}>
+      <Box style={{ background: '#0f2a1a', borderRadius: 12, padding: 18, flex: 1 }}>
+        <Text style={{ fontSize: 13.5, color: '#9fd8ae', fontWeight: 'bold', marginBottom: 8 }}>自研 RAG（BM25 + 同义词扩展）</Text>
+        <Text style={{ fontSize: 12, color: '#d5ecd9', lineHeight: 1.9 }}>
+          多字段加权：名称×3 / 别名×2.5 / 症状×2 / 关键词×1.5<br />
+          口语词映射：「蔫了」→「萎蔫」<br />
+          scoreNormalized 归一化，前端可视化直接可用<br />
+          无命中 → 明确告知「知识库无命中」，<span style={{ color: '#ffd9a0', fontWeight: 'bold' }}>宁可不答，不编答案</span>
+        </Text>
+      </Box>
+      <Box style={{ background: '#0f2a1a', borderRadius: 12, padding: 18, flex: 1 }}>
+        <Text style={{ fontSize: 13.5, color: '#9fd8ae', fontWeight: 'bold', marginBottom: 8 }}>全链路降级（断网演示不崩）</Text>
+        <Text style={{ fontSize: 12, color: '#d5ecd9', lineHeight: 1.9 }}>
+          AI 超时 → 规则引擎诊断 → 知识库直出方案 → 模拟气象源<br />
+          重试 2 次指数退避 · JSON 三级容错解析 · 6s 气象超时切换<br />
+          <span style={{ color: '#ffd9a0', fontWeight: 'bold' }}>答辩可现场拔网线 30 秒演示</span>
+        </Text>
+      </Box>
+      <Box style={{ background: '#e8f7ec', borderRadius: 12, padding: '12px 18px' }}>
+        <Text style={{ fontSize: 12.5, color: '#14532d', fontWeight: 'bold' }}>💡 为什么诊断链路用固定编排？用药安全必须可审计、可复现——模型自主决策放在低风险的问答链路，这是刻意的安全设计</Text>
+      </Box>
+    </Box>
+  </Box>
+</Slide>
