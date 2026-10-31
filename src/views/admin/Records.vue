@@ -104,7 +104,7 @@ const changePage = async (delta: number) => {
 </script>
 
 <template>
-  <div class="records">
+  <div class="records records--watermarked">
     <!-- 工具栏 -->
     <div class="toolbar">
       <div class="search-box">
@@ -306,6 +306,10 @@ const changePage = async (delta: number) => {
 
 <style scoped>
 .records {
+  /* 数据水印（参考 Element Plus Watermark）：防截图外传，标注数据归属 */
+  --wm: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='220' height='140'%3E%3Ctext x='18' y='76' font-size='13' fill='rgba(47,152,104,0.07)' transform='rotate(-18 18 76)' font-family='sans-serif'%3E云岭农诊 · 内部数据%3C/text%3E%3C/svg%3E");
+  background-image: var(--wm);
+  background-repeat: repeat;
   display: flex;
   flex-direction: column;
   gap: 14px;

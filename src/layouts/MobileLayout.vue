@@ -1,16 +1,42 @@
 <script setup lang="ts">
-import { computed } from 'vue'
+import { computed, ref, onMounted, onUnmounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import AppIcon from '@/components/AppIcon.vue'
 import UserMenu from '@/components/UserMenu.vue'
 import { useAppStore } from '@/stores/app'
-import { onMounted } from 'vue'
 
 const store = useAppStore()
 onMounted(() => store.restoreUser())
 
 const route = useRoute()
 const router = useRouter()
+
+/* ===== Backtop 回到顶部 ===== */
+const showBacktop = ref(false)
+const onScroll = () => (showBacktop.value = window.scrollY > 500)
+const scrollTop = () => window.scrollTo({ top: 0, behavior: 'smooth' })
+onMounted(() => window.addEventListener('scroll', onScroll, { passive: true }))
+onUnmounted(() => window.removeEventListener('scroll', onScroll))
+
+/* ===== Tour 首次访问漫游引导（localStorage 记忆，仅农户端出现一次） ===== */
+const TOUR_KEY = 'ylnz_tour_done'
+const tour = ref(false)
+const tourStep = ref(0)
+const tourSteps = [
+  { title: '拍照诊断，30 秒出结果', desc: '点击「拍照诊断」上传病叶照片，AI 多 Agent 自动识别作物与病害，给出用药方案' },
+  { title: '实时天气 + 病害预警', desc: '首页天气卡展示您所在州市的 7 天实况，连续降雨时会自动推送病害气象预警' },
+  { title: '本地作物图谱随身查', desc: '收录您所在州市主栽作物的常见病害图文对照，可搜索症状快速定位' },
+  { title: '问答与专家支持', desc: '大白话提问 AI 农技员，任何作物都能问；疑难问题可转对口专家一对一咨询' }
+]
+onMounted(() => {
+  if (!localStorage.getItem(TOUR_KEY) && route.path === '/') {
+    setTimeout(() => (tour.value = true), 1200)
+  }
+})
+const finishTour = () => {
+  tour.value = false
+  localStorage.setItem(TOUR_KEY, '1')
+}
 
 const tabs = [
   { name: 'home', path: '/', label: '首页', icon: 'home' },
@@ -74,6 +100,39 @@ const go = (path: string) => {
         </transition>
       </router-view>
     </main>
+
+    <!-- 回到顶部（参考 Element Plus Backtop）：滚动超过一屏出现 -->
+    <transition name="fade">
+      <button v-show="showBacktop" class="backtop" @click="scrollTop" aria-label="回到顶部">
+        <AppIcon name="chevron-up" :size="18" />
+      </button>
+    </transition>
+
+    <!-- 首次访问漫游引导（参考 Element Plus Tour）：逐步介绍核心功能区 -->
+    <Teleport to="body">
+      <div v-if="tour" class="tour-mask" @click.self="finishTour">
+        <div class="tour-card">
+          <div class="tour-card__step">第 {{ tourStep + 1 }} 步 / 共 {{ tourSteps.length }} 步</div>
+          <h3 class="tour-card__title">{{ tourSteps[tourStep].title }}</h3>
+          <p class="tour-card__desc">{{ tourSteps[tourStep].desc }}</p>
+          <div class="tour-card__dots">
+            <span
+              v-for="(s, i) in tourSteps"
+              :key="i"
+              class="tour-card__dot"
+              :class="{ 'is-on': i === tourStep }"
+            ></span>
+          </div>
+          <div class="tour-card__actions">
+            <button class="tour-card__skip" @click="finishTour">跳过</button>
+            <button v-if="tourStep > 0" class="tour-card__prev" @click="tourStep--">上一步</button>
+            <button class="tour-card__next" @click="tourStep < tourSteps.length - 1 ? tourStep++ : finishTour()">
+              {{ tourStep < tourSteps.length - 1 ? '下一步' : '开始使用' }}
+            </button>
+          </div>
+        </div>
+      </div>
+    </Teleport>
 
     <nav class="tabbar">
       <button
@@ -349,5 +408,118 @@ const go = (path: string) => {
   .tabbar {
     display: none;
   }
+}
+
+/* ===== Backtop 回到顶部 ===== */
+.backtop {
+  position: fixed;
+  right: 22px;
+  bottom: 96px;
+  z-index: 180;
+  width: 42px;
+  height: 42px;
+  border-radius: var(--r-full);
+  display: grid;
+  place-items: center;
+  color: var(--c-primary-700);
+  background: rgba(255, 255, 255, 0.92);
+  border: 1px solid var(--c-primary-100);
+  box-shadow: var(--sh-md);
+  backdrop-filter: blur(8px);
+  transition: transform var(--dur-fast) var(--ease-spring), box-shadow var(--dur-fast);
+}
+.backtop:hover {
+  transform: translateY(-3px);
+  box-shadow: var(--sh-lg);
+}
+
+/* ===== Tour 漫游引导 ===== */
+.tour-mask {
+  position: fixed;
+  inset: 0;
+  z-index: 500;
+  display: grid;
+  place-items: center;
+  background: rgba(14, 30, 23, 0.55);
+  backdrop-filter: blur(4px);
+}
+.tour-card {
+  width: min(92vw, 420px);
+  padding: 26px 26px 20px;
+  border-radius: var(--r-xl);
+  background: #fff;
+  box-shadow: var(--sh-lg);
+  text-align: center;
+}
+.tour-card__step {
+  font-size: 11.5px;
+  font-weight: 600;
+  color: var(--c-primary-500);
+  letter-spacing: 0.5px;
+  margin-bottom: 10px;
+}
+.tour-card__title {
+  font-size: 19px;
+  color: var(--c-text-1);
+  margin-bottom: 8px;
+}
+.tour-card__desc {
+  font-size: 13.5px;
+  line-height: 1.7;
+  color: var(--c-text-3);
+  margin-bottom: 16px;
+  min-height: 46px;
+}
+.tour-card__dots {
+  display: flex;
+  justify-content: center;
+  gap: 6px;
+  margin-bottom: 18px;
+}
+.tour-card__dot {
+  width: 7px;
+  height: 7px;
+  border-radius: var(--r-full);
+  background: var(--c-line);
+  transition: all var(--dur-fast);
+}
+.tour-card__dot.is-on {
+  width: 20px;
+  background: var(--c-primary-500);
+}
+.tour-card__actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.tour-card__skip {
+  margin-right: auto;
+  font-size: 12.5px;
+  color: var(--c-text-4);
+}
+.tour-card__prev {
+  padding: 8px 16px;
+  border-radius: var(--r-full);
+  border: 1px solid var(--c-line);
+  font-size: 13px;
+  color: var(--c-text-2);
+}
+.tour-card__next {
+  padding: 8px 22px;
+  border-radius: var(--r-full);
+  font-size: 13px;
+  font-weight: 600;
+  color: #fff;
+  background: linear-gradient(140deg, var(--c-primary-400), var(--c-primary-600));
+  box-shadow: 0 4px 14px rgba(47, 152, 104, 0.3);
+}
+
+.fade-enter-active,
+.fade-leave-active {
+  transition: opacity var(--dur-base);
+}
+.fade-enter-from,
+.fade-leave-to {
+  opacity: 0;
 }
 </style>
