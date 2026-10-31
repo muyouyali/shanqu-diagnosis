@@ -225,3 +225,24 @@ export const provinceOfRegion = (region?: string): string => {
   }
   return '云南'
 }
+
+/** 地名候选 → 地区库匹配（精确 → 包含 → 省会兜底）；供自动定位与地区选择器共用 */
+export const matchRegionOf = (...candidates: (string | undefined)[]): string | null => {
+  const allRegions = PROVINCES.flatMap((p) =>
+    p.groups.flatMap((g) => g.items.map((item) => ({ name: item, province: p.name })))
+  )
+  const names = candidates.filter(Boolean) as string[]
+  for (const n of names) {
+    const exact = allRegions.find((r) => r.name === n)
+    if (exact) return exact.name
+  }
+  for (const n of names) {
+    const hit = allRegions.find((r) => n.includes(r.name) || r.name.includes(n))
+    if (hit) return hit.name
+  }
+  for (const n of names) {
+    const prov = PROVINCES.find((p) => n.includes(p.name) || p.name.includes(n))
+    if (prov) return prov.groups[0].items[0]
+  }
+  return null
+}

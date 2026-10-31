@@ -1,8 +1,9 @@
 <script setup lang="ts">
-import { ref, computed } from 'vue'
+import { ref, computed, watch, onBeforeUnmount } from 'vue'
 import { useAppStore } from '@/stores/app'
 import AppIcon from '@/components/AppIcon.vue'
 import SceneryBanner from '@/components/SceneryBanner.vue'
+import api from '@/api'
 import { PROVINCES, provinceOfRegion } from '@/data/regions'
 
 const store = useAppStore()
@@ -26,10 +27,121 @@ const searchResults = computed(() => {
   return allRegions.filter((r) => r.name.includes(k) || r.province.includes(k)).slice(0, 12)
 })
 
+// 弹窗打开时锁定背景滚动，避免「滑动弹窗带动后面页面」
+watch(open, (v) => {
+  document.body.style.overflow = v ? 'hidden' : ''
+})
+onBeforeUnmount(() => {
+  document.body.style.overflow = ''
+})
+
 const pick = (r: string) => {
+  localStorage.setItem('ylnz_region_pinned', '1')
   store.setRegion(r)
   open.value = false
   store.showToast(`定位已切换到 ${r}`, 'success')
+}
+
+/** 从地名候选中匹配地区库（精确 → 包含 → 省会映射） */
+const matchRegion = (...candidates: string[]): string | null => {
+  const names = candidates.filter(Boolean)
+  for (const n of names) {
+    const exact = allRegions.find((r) => r.name === n)
+    if (exact) return exact.name
+  }
+  for (const n of names) {
+    if (!n) continue
+    const hit = allRegions.find((r) => n.includes(r.name) || r.name.includes(n))
+    if (hit) return hit.name
+  }
+  // 未收录的地市映射到对应省份作为兜底
+  for (const n of names) {
+    if (!n) continue
+    const prov = PROVINCES.find((p) => n.includes(p.name) || p.name.includes(n))
+    if (prov) return prov.groups[0].items[0]
+  }
+  return null
+}
+
+/** 真定位：浏览器 GPS → 坐标反查地名；失败则 IP 定位兜底 */
+const locating = ref(false)
+const locateMe = async () => {
+  if (locating.value) return
+  locating.value = true
+  try {
+    let matched: string | null = null
+    // 1) 浏览器定位（需要 HTTPS 或 localhost）
+    const pos = await new Promise<GeolocationPosition>((resolve, reject) => {
+      if (!('geolocation' in navigator)) return reject(new Error('no geolocation'))
+      navigator.geolocation.getCurrentPosition(resolve, reject, {
+        enableHighAccuracy: false,
+        timeout: 8000,
+        maximumAge: 5 * 60 * 1000
+      })
+    }).catch(() => null)
+
+    if (pos) {
+      const { latitude, longitude } = pos.coords
+      // 多服务商兜底：BigDataCloud（免 Key、中文）→ Nominatim → IP 定位
+      try {
+        const r = await fetch(
+          `https://api.bigdatacloud.net/data/reverse-geocode-client?latitude=${latitude}&longitude=${longitude}&localityLanguage=zh`,
+          { headers: { Accept: 'application/json' } }
+        )
+        const j = await r.json()
+        if (!j.status) matched = matchRegion(j.city, j.locality, j.principalSubdivision)
+      } catch { /* 下一个 */ }
+
+      if (!matched) {
+        try {
+          const r = await fetch(
+            `https://nominatim.openstreetmap.org/reverse?format=jsonv2&lat=${latitude}&lon=${longitude}&accept-language=zh-CN`,
+            { headers: { Accept: 'application/json' } }
+          )
+          const j = await r.json()
+          const a = j.address || {}
+          matched = matchRegion(a.county, a.city, a.district, a.state)
+        } catch { /* 走 IP 兜底 */ }
+      }
+    }
+
+    // 后端中转反查（服务端网络更稳，本地部署始终可用）
+    if (!matched && pos) {
+      try {
+        const r = await api.geoReverse(pos.coords.latitude, pos.coords.longitude)
+        if (r.ok && r.names?.length) matched = matchRegion(...r.names)
+      } catch { /* 走 IP 兜底 */ }
+    }
+
+    // IP 定位兜底（浏览器定位被拒绝时也能用）
+    if (!matched) {
+      try {
+        const r = await fetch('https://api.bigdatacloud.net/data/client-info', { headers: { Accept: 'application/json' } })
+        if (r.ok) {
+          const j = await r.json()
+          matched = matchRegion(j.city, j.principalSubdivision)
+        }
+      } catch { /* 放弃 */ }
+      if (!matched) {
+        try {
+          const r = await fetch('https://ipapi.co/json/')
+          const j = await r.json()
+          matched = matchRegion(j.city, j.region)
+        } catch { /* 放弃 */ }
+      }
+    }
+
+    if (matched) {
+      localStorage.setItem('ylnz_region_pinned', '1')
+      store.setRegion(matched)
+      open.value = false
+      store.showToast(`已根据当前位置定位到 ${matched}`, 'success')
+    } else {
+      store.showToast('定位失败，请手动选择地区', 'error')
+    }
+  } finally {
+    locating.value = false
+  }
 }
 </script>
 
@@ -50,6 +162,15 @@ const pick = (r: string) => {
               <h3>选择您的种植区域</h3>
               <p>天气与病害风险将按所选区域计算</p>
             </div>
+
+            <!-- 一键真定位 -->
+            <button class="locate-btn" :disabled="locating" @click="locateMe">
+              <span class="locate-btn__pulse"><AppIcon name="map-pin" :size="15" /></span>
+              <span class="locate-btn__txt">
+                <strong>{{ locating ? '正在定位当前位置…' : '定位当前位置' }}</strong>
+                <small>{{ locating ? '请允许浏览器获取位置信息' : '自动识别您所在的种植地区' }}</small>
+              </span>
+            </button>
 
             <!-- 搜索框 -->
             <div class="search-box">
@@ -169,17 +290,20 @@ const pick = (r: string) => {
   display: flex;
   align-items: flex-end;
   justify-content: center;
+  overscroll-behavior: contain;
+  touch-action: none;
 }
 
 .sheet {
   width: 100%;
-  max-height: 76vh;
+  max-height: 80vh;
   max-width: 560px;
   background: var(--c-bg-card);
   border-radius: var(--r-xl) var(--r-xl) 0 0;
   display: flex;
   flex-direction: column;
   overflow: hidden;
+  box-shadow: 0 -12px 48px rgba(12, 40, 26, 0.28);
 }
 
 .sheet__banner {
@@ -192,14 +316,15 @@ const pick = (r: string) => {
 }
 
 .sheet__head {
-  padding: 20px 20px 12px;
+  padding: 18px 20px 10px;
   text-align: center;
-  border-bottom: 1px solid var(--c-line-soft);
 }
 
 .sheet__head h3 {
-  font-size: 16px;
-  font-weight: 700;
+  font-size: 17px;
+  font-weight: 800;
+  letter-spacing: 0.5px;
+  color: var(--c-text-1);
 }
 
 .sheet__head p {
@@ -215,23 +340,95 @@ const pick = (r: string) => {
 }
 
 /* 搜索框 */
+/* 一键真定位按钮 */
+.locate-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  width: calc(100% - 40px);
+  margin: 14px auto 2px;
+  padding: 10px 16px;
+  border-radius: 14px;
+  text-align: left;
+  color: #fff;
+  background: linear-gradient(120deg, var(--c-primary-600), var(--c-primary-700) 60%, var(--c-primary-800));
+  box-shadow: 0 6px 18px rgba(47, 152, 104, 0.32), inset 0 1px 0 rgba(255, 255, 255, 0.22);
+  transition: transform var(--dur-fast), box-shadow var(--dur-fast), opacity var(--dur-fast);
+}
+
+.locate-btn:not(:disabled):hover {
+  transform: translateY(-1.5px);
+  box-shadow: 0 8px 22px rgba(47, 152, 104, 0.42), inset 0 1px 0 rgba(255, 255, 255, 0.22);
+}
+
+.locate-btn:disabled {
+  opacity: 0.7;
+}
+
+/* 图标带脉冲光环 */
+.locate-btn__pulse {
+  position: relative;
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  background: rgba(255, 255, 255, 0.16);
+  border: 1px solid rgba(255, 255, 255, 0.28);
+  flex-shrink: 0;
+}
+
+.locate-btn__pulse::after {
+  content: '';
+  position: absolute;
+  inset: -3px;
+  border-radius: 50%;
+  border: 1.5px solid rgba(255, 255, 255, 0.45);
+  animation: locate-pulse 1.8s ease-out infinite;
+}
+
+@keyframes locate-pulse {
+  0% { transform: scale(0.9); opacity: 0.9; }
+  70% { transform: scale(1.25); opacity: 0; }
+  100% { transform: scale(1.25); opacity: 0; }
+}
+
+.locate-btn__txt {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+
+.locate-btn__txt strong {
+  font-size: 13.5px;
+  font-weight: 700;
+  letter-spacing: 0.3px;
+}
+
+.locate-btn__txt small {
+  font-size: 10.5px;
+  color: rgba(255, 255, 255, 0.72);
+}
+
 .search-box {
   display: flex;
   align-items: center;
   gap: 8px;
   margin: 12px 20px 0;
   padding: 0 14px;
-  height: 42px;
+  height: 44px;
   border-radius: var(--r-full);
   background: var(--c-bg-muted);
   border: 1.5px solid var(--c-line);
-  transition: border-color var(--dur-fast);
+  transition: border-color var(--dur-fast), box-shadow var(--dur-fast), background var(--dur-fast);
   flex-shrink: 0;
 }
 
 .search-box:focus-within {
-  border-color: var(--c-primary-300);
+  border-color: var(--c-primary-400);
   background: #fff;
+  box-shadow: 0 0 0 3px rgba(47, 152, 104, 0.12);
 }
 
 .search-box__icon {
@@ -333,9 +530,16 @@ const pick = (r: string) => {
 }
 
 .prov-tab.is-active {
-  background: var(--c-primary-600);
-  border-color: var(--c-primary-600);
+  background: linear-gradient(135deg, var(--c-primary-500), var(--c-primary-700));
+  border-color: transparent;
   color: #fff;
+  box-shadow: 0 3px 10px rgba(47, 152, 104, 0.3);
+}
+
+.prov-tab:not(.is-active):hover {
+  border-color: var(--c-primary-200);
+  color: var(--c-primary-700);
+  background: var(--c-primary-50);
 }
 
 .prov-tab__badge {
@@ -383,7 +587,14 @@ const pick = (r: string) => {
   border: 1.5px solid var(--c-line-soft);
   font-size: 13px;
   color: var(--c-text-2);
-  transition: all var(--dur-fast);
+  transition: all var(--dur-fast) var(--ease-out);
+}
+
+.sheet__item:hover {
+  border-color: var(--c-primary-200);
+  color: var(--c-primary-700);
+  background: var(--c-primary-50);
+  transform: translateY(-1px);
 }
 
 .sheet__item:active {
@@ -391,10 +602,16 @@ const pick = (r: string) => {
 }
 
 .sheet__item.is-active {
-  background: var(--c-primary-50);
+  background: linear-gradient(135deg, var(--c-primary-50), #eafaf1);
   border-color: var(--c-primary-500);
   color: var(--c-primary-700);
   font-weight: 700;
+  box-shadow: 0 3px 10px rgba(47, 152, 104, 0.16);
+}
+
+.sheet__item.is-active :deep(svg),
+.sheet__item.is-active .icon {
+  color: var(--c-primary-600);
 }
 
 .sheet__cancel {
@@ -404,6 +621,12 @@ const pick = (r: string) => {
   font-weight: 600;
   color: var(--c-text-3);
   background: var(--c-bg-card);
+  transition: color var(--dur-fast), background var(--dur-fast);
+}
+
+.sheet__cancel:hover {
+  color: var(--c-primary-700);
+  background: var(--c-primary-50);
 }
 
 /* 弹层动画 */

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, onMounted, computed } from 'vue'
+import { ref, onMounted, onBeforeUnmount, computed, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { useAppStore } from '@/stores/app'
 import AppIcon from '@/components/AppIcon.vue'
@@ -10,6 +10,7 @@ import CropDetailSheet from '@/components/CropDetailSheet.vue'
 import CropSubmitSheet from '@/components/CropSubmitSheet.vue'
 import UserMenu from '@/components/UserMenu.vue'
 import { provinceOfRegion } from '@/data/regions'
+import { CITY_SPECIALTY } from '@/data/cityCrops'
 import api from '@/api'
 import type { AlertResponse } from '@/types'
 
@@ -37,19 +38,46 @@ const alertTone = computed(() => {
 })
 
 onMounted(async () => {
+  bannerRestart()
   try {
     await store.loadCrops()
   } catch {
     /* 首页不阻断 */
   }
   try {
-    alert.value = await api.alerts(14)
+    // 6 秒超时兜底：后端未就绪/网络挂起时不再让骨架屏一直转
+    alert.value = await Promise.race([
+      api.alerts(14, store.region),
+      new Promise<null>((r) => setTimeout(() => r(null), 6000)),
+    ])
   } catch {
     /* 预警失败不阻断 */
   } finally {
     loadingAlert.value = false
   }
 })
+
+onBeforeUnmount(() => {
+  if (bannerTimer) clearInterval(bannerTimer)
+})
+
+/** 地区切换后预警/风险也跟随刷新 */
+watch(
+  () => store.region,
+  async () => {
+    loadingAlert.value = true
+    try {
+      alert.value = await Promise.race([
+        api.alerts(14, store.region),
+        new Promise<null>((r) => setTimeout(() => r(null), 6000))
+      ])
+    } catch {
+      /* 预警失败不阻断 */
+    } finally {
+      loadingAlert.value = false
+    }
+  }
+)
 
 const goDiagnose = (cropId?: string) => {
   if (cropId) store.setCrop(cropId)
@@ -58,23 +86,55 @@ const goDiagnose = (cropId?: string) => {
 
 const badges = ['多模态识图', 'RAG 检索增强', '双 Agent 协作', '流式输出', '天气工具联动']
 
+// ===== Hero 图片轮播 =====
+const banners = [
+  { img: '/media/banners/b39452374.jpg', title: '云端梯田 · 山地作物的家园' },
+  { img: '/media/banners/b35872964.jpg', title: '雾绕山间 · 云岭特色作物带' },
+  { img: '/media/banners/b36813325.jpg', title: '梯田农舍 · 传统耕作的智慧' },
+  { img: '/media/banners/b39686331.jpg', title: '晨雾群山 · 生态种植屏障' },
+  { img: '/media/banners/b32742909.jpg', title: '高山云雾 · 天然病害防线' },
+]
+const bannerCur = ref(0)
+let bannerTimer: ReturnType<typeof setInterval> | null = null
+const bannerGo = (i: number) => {
+  bannerCur.value = (i + banners.length) % banners.length
+  bannerRestart()
+}
+const bannerNext = () => bannerGo(bannerCur.value + 1)
+const bannerPrev = () => bannerGo(bannerCur.value - 1)
+const bannerRestart = () => {
+  if (bannerTimer) clearInterval(bannerTimer)
+  bannerTimer = setInterval(() => {
+    bannerCur.value = (bannerCur.value + 1) % banners.length
+  }, 5000)
+}
+
 const showAlertDetail = ref(false)
 
 // ===== 作物搜索 + 本地分组 =====
 const cropKeyword = ref('')
-const localProvince = computed(() => provinceOfRegion(store.region))
+const localProvince = computed(() => provinceOfRegion(store.region) || store.cropsProvince)
 
 /** 地区筛选：全部 / 本地 / 知识库 / 共建 */
 const cropTab = ref<'all' | 'local' | 'kb' | 'community'>('all')
 
-/** 是否为当前地区作物 */
-const isLocalCrop = (c: { regions?: string[] }) =>
-  Boolean(c.regions?.includes(localProvince.value))
+/** 是否为当前地区作物（用 store 已算好的本地集合，避免省份识别失败） */
+const isLocalCrop = (c: { id: string; regions?: string[] }) =>
+  store.localCrops.some((x) => x.id === c.id)
 
-/** 本地知识库作物（可诊断） */
-const localKbCrops = computed(() =>
-  (store.crops as any[]).filter((c) => c.diagnosable && isLocalCrop(c))
-)
+/** 当前州市主推作物（如 文山市→三七、红河州→石榴），严格与所选地区对应 */
+const cityFeaturedIds = computed(() => CITY_SPECIALTY[store.region] || [])
+const isCityFeatured = (id: string) => cityFeaturedIds.value.includes(id)
+
+/** 本地知识库作物（可诊断；州市主推置顶） */
+const localKbCrops = computed(() => {
+  const list = (store.crops as any[]).filter((c) => c.diagnosable && isLocalCrop(c))
+  if (!cityFeaturedIds.value.length) return list
+  return [
+    ...list.filter((c) => isCityFeatured(c.id)),
+    ...list.filter((c) => !isCityFeatured(c.id))
+  ]
+})
 
 /** 本地百科作物（知识库未收录，地区图谱） */
 const localAtlasCrops = computed(() =>
@@ -151,8 +211,35 @@ const hueOf = (name: string) => {
     <!-- ===== 顶部 Hero ===== -->
     <header class="hero">
       <div class="hero__bg">
+        <!-- 真实图片轮播 -->
+        <img
+          v-for="(b, i) in banners"
+          :key="b.img"
+          :src="b.img"
+          :alt="b.title"
+          class="hero__slide"
+          :class="{ 'is-on': i === bannerCur }"
+        />
         <div class="hero__mountain"></div>
         <div class="hero__glow"></div>
+        <!-- 底部说明 + 圆点 + 箭头 -->
+        <div class="hero__carousel">
+          <span class="hero__cap">{{ banners[bannerCur].title }}</span>
+          <div class="hero__dots">
+            <button
+              v-for="(b, i) in banners"
+              :key="'d' + i"
+              class="hero__dot"
+              :class="{ 'is-on': i === bannerCur }"
+              :aria-label="`第${i + 1}张`"
+              @click="bannerGo(i)"
+            />
+          </div>
+          <div class="hero__arrows">
+            <button class="hero__arrow" aria-label="上一张" @click="bannerPrev">‹</button>
+            <button class="hero__arrow" aria-label="下一张" @click="bannerNext">›</button>
+          </div>
+        </div>
       </div>
 
       <div class="hero__content">
@@ -194,7 +281,11 @@ const hueOf = (name: string) => {
 
     <!-- ===== 天气与风险 ===== -->
     <section class="section weather-section">
-      <WeatherWidget :region="store.region" :crop-id="store.selectedCropId || undefined" />
+      <!-- 天气提示跟随地区主推作物（如普洱市→茶树），未配置主推时回退到当前选中作物 -->
+      <WeatherWidget
+        :region="store.region"
+        :crop-id="cityFeaturedIds[0] || store.selectedCropId || undefined"
+      />
     </section>
 
     <!-- ===== 区域预警 ===== -->
@@ -230,17 +321,26 @@ const hueOf = (name: string) => {
           <AppIcon name="arrow-right" :size="11" />
         </span>
       </button>
+
+      <div v-else class="alert-card alert-card--calm">
+        <span class="alert-card__tag">
+          <AppIcon name="check-circle" :size="12" />
+          区域预警 · 平稳
+        </span>
+        <p class="alert-card__text">近 14 天本区域暂无高发病害预警，可按常规节奏进行田间管理。</p>
+      </div>
     </section>
 
     <!-- ===== 地区作物百科 ===== -->
     <section class="section">
       <div class="section__head">
         <h2 class="section__title">
-          {{ localProvince }}·{{ store.region }} 作物图谱
+          <span class="section__title-cn">{{ localProvince }}·{{ store.region }} 作物图谱</span>
+          <span class="section__title-en">CROP ATLAS<i></i></span>
           <span class="section__local">{{ tabCount.local }} 种在地作物</span>
         </h2>
         <span class="section__more" @click="router.push('/knowledge')">
-          病害图谱 <AppIcon name="arrow-right" :size="13" />
+          病害图谱 <i class="section__more-sq">›</i>
         </span>
       </div>
 
@@ -276,8 +376,8 @@ const hueOf = (name: string) => {
         <div v-if="localKbCrops.length" class="crop-group" v-reveal="60">
           <div class="crop-group__head">
             <span class="crop-group__dot crop-group__dot--kb" />
-            <h3>本地主栽 · 可 AI 诊断</h3>
-            <span class="crop-group__hint">已建立完整病害知识库</span>
+            <h3>{{ store.region }}主栽 · 可 AI 诊断</h3>
+            <span class="crop-group__hint">含{{ localProvince }}其他产区作物</span>
           </div>
           <div class="atlas-grid">
             <button
@@ -290,6 +390,7 @@ const hueOf = (name: string) => {
               <span class="atlas-card__glow" />
               <span class="atlas-card__top">
                 <span class="atlas-card__emoji">{{ c.emoji }}</span>
+                <span v-if="isCityFeatured(c.id)" class="atlas-card__badge atlas-card__badge--city">主推</span>
                 <span class="atlas-card__badge">可诊断</span>
               </span>
               <span class="atlas-card__name">{{ c.name }}</span>
@@ -407,7 +508,10 @@ const hueOf = (name: string) => {
 
     <!-- ===== 功能入口 ===== -->
     <section class="section">
-      <h2 class="section__title">常用功能</h2>
+      <h2 class="section__title">
+        <span class="section__title-cn">常用功能</span>
+        <span class="section__title-en">QUICK TOOLS<i></i></span>
+      </h2>
       <div class="feature-list" v-reveal="100">
         <button class="feature" @click="router.push('/qa')">
           <span class="feature__icon feature__icon--blue">
@@ -443,7 +547,7 @@ const hueOf = (name: string) => {
         </button>
 
         <button class="feature" @click="router.push('/ask-expert')">
-          <span class="feature__icon feature__icon--blue">
+          <span class="feature__icon feature__icon--purple">
             <AppIcon name="user" :size="19" />
           </span>
           <span class="feature__body">
@@ -459,11 +563,28 @@ const hueOf = (name: string) => {
     <AlertDetailModal :show="showAlertDetail" :alert="alert" @close="showAlertDetail = false" />
 
     <footer class="foot">
+      <div class="foot__inner">
+        <div class="foot__brand">
+          <span class="foot__logo">🌿</span>
+          <div class="foot__brand-txt">
+            <strong>云岭农诊</strong>
+            <small>山地特色经济作物病虫害多 Agent 诊断系统</small>
+          </div>
+        </div>
+        <nav class="foot__links">
+          <span @click="router.push('/diagnose')">智能诊断</span>
+          <i></i>
+          <span @click="router.push('/knowledge')">病害图谱</span>
+          <i></i>
+          <span @click="router.push('/qa')">农技问答</span>
+          <i></i>
+          <span @click="router.push('/archive')">种植档案</span>
+        </nav>
+      </div>
       <div class="foot__badge">
         <AppIcon name="shield" :size="13" />
         AI 诊断仅供参考，不替代专业农技人员指导
       </div>
-      <p class="foot__text">全国高校 AI Web 开发挑战赛 · 云南赛区</p>
     </footer>
   </div>
 </template>
@@ -486,6 +607,93 @@ const hueOf = (name: string) => {
   z-index: 0;
   background: linear-gradient(165deg, #10362a 0%, #1a5a41 45%, #25795a 100%);
   border-radius: 0 0 32px 32px;
+}
+
+/* 轮播图层 */
+.hero__slide {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  opacity: 0;
+  transition: opacity 0.9s ease;
+}
+.hero__slide.is-on {
+  opacity: 1;
+}
+
+/* 轮播之上压暗遮罩，保证文字可读 */
+.hero__bg::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background:
+    linear-gradient(180deg, rgba(7, 28, 19, 0.62) 0%, rgba(9, 36, 24, 0.42) 45%, rgba(5, 22, 14, 0.78) 100%),
+    linear-gradient(90deg, rgba(7, 30, 20, 0.5), transparent 55%);
+  border-radius: 0 0 32px 32px;
+}
+
+/* 轮播控制条 */
+.hero__carousel {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 2;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 18px 14px;
+}
+.hero__cap {
+  flex: 1;
+  font-size: 13px;
+  color: rgba(255, 255, 255, 0.88);
+  text-shadow: 0 1px 4px rgba(0, 0, 0, 0.5);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.hero__dots {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+}
+.hero__dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 99px;
+  border: none;
+  padding: 0;
+  background: rgba(255, 255, 255, 0.42);
+  cursor: pointer;
+  transition: all 0.3s;
+}
+.hero__dot.is-on {
+  width: 20px;
+  background: #fff;
+}
+.hero__arrows {
+  display: flex;
+  gap: 8px;
+}
+.hero__arrow {
+  width: 28px;
+  height: 28px;
+  border-radius: 99px;
+  border: 1px solid rgba(255, 255, 255, 0.35);
+  background: rgba(0, 0, 0, 0.28);
+  color: #fff;
+  font-size: 17px;
+  line-height: 1;
+  cursor: pointer;
+  display: grid;
+  place-items: center;
+  transition: background 0.25s;
+}
+.hero__arrow:hover {
+  background: rgba(0, 0, 0, 0.5);
 }
 
 /* 山峦剪影 */
@@ -694,6 +902,42 @@ const hueOf = (name: string) => {
   font-weight: 700;
   letter-spacing: -0.1px;
   margin-bottom: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+/* 中文主标 + 英文小标：门户式栏目排版 */
+.section__title-cn {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.section__title-cn::before {
+  content: '';
+  width: 4px;
+  height: 15px;
+  border-radius: 3px;
+  background: linear-gradient(180deg, var(--c-primary-400), var(--c-primary-700));
+}
+
+.section__title-en {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 2.5px;
+  color: var(--c-text-4);
+  text-transform: uppercase;
+  padding-left: 12px;
+}
+
+.section__title-en i {
+  width: 46px;
+  height: 1px;
+  background: linear-gradient(90deg, var(--c-line), transparent);
 }
 
 .section__head .section__title {
@@ -703,10 +947,42 @@ const hueOf = (name: string) => {
 .section__more {
   display: inline-flex;
   align-items: center;
-  gap: 2px;
+  gap: 7px;
+  height: 30px;
+  padding: 0 11px;
+  border-radius: var(--r-full);
   font-size: 12.5px;
-  color: var(--c-primary-600);
+  color: var(--c-primary-700);
   font-weight: 600;
+  background: var(--c-primary-50);
+  border: 1px solid var(--c-primary-100);
+  cursor: pointer;
+  transition: all var(--dur-fast) var(--ease-out);
+}
+
+.section__more:hover {
+  background: var(--c-primary-600);
+  border-color: var(--c-primary-600);
+  color: #fff;
+}
+
+.section__more:hover .section__more-sq {
+  transform: translateX(2px);
+}
+
+/* MORE 小方块箭头（门户风格） */
+.section__more-sq {
+  width: 16px;
+  height: 16px;
+  border-radius: 5px;
+  display: grid;
+  place-items: center;
+  font-style: normal;
+  font-size: 13px;
+  line-height: 1;
+  background: var(--c-primary-600);
+  color: #fff;
+  transition: transform var(--dur-fast) var(--ease-out);
 }
 
 /* ===== 预警卡 ===== */
@@ -743,6 +1019,12 @@ const hueOf = (name: string) => {
   border-left: 3px solid var(--tone);
   box-shadow: var(--sh-sm);
   transition: transform var(--dur-base) var(--ease-out), box-shadow var(--dur-base) var(--ease-out);
+}
+
+.alert-card--calm {
+  border-left-color: var(--c-primary-500);
+  background: linear-gradient(135deg, var(--c-primary-50), var(--c-bg-card) 55%);
+  cursor: default;
 }
 
 .alert-card:hover {
@@ -1069,6 +1351,11 @@ const hueOf = (name: string) => {
   color: #2563eb;
 }
 
+.atlas-card__badge--city {
+  background: linear-gradient(135deg, #d97706, #b45309);
+  color: #fff;
+}
+
 .atlas-card__name {
   font-size: 14px;
   font-weight: 800;
@@ -1247,25 +1534,31 @@ const hueOf = (name: string) => {
 }
 
 .feature__icon {
-  width: 38px;
-  height: 38px;
-  border-radius: 12px;
+  width: 42px;
+  height: 42px;
+  border-radius: 13px;
   display: grid;
   place-items: center;
   flex-shrink: 0;
+  color: #fff;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.14), inset 0 1px 0 rgba(255, 255, 255, 0.25);
 }
 
 .feature__icon--blue {
-  background: #eef2ff;
-  color: #5566d8;
+  background: linear-gradient(135deg, #6b8cff, #4f6ef2);
+  box-shadow: 0 4px 12px rgba(79, 110, 242, 0.32), inset 0 1px 0 rgba(255, 255, 255, 0.25);
 }
 .feature__icon--amber {
-  background: var(--c-accent-100);
-  color: var(--c-accent-600);
+  background: linear-gradient(135deg, #ffb257, #f59221);
+  box-shadow: 0 4px 12px rgba(245, 146, 33, 0.32), inset 0 1px 0 rgba(255, 255, 255, 0.25);
 }
 .feature__icon--green {
-  background: var(--c-primary-50);
-  color: var(--c-primary-600);
+  background: linear-gradient(135deg, var(--c-primary-400), var(--c-primary-700));
+  box-shadow: 0 4px 12px rgba(47, 152, 104, 0.32), inset 0 1px 0 rgba(255, 255, 255, 0.25);
+}
+.feature__icon--purple {
+  background: linear-gradient(135deg, #b57bff, #8b46e8);
+  box-shadow: 0 4px 12px rgba(139, 70, 232, 0.32), inset 0 1px 0 rgba(255, 255, 255, 0.25);
 }
 
 .feature__body {
@@ -1294,8 +1587,79 @@ const hueOf = (name: string) => {
 
 /* ===== 页脚 ===== */
 .foot {
-  padding: 30px 20px 12px;
+  padding: 36px 20px 12px;
   text-align: center;
+}
+
+.foot__inner {
+  max-width: 1080px;
+  margin: 0 auto 22px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+  padding-bottom: 20px;
+  border-bottom: 1px solid var(--c-line-soft);
+  text-align: left;
+}
+
+.foot__brand {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.foot__logo {
+  width: 38px;
+  height: 38px;
+  border-radius: 12px;
+  display: grid;
+  place-items: center;
+  font-size: 19px;
+  background: linear-gradient(135deg, var(--c-primary-50), #eaf7ef);
+  border: 1px solid var(--c-primary-100);
+}
+
+.foot__brand-txt {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+
+.foot__brand-txt strong {
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--c-text-1);
+}
+
+.foot__brand-txt small {
+  font-size: 11px;
+  color: var(--c-text-3);
+}
+
+.foot__links {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  font-size: 12px;
+  color: var(--c-text-3);
+}
+
+.foot__links span {
+  cursor: pointer;
+  transition: color var(--dur-fast);
+}
+
+.foot__links span:hover {
+  color: var(--c-primary-600);
+}
+
+.foot__links i {
+  width: 3px;
+  height: 3px;
+  border-radius: 50%;
+  background: var(--c-line);
 }
 
 .foot__badge {
@@ -1352,11 +1716,81 @@ const hueOf = (name: string) => {
   }
   .feature-list {
     display: grid;
-    grid-template-columns: repeat(3, 1fr);
+    grid-template-columns: repeat(2, minmax(0, 1fr));
     gap: 14px;
+  }
+  .feature {
+    padding: 16px 18px;
+  }
+  .feature:hover {
+    transform: translateY(-2px);
+    box-shadow: var(--sh-sm);
+    border-color: var(--c-primary-200);
+  }
+  .feature__arrow {
+    transition: transform var(--dur-fast) var(--ease-out);
+  }
+  .feature:hover .feature__arrow {
+    transform: translateX(3px);
+    color: var(--c-primary-600);
   }
   .foot {
     padding-top: 44px;
+  }
+}
+
+/* ===== 大屏微调：≥1200px 适度放大，避免卡片被拉扁 ===== */
+@media (min-width: 1200px) {
+  .hero {
+    padding: 0 36px 38px;
+  }
+  .hero__content {
+    padding-top: 44px;
+  }
+  .hero__title {
+    font-size: 40px;
+    margin-bottom: 12px;
+  }
+  .hero__desc {
+    font-size: 14.5px;
+    margin-bottom: 24px;
+  }
+  .hero__cta {
+    max-width: 520px;
+    padding: 16px 19px;
+  }
+  .hero__cta-icon {
+    width: 48px;
+    height: 48px;
+    border-radius: 15px;
+  }
+  .hero__top {
+    margin-bottom: 30px;
+  }
+  .section {
+    padding: 0 36px;
+    margin-top: 32px;
+  }
+  .section__title {
+    font-size: 17px;
+  }
+  .atlas-grid {
+    grid-template-columns: repeat(5, minmax(0, 1fr));
+    gap: 15px;
+  }
+  .crop-mini-grid {
+    grid-template-columns: repeat(6, minmax(0, 1fr));
+    gap: 9px;
+  }
+  .crop-mini {
+    padding: 10px 12px;
+  }
+  .feature-list {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 15px;
+  }
+  .foot__inner {
+    max-width: 100%;
   }
 }
 </style>

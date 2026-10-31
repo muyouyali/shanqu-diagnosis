@@ -5,6 +5,12 @@ import { useAppStore } from '@/stores/app'
 import AppIcon from '@/components/AppIcon.vue'
 import PageHero from '@/components/PageHero.vue'
 import api from '@/api'
+import { provinceOfRegion } from '@/data/regions'
+
+/** 当前地区可诊断的作物：优先显示所选区域对应的本地作物，跨区作物归入「其他地区」 */
+const regionCrops = computed(() => store.localCrops.filter((c) => c.diagnosable !== false))
+const remoteCrops = computed(() => store.otherCrops.filter((c) => c.diagnosable !== false))
+const showRemote = ref(false)
 
 const router = useRouter()
 const store = useAppStore()
@@ -32,11 +38,21 @@ const steps = [
 ]
 const activeStep = ref(-1)
 
+/** 多 Agent 协作说明弹窗 */
+const flowOpen = ref(false)
+const FLOW_DESC: Record<string, string> = {
+  triage: '视觉大模型（Qwen3-VL）读取照片，识别作物器官与病斑形态，输出疑似病害与置信度',
+  gate: '校验置信度是否达标、是否涉及检疫性/毁灭性病害，低置信度结果不直接下发，转交专家复核',
+  treatment: '结合知识库与农药安全数据生成用药方案，标注剂量、频次与安全间隔期'
+}
+
 const currentCrop = computed(() => store.selectedCrop)
 
 const canSubmit = computed(() => Boolean(image.value || symptomsText.value.trim()))
 
 onMounted(async () => {
+  // 先恢复登录态：提交诊断时记录才能归属到当前账号
+  await store.restoreUser().catch(() => {})
   try {
     await store.loadCrops()
   } catch {
@@ -138,7 +154,7 @@ const submit = async () => {
       stage: stage.value || undefined,
       area: area.value || undefined,
       region: store.region,
-      userId: store.userId
+      userId: store.recordsUserId
     })
 
     store.setLastResult(result, image.value)
@@ -176,21 +192,49 @@ const submit = async () => {
       desc="拍张照片、描述症状，AI 双 Agent 联合分析，约 30 秒出具诊断报告"
       badge="多 Agent 协作"
       badge-icon="sparkle"
-    >
-      <div class="hero-tips">
-        <span>✓ 症状越清晰越准</span>
-        <span>✓ 支持叶片 / 果实 / 根部</span>
-        <span>✓ 低置信度自动转专家复核</span>
-      </div>
-    </PageHero>
+      image="/media/banners/b39452374_wide.jpg"
+      :tags="['症状越清晰越准', '支持叶片 / 果实 / 根部', '低置信度自动转专家复核']"
+      @badge-click="flowOpen = true"
+    />
+
+    <!-- 多 Agent 协作说明弹窗 -->
+    <Teleport to="body">
+      <Transition name="fade">
+        <div v-if="flowOpen" class="flow-mask" @click.self="flowOpen = false">
+          <div class="flow">
+            <header class="flow__head">
+              <b><AppIcon name="sparkle" :size="15" /> 多 Agent 协作 · 工作原理</b>
+              <button class="flow__close" @click="flowOpen = false">✕</button>
+            </header>
+            <div class="flow__body">
+              <div v-for="(s, i) in steps" :key="s.key" class="flow__item">
+                <span class="flow__n">{{ i + 1 }}</span>
+                <span class="flow__icon"><AppIcon :name="s.icon" :size="17" /></span>
+                <div class="flow__txt">
+                  <strong>{{ s.label }}</strong>
+                  <p>{{ FLOW_DESC[s.key] }}</p>
+                </div>
+              </div>
+              <p class="flow__foot">
+                三个 Agent 各司其职、层层把关：视觉模型负责「看」，闸门负责「把关」，用药 Agent 负责「开方」——
+                置信度不足或涉及检疫性病害时会自动转交人工复核，而不是硬给一个答案。
+              </p>
+            </div>
+          </div>
+        </div>
+      </Transition>
+    </Teleport>
 
     <div class="scroll-area">
       <!-- 作物选择 -->
       <section class="block">
-        <label class="block__label">1 · 选择作物</label>
+        <label class="block__label">
+          1 · 选择作物
+          <span class="block__hint">{{ store.region }} · {{ store.cropsProvince }}产区</span>
+        </label>
         <div class="crop-chips">
           <button
-            v-for="c in store.crops.filter((c) => c.diagnosable !== false)"
+            v-for="c in regionCrops"
             :key="c.id"
             class="crop-chip"
             :class="{ 'is-active': store.selectedCropId === c.id }"
@@ -201,6 +245,31 @@ const submit = async () => {
             <span>{{ c.name }}</span>
             <AppIcon v-if="store.selectedCropId === c.id" name="check" :size="14" class="crop-chip__check" />
           </button>
+        </div>
+
+        <!-- 跨区作物：折叠展开，避免与本地产区混淆 -->
+        <div v-if="remoteCrops.length" class="remote-wrap">
+          <button class="remote-toggle" @click="showRemote = !showRemote">
+            <AppIcon name="grid" :size="13" />
+            <span>{{ showRemote ? '收起' : '其他地区作物' }}（{{ remoteCrops.length }}）</span>
+            <AppIcon :name="showRemote ? 'chevron-up' : 'chevron-down'" :size="13" />
+          </button>
+          <div v-if="showRemote" class="crop-chips crop-chips--remote">
+            <button
+              v-for="c in remoteCrops"
+              :key="c.id"
+              class="crop-chip"
+              :class="{ 'is-active': store.selectedCropId === c.id }"
+              :style="{ '--crop-color': c.color }"
+              @click="store.setCrop(c.id)"
+            >
+              <span class="crop-chip__emoji">{{ c.emoji }}</span>
+              <span>{{ c.name }}</span>
+            </button>
+          </div>
+          <p v-if="showRemote" class="remote-tip">
+            以下作物在 {{ store.cropsProvince }} 非主产区，知识库已收录诊断模型，可按需选择
+          </p>
         </div>
       </section>
 
@@ -485,11 +554,13 @@ const submit = async () => {
 /* 作物 chip */
 .crop-chips {
   display: flex;
+  flex-wrap: wrap;
   gap: 8px;
 }
 
 .crop-chip {
-  flex: 1;
+  flex: 1 1 calc(25% - 8px);
+  min-width: 76px;
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -521,6 +592,41 @@ const submit = async () => {
   top: 5px;
   right: 5px;
   color: var(--crop-color);
+}
+
+/* 跨区作物折叠区 */
+.remote-wrap {
+  margin-top: 10px;
+}
+
+.remote-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  border-radius: 999px;
+  background: var(--c-bg-soft);
+  border: 1px dashed var(--c-line);
+  font-size: 12px;
+  color: var(--c-text-3);
+  transition: all var(--dur-fast) var(--ease-out);
+}
+
+.remote-toggle:hover {
+  border-color: var(--c-brand);
+  color: var(--c-brand);
+}
+
+.crop-chips--remote {
+  margin-top: 9px;
+  opacity: 0.92;
+}
+
+.remote-tip {
+  margin: 8px 0 0;
+  font-size: 11.5px;
+  line-height: 1.6;
+  color: var(--c-text-4);
 }
 
 /* 上传区 */
@@ -928,6 +1034,129 @@ const submit = async () => {
 .fade-enter-active,
 .fade-leave-active {
   transition: opacity var(--dur-base) var(--ease-out);
+}
+.fade-enter-from,
+.fade-leave-to {
+  opacity: 0;
+}
+
+/* 多 Agent 说明弹窗 */
+.flow-mask {
+  position: fixed;
+  inset: 0;
+  z-index: 200;
+  background: rgba(10, 30, 18, 0.5);
+  backdrop-filter: blur(4px);
+  display: grid;
+  place-items: center;
+  padding: 20px;
+  overscroll-behavior: contain;
+}
+
+.flow {
+  width: min(480px, 100%);
+  max-height: 84vh;
+  overflow-y: auto;
+  background: var(--c-bg-card);
+  border-radius: 20px;
+  box-shadow: 0 24px 60px rgba(10, 40, 22, 0.28);
+}
+
+.flow__head {
+  position: sticky;
+  top: 0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 15px 18px;
+  background: linear-gradient(118deg, #0f3d22, #17643a 70%, #2f9e5f);
+  color: #fff;
+  font-size: 14.5px;
+  border-radius: 20px 20px 0 0;
+}
+
+.flow__head b {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+}
+
+.flow__close {
+  width: 27px;
+  height: 27px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.16);
+  color: #fff;
+  font-size: 12px;
+}
+
+.flow__body {
+  padding: 16px 18px 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 13px;
+}
+
+.flow__item {
+  display: flex;
+  align-items: flex-start;
+  gap: 11px;
+  position: relative;
+  padding-bottom: 2px;
+}
+
+.flow__n {
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  font-size: 10.5px;
+  font-weight: 800;
+  color: #fff;
+  background: var(--c-primary-600);
+  flex-shrink: 0;
+  margin-top: 7px;
+}
+
+.flow__icon {
+  width: 36px;
+  height: 36px;
+  border-radius: 12px;
+  display: grid;
+  place-items: center;
+  color: #fff;
+  background: linear-gradient(135deg, var(--c-primary-500), var(--c-primary-700));
+  flex-shrink: 0;
+}
+
+.flow__txt strong {
+  display: block;
+  font-size: 13px;
+  font-weight: 800;
+  color: var(--c-text-1);
+  margin-bottom: 2px;
+}
+
+.flow__txt p {
+  font-size: 11.5px;
+  line-height: 1.7;
+  color: var(--c-text-3);
+}
+
+.flow__foot {
+  margin-top: 4px;
+  padding: 11px 13px;
+  border-radius: 12px;
+  background: var(--c-primary-50);
+  font-size: 11.5px;
+  line-height: 1.8;
+  color: var(--c-primary-800);
+}
+
+.fade-enter-active,
+.fade-leave-active {
+  transition: opacity 0.2s;
 }
 .fade-enter-from,
 .fade-leave-to {

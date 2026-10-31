@@ -12,12 +12,20 @@ const loading = ref(true)
 const cropFilter = ref('')
 const keyword = ref('')
 const onlyEscalated = ref(false)
+/** 隐私模式（默认开）：农户的常规诊断档案不下发到专家端，仅转人工复核的病例可见 */
+const privacyMode = ref(true)
+/** 提交来源筛选：区分农户端「我的档案」与本机游客记录 */
+const sourceFilter = ref<'' | 'farmer' | 'guest'>('')
 const page = ref(0)
 const pageSize = 15
 const selected = ref<RecordItem | null>(null)
 
 const filtered = computed(() => {
   let list = records.value
+  if (privacyMode.value) {
+    // 农户常规记录不下发：仅转人工复核病例 + 游客演示记录可见
+    list = list.filter((r) => r.gate?.needHumanReview || !r.userId || String(r.userId).startsWith('u_'))
+  }
   if (keyword.value.trim()) {
     const k = keyword.value.trim()
     list = list.filter(
@@ -28,6 +36,12 @@ const filtered = computed(() => {
     )
   }
   if (onlyEscalated.value) list = list.filter((r) => r.gate?.needHumanReview)
+  if (sourceFilter.value) {
+    list = list.filter((r) => {
+      const isGuest = !r.userId || String(r.userId).startsWith('u_')
+      return sourceFilter.value === 'guest' ? isGuest : !isGuest
+    })
+  }
   return list
 })
 
@@ -56,6 +70,16 @@ onMounted(async () => {
 const fmt = (iso: string) => {
   const d = new Date(iso)
   return `${d.getFullYear()}/${String(d.getMonth() + 1).padStart(2, '0')}/${String(d.getDate()).padStart(2, '0')} ${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`
+}
+
+/** 记录提交来源：区分注册农户 / 游客体验，避免与农户端「我的档案」混淆 */
+const isGuest = (r: any) => !r.userId || String(r.userId).startsWith('u_')
+
+const sourceOf = (r: any) => {
+  const uid = String(r.userId || '')
+  if (!uid) return '游客'
+  if (uid.startsWith('u_')) return `访客 ${uid.slice(-4)}`
+  return `农户 #${uid}`
 }
 
 const confTone = (v: number) => (v >= 0.65 ? 'high' : v >= 0.4 ? 'medium' : 'low')
@@ -98,7 +122,23 @@ const changePage = async (delta: number) => {
         仅看转人工
       </button>
 
-      <span class="count-badge">共 {{ total }} 条</span>
+      <button
+        class="toggle-btn"
+        :class="{ 'is-active': privacyMode }"
+        @click="privacyMode = !privacyMode"
+        title="开启时农户常规档案不下发，仅转人工复核病例可见"
+      >
+        <AppIcon name="shield" :size="14" />
+        {{ privacyMode ? '隐私保护已开' : '显示农户档案' }}
+      </button>
+
+      <select v-model="sourceFilter" class="select">
+        <option value="">全部来源</option>
+        <option value="farmer">仅注册农户</option>
+        <option value="guest">仅游客体验</option>
+      </select>
+
+      <span class="count-badge">显示 {{ filtered.length }} / {{ total }} 条</span>
     </div>
 
     <!-- 表格 -->
@@ -111,6 +151,7 @@ const changePage = async (delta: number) => {
             <th>诊断结论</th>
             <th style="width: 90px">置信度</th>
             <th style="width: 110px">区域</th>
+            <th style="width: 110px">提交来源</th>
             <th style="width: 150px">时间</th>
             <th style="width: 100px">状态</th>
             <th style="width: 80px">操作</th>
@@ -118,10 +159,10 @@ const changePage = async (delta: number) => {
         </thead>
         <tbody>
           <tr v-if="loading">
-            <td colspan="8" class="empty-cell">加载中…</td>
+            <td colspan="9" class="empty-cell">加载中…</td>
           </tr>
           <tr v-else-if="!filtered.length">
-            <td colspan="8" class="empty-cell">暂无数据</td>
+            <td colspan="9" class="empty-cell">暂无数据</td>
           </tr>
           <tr v-for="r in filtered" :key="r.id" @click="selected = r">
             <td class="mono">{{ r.id }}</td>
@@ -145,6 +186,9 @@ const changePage = async (delta: number) => {
               </span>
             </td>
             <td class="muted">{{ r.region || '—' }}</td>
+            <td>
+              <span class="src-tag" :class="isGuest(r) ? 'is-guest' : 'is-farmer'">{{ sourceOf(r) }}</span>
+            </td>
             <td class="muted mono">{{ fmt(r.createdAt) }}</td>
             <td>
               <span v-if="r.gate?.needHumanReview" class="status status--warn">
@@ -777,5 +821,27 @@ const changePage = async (delta: number) => {
 .drawer-enter-from .drawer,
 .drawer-leave-to .drawer {
   transform: translateX(100%);
+}
+
+/* 提交来源标签 */
+.src-tag {
+  display: inline-block;
+  font-size: 11px;
+  font-weight: 700;
+  padding: 2px 8px;
+  border-radius: var(--r-full);
+  white-space: nowrap;
+}
+
+.src-tag.is-farmer {
+  color: var(--c-primary-700);
+  background: var(--c-primary-50);
+  border: 1px solid var(--c-primary-200);
+}
+
+.src-tag.is-guest {
+  color: var(--c-text-3);
+  background: var(--c-bg-muted);
+  border: 1px solid var(--c-line-soft);
 }
 </style>

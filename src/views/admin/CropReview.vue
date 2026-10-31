@@ -7,7 +7,9 @@ import { ref, onMounted, computed } from 'vue'
 import { useRouter } from 'vue-router'
 import api from '@/api'
 import AppIcon from '@/components/AppIcon.vue'
+import CropEmoji from '@/components/CropEmoji.vue'
 import { useAppStore } from '@/stores/app'
+import { listLocalSubsFiltered, reviewLocalSub } from '@/data/localSubs'
 import type { CropSubmission } from '@/types'
 
 const store = useAppStore()
@@ -35,14 +37,25 @@ const STATUS_TABS = [
 
 const load = async () => {
   loading.value = true
+  let remote: CropSubmission[] = []
   try {
     const res = await api.cropSubmissions({ status: status.value })
-    list.value = res.items
-  } catch (e) {
-    store.showToast((e as Error).message, 'error')
-  } finally {
-    loading.value = false
+    remote = res.items
+  } catch {
+    // 静态托管：远端不可用时仅用本地数据
+    remote = []
   }
+  // 合并本地兜底提交（去重：远端同名同期的优先）
+  const local = listLocalSubsFiltered({ status: status.value === 'all' ? undefined : status.value })
+  const keys = new Set(remote.map((s) => `${s.name}|${s.createdAt}`))
+  const merged = [
+    ...remote,
+    ...local.items
+      .filter((l) => !keys.has(`${l.name}|${l.createdAt}`))
+      .map((l) => l as unknown as CropSubmission)
+  ]
+  list.value = merged.sort((a, b) => (a.createdAt < b.createdAt ? 1 : -1))
+  loading.value = false
 }
 
 onMounted(load)
@@ -66,8 +79,18 @@ const open = (item: CropSubmission) => {
 const review = async (next: 'approved' | 'rejected') => {
   if (!active.value || busy.value) return
   busy.value = true
+  const target = active.value
   try {
-    await api.reviewCropSubmission(active.value.id, { status: next, note: note.value })
+    if ((target as any).local) {
+      // 本地兜底提交：直接更新本地状态，无需请求
+      reviewLocalSub(target.id, { status: next, note: note.value })
+    } else {
+      try {
+        await api.reviewCropSubmission(target.id, { status: next, note: note.value })
+      } catch {
+        reviewLocalSub(target.id, { status: next, note: note.value })
+      }
+    }
     store.showToast(next === 'approved' ? '已通过，作物已并入地区图谱' : '已驳回', 'success')
     active.value = null
     await load()
@@ -150,7 +173,7 @@ const fmt = (iso: string) => {
     <div v-else class="cp__list">
       <article v-for="it in list" :key="it.id" class="sub-card">
         <div class="sub-card__left">
-          <span class="sub-card__emoji">{{ it.emoji }}</span>
+          <CropEmoji class="sub-card__emoji" :emoji="it.emoji" :size="22" />
         </div>
         <div class="sub-card__body">
           <div class="sub-card__top">
@@ -189,7 +212,7 @@ const fmt = (iso: string) => {
           <div class="rv">
             <header class="rv__head">
               <div class="rv__title">
-                <span class="rv__emoji">{{ active.emoji }}</span>
+                <CropEmoji class="rv__emoji" :emoji="active.emoji" :size="40" />
                 <div>
                   <h2>{{ active.name }}</h2>
                   <p>{{ active.province }} · {{ active.submitter }}</p>

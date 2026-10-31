@@ -75,12 +75,39 @@ const matchCoord = (region) => {
   for (const [name, c] of Object.entries(REGION_COORDS)) {
     if (r.includes(name)) return c
   }
-  return REGION_COORDS['文山'] // 默认文山
+  return null // 交由动态地理编码解析
+}
+
+/** 动态地理编码：Open-Meteo 免费 geocoding API，任意市/县名 → 坐标（带内存缓存） */
+const geoCache = new Map()
+const geocodeRegion = async (region) => {
+  const key = String(region || '').trim()
+  if (!key) return null
+  if (geoCache.has(key)) return geoCache.get(key)
+  try {
+    const url = `https://geocoding-api.open-meteo.com/v1/search?name=${encodeURIComponent(key)}&count=1&language=zh&format=json&countryCode=CN`
+    const resp = await fetch(url, { signal: AbortSignal.timeout(5000) })
+    if (!resp.ok) return null
+    const j = await resp.json()
+    const hit = (j.results || [])[0]
+    if (!hit) return null
+    const coords = [hit.latitude, hit.longitude]
+    geoCache.set(key, coords)
+    return coords
+  } catch {
+    return null
+  }
 }
 
 /** 从真实预报计算 7 天风险指数（与模拟源同构的输出） */
 const buildFromRealWeather = async (region, cropId) => {
-  const [lat, lon] = matchCoord(region)
+  let [lat, lon] = matchCoord(region) || []
+  if (!lat) {
+    // 先试去掉「市/州/县」后缀的纯地名，再试原名
+    const bare = String(region || '').replace(/(市|州|县|区|盟|地区)$/g, '') || region
+    ;[lat, lon] = (await geocodeRegion(bare)) || (await geocodeRegion(region)) || []
+  }
+  if (!lat) lat = REGION_COORDS['文山'][0], lon = REGION_COORDS['文山'][1] // 最终兜底
   const url =
     `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}` +
     `&daily=weather_code,precipitation_sum,temperature_2m_max,temperature_2m_min,relative_humidity_2m_mean` +
@@ -114,7 +141,7 @@ const buildFromRealWeather = async (region, cropId) => {
     const risk = Math.min(95, Math.round(humidity * 0.6 + rainProb * 0.35))
     riskPeak = Math.max(riskPeak, risk)
     days.push({
-      day: i < 3 ? dayNames[i] : `第${i + 1}天`,
+      day: i < 2 ? dayNames[i] : d.time[i].slice(5, 10).replace('-', '/'),
       cond,
       rainProb,
       tempLow,
@@ -154,7 +181,7 @@ export const getWeatherForecast = async (region, cropId) => {
       const risk = Math.min(95, Math.round(humidity * 0.6 + rainProb * 0.35))
       riskPeak = Math.max(riskPeak, risk)
       days.push({
-        day: i < 3 ? dayNames[i] : `第${i + 1}天`,
+        day: i < 2 ? dayNames[i] : new Date(Date.now() + i * 86400000).toISOString().slice(5, 10).replace('-', '/'),
         cond,
         rainProb,
         tempLow,

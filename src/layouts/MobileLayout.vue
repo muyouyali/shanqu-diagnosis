@@ -41,8 +41,9 @@ const go = (path: string) => {
     <header class="topnav">
       <div class="topnav__inner">
         <router-link to="/" class="topnav__brand">
-          <span class="topnav__logo"><AppIcon name="leaf" :size="17" :stroke="2.2" /></span>
+          <span class="topnav__logo"><AppIcon name="leaf" :size="19" :stroke="2.2" /></span>
           <strong>云岭农诊</strong>
+          <span class="topnav__brand-tag">AI 植保</span>
         </router-link>
         <nav class="topnav__links">
           <router-link to="/" class="topnav__link" :class="{ 'is-active': active === 'home' }">
@@ -205,17 +206,30 @@ const go = (path: string) => {
     position: sticky;
     top: 0;
     z-index: 200;
-    background: rgba(255, 255, 255, 0.88);
+    background: linear-gradient(180deg, rgba(236, 247, 240, 0.97), rgba(222, 240, 229, 0.94));
     backdrop-filter: saturate(180%) blur(20px);
     -webkit-backdrop-filter: saturate(180%) blur(20px);
-    border-bottom: 1px solid var(--c-line-soft);
+    border-bottom: 1px solid rgba(47, 152, 104, 0.14);
+    box-shadow: 0 2px 14px rgba(24, 68, 48, 0.05);
+  }
+
+  /* 底部品牌色渐变细线 */
+  .topnav::after {
+    content: '';
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: -1px;
+    height: 2px;
+    background: linear-gradient(90deg, transparent, rgba(47, 152, 104, 0.35) 18%, rgba(112, 196, 152, 0.5) 50%, rgba(47, 152, 104, 0.35) 82%, transparent);
+    pointer-events: none;
   }
 
   .topnav__inner {
-    max-width: 1200px;
+    max-width: 1280px;
     margin: 0 auto;
-    height: 62px;
-    padding: 0 32px;
+    height: 66px;
+    padding: 0 40px;
     display: flex;
     align-items: center;
     gap: 28px;
@@ -224,54 +238,84 @@ const go = (path: string) => {
   .topnav__brand {
     display: flex;
     align-items: center;
-    gap: 9px;
+    gap: 10px;
     flex-shrink: 0;
   }
 
   .topnav__logo {
-    width: 32px;
-    height: 32px;
-    border-radius: 10px;
+    width: 36px;
+    height: 36px;
+    border-radius: 12px;
     display: grid;
     place-items: center;
     color: #fff;
     background: linear-gradient(140deg, var(--c-primary-400), var(--c-primary-700));
+    box-shadow: 0 4px 12px rgba(47, 152, 104, 0.32), inset 0 1px 0 rgba(255, 255, 255, 0.28);
+    transition: transform var(--dur-base) var(--ease-spring);
+  }
+
+  .topnav__brand:hover .topnav__logo {
+    transform: rotate(-8deg) scale(1.06);
   }
 
   .topnav__brand strong {
-    font-size: 17px;
+    font-size: 18px;
     letter-spacing: 1px;
-    color: var(--c-primary-800);
+    background: linear-gradient(120deg, var(--c-primary-800), var(--c-primary-600));
+    -webkit-background-clip: text;
+    background-clip: text;
+    -webkit-text-fill-color: transparent;
+  }
+
+  /* 品牌副标：AI 植保小徽 */
+  .topnav__brand-tag {
+    margin-left: 2px;
+    padding: 2.5px 8px;
+    border-radius: var(--r-full);
+    font-size: 10.5px;
+    font-weight: 600;
+    letter-spacing: 1px;
+    color: var(--c-primary-700);
+    background: var(--c-primary-50);
+    border: 1px solid var(--c-primary-100);
+    flex-shrink: 0;
   }
 
   .topnav__links {
     display: flex;
-    gap: 4px;
+    gap: 6px;
     flex: 1;
   }
 
   .topnav__link {
+    position: relative;
     display: inline-flex;
     align-items: center;
     gap: 6px;
-    height: 38px;
-    padding: 0 15px;
+    height: 40px;
+    padding: 0 17px;
     border-radius: var(--r-full);
-    font-size: 14px;
+    font-size: 14.5px;
     font-weight: 500;
-    color: var(--c-text-3);
+    color: var(--c-text-2);
     transition: all var(--dur-fast) var(--ease-out);
   }
 
   .topnav__link:hover {
     background: var(--c-primary-50);
     color: var(--c-primary-700);
+    transform: translateY(-1px);
   }
 
   .topnav__link.is-active {
-    background: var(--c-primary-600);
+    background: linear-gradient(135deg, var(--c-primary-500), var(--c-primary-700));
     color: #fff;
     font-weight: 600;
+    box-shadow: 0 4px 14px rgba(47, 152, 104, 0.32), inset 0 1px 0 rgba(255, 255, 255, 0.22);
+  }
+
+  .topnav__link.is-active:hover {
+    transform: none;
   }
 
   .topnav__cta {
@@ -297,7 +341,7 @@ const go = (path: string) => {
 
   /* 主区放开宽度限制，隐藏底部 tabbar */
   .mobile-shell__main {
-    max-width: 1200px;
+    max-width: 1280px;
     padding-bottom: 40px;
   }
 

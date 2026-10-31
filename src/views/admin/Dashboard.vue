@@ -74,6 +74,34 @@ const cropName = (id: string) => store.crops.find((c) => c.id === id)?.name || i
 const days = ref(30)
 const cropFilter = ref('')
 
+/** 作物可搜索下拉 */
+const cropOpen = ref(false)
+const cropKeyword = ref('')
+const cropOptions = computed(() => {
+  const k = cropKeyword.value.trim().toLowerCase()
+  const all = store.crops
+  if (!k) return all
+  return all.filter((c) => c.name.toLowerCase().includes(k) || c.id.includes(k))
+})
+const pickCrop = (id: string) => {
+  cropFilter.value = id
+  cropOpen.value = false
+  cropKeyword.value = ''
+}
+// 点击外部关闭
+onMounted(() => {
+  document.addEventListener('click', closeCropSelect)
+})
+onBeforeUnmount(() => {
+  document.removeEventListener('click', closeCropSelect)
+})
+const cropSelectRef = ref<HTMLElement | null>(null)
+const closeCropSelect = (e: MouseEvent) => {
+  if (cropOpen.value && cropSelectRef.value && !cropSelectRef.value.contains(e.target as Node)) {
+    cropOpen.value = false
+  }
+}
+
 const trendRef = ref<HTMLElement | null>(null)
 const diseaseRef = ref<HTMLElement | null>(null)
 const cropRef = ref<HTMLElement | null>(null)
@@ -354,17 +382,38 @@ watch([days, cropFilter], load)
           近 {{ d }} 天
         </button>
       </div>
-      <div class="toolbar__group">
-        <button class="seg" :class="{ 'is-active': cropFilter === '' }" @click="cropFilter = ''">全部作物</button>
-        <button
-          v-for="c in store.crops"
-          :key="c.id"
-          class="seg"
-          :class="{ 'is-active': cropFilter === c.id }"
-          @click="cropFilter = c.id"
-        >
-          {{ c.name }}
+      <div class="crop-select" ref="cropSelectRef">
+        <button class="seg crop-select__btn" :class="{ 'is-active': !!cropFilter }" @click.stop="cropOpen = !cropOpen">
+          <AppIcon name="leaf" :size="13" />
+          {{ cropFilter ? cropName(cropFilter) : '全部作物' }}
+          <AppIcon name="chevron-down" :size="12" :class="{ 'rot-180': cropOpen }" />
         </button>
+        <div v-if="cropOpen" class="crop-select__panel" @click.stop>
+          <div class="crop-select__search">
+            <AppIcon name="search" :size="13" />
+            <input
+              v-model="cropKeyword"
+              placeholder="搜索作物…"
+              maxlength="10"
+              @keyup.enter="cropOptions.length && pickCrop(cropOptions[0].id)"
+            />
+          </div>
+          <div class="crop-select__list">
+            <button class="crop-select__item" :class="{ 'is-on': cropFilter === '' }" @click="pickCrop('')">
+              全部作物 <em>{{ store.crops.length }}</em>
+            </button>
+            <button
+              v-for="c in cropOptions"
+              :key="c.id"
+              class="crop-select__item"
+              :class="{ 'is-on': cropFilter === c.id }"
+              @click="pickCrop(c.id)"
+            >
+              {{ c.emoji }} {{ c.name }} <em>{{ c.diseaseCount }} 病</em>
+            </button>
+            <p v-if="!cropOptions.length" class="crop-select__empty">未找到匹配作物</p>
+          </div>
+        </div>
       </div>
       <button class="toolbar__refresh" @click="load" :disabled="loading">
         <AppIcon name="refresh" :size="16" />
@@ -1129,5 +1178,91 @@ watch([days, cropFilter], load)
   font-size: 12px;
   color: var(--c-text-1);
   flex-shrink: 0;
+}
+
+/* 作物可搜索下拉 */
+.crop-select { position: relative; }
+.crop-select__btn { display: inline-flex; align-items: center; gap: 6px; }
+.rot-180 { transform: rotate(180deg); transition: transform var(--dur-fast); }
+
+.crop-select__panel {
+  position: absolute;
+  top: calc(100% + 6px);
+  left: 0;
+  z-index: 50;
+  width: 260px;
+  background: #fff;
+  border: 1px solid var(--c-line-soft);
+  border-radius: 12px;
+  box-shadow: 0 12px 36px rgba(12, 40, 26, 0.16);
+  overflow: hidden;
+  animation: cropdrop 0.18s var(--ease-out);
+}
+
+@keyframes cropdrop {
+  from { opacity: 0; transform: translateY(-6px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.crop-select__search {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding: 0 12px;
+  height: 38px;
+  border-bottom: 1px solid var(--c-line-soft);
+  color: var(--c-text-4);
+}
+
+.crop-select__search input {
+  flex: 1;
+  min-width: 0;
+  border: none;
+  outline: none;
+  font-size: 12.5px;
+  color: var(--c-text-1);
+  background: transparent;
+}
+
+.crop-select__list {
+  max-height: 260px;
+  overflow-y: auto;
+  padding: 6px;
+}
+
+.crop-select__item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+  padding: 9px 10px;
+  border-radius: 8px;
+  font-size: 12.5px;
+  color: var(--c-text-2);
+  text-align: left;
+  transition: background var(--dur-fast), color var(--dur-fast);
+}
+
+.crop-select__item:hover { background: var(--c-primary-50); color: var(--c-primary-700); }
+
+.crop-select__item.is-on {
+  background: var(--c-primary-50);
+  color: var(--c-primary-700);
+  font-weight: 700;
+}
+
+.crop-select__item em {
+  margin-left: auto;
+  font-style: normal;
+  font-size: 10.5px;
+  color: var(--c-text-4);
+  font-weight: 500;
+}
+
+.crop-select__empty {
+  padding: 14px;
+  text-align: center;
+  font-size: 12px;
+  color: var(--c-text-4);
 }
 </style>

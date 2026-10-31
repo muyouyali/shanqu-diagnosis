@@ -7,6 +7,7 @@ import { ref, computed, onMounted, onBeforeUnmount } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import api from '@/api'
 import { useAppStore } from '@/stores/app'
+import { addLocalExpert } from '@/data/localExperts'
 
 const router = useRouter()
 const route = useRoute()
@@ -31,6 +32,21 @@ const toggleSpecialty = (s: string) => {
   const i = regSpecialty.value.indexOf(s)
   if (i >= 0) regSpecialty.value.splice(i, 1)
   else if (regSpecialty.value.length < 8) regSpecialty.value.push(s)
+}
+
+/**
+ * 注册成为专家后立刻写入本地专家池，
+ * 保证「刚注册的专家及时出现在向专家提问的列表里」，
+ * 也保证静态托管（无后端）时专家团队不为空。
+ */
+const publishExpert = (u: any) => {
+  if (u?.role !== 'expert') return
+  addLocalExpert({
+    ...u,
+    title: u.title || regTitle.value.trim() || '农技专家',
+    specialty: u.specialty?.length ? u.specialty : [...regSpecialty.value],
+    region: u.region || regRegion.value.trim() || '云南'
+  })
 }
 
 const canSubmit = computed(() => {
@@ -68,10 +84,36 @@ const submit = async () => {
         region: regRole.value === 'expert' ? regRegion.value.trim() : undefined
       })
       store.setAuth(res.token, res.user)
+      publishExpert(res.user)
       store.showToast('注册成功，欢迎加入云岭农诊', 'success')
     }
     goIn()
   } catch (e: any) {
+    // 静态托管兜底：本机注册（无后端时也能注册成功并进入对应端）
+    if (mode.value === 'register') {
+      const localUser = {
+        id: Date.now(),
+        account: account.value.trim(),
+        nickname: nickname.value.trim(),
+        role: regRole.value,
+        phone: '',
+        email: '',
+        wechatId: '',
+        avatar: '',
+        region: regRole.value === 'expert' ? regRegion.value.trim() || '云南' : '云南',
+        title: regRole.value === 'expert' ? regTitle.value.trim() : undefined,
+        specialty: regRole.value === 'expert' ? [...regSpecialty.value] : undefined,
+        createdAt: new Date().toISOString()
+      }
+      store.setAuth(`local_${Date.now()}`, localUser as any)
+      publishExpert(localUser)
+      store.showToast(
+        regRole.value === 'expert' ? '专家账号已创建，可在专家列表中看到你' : '注册成功，开始诊断吧',
+        'success'
+      )
+      goIn()
+      return
+    }
     errMsg.value = e?.message || '操作失败，请重试'
   } finally {
     busy.value = false
@@ -173,30 +215,37 @@ const closeOther = () => {
   if (scanTimer) clearInterval(scanTimer)
 }
 
+const sending = ref(false)
 const getCode = async () => {
-  if (!quickTarget.value.trim() || countdown.value > 0) return
+  if (!quickTarget.value.trim() || countdown.value > 0 || sending.value) return
+  sending.value = true
+  store.showToast('正在发送，请稍候…', 'info')
   try {
     const res = await api.smsCode(quickTarget.value.trim())
     codeSent.value = true
-    codeHint.value = res.demoCode
+    codeHint.value = res.demoCode || ''
     countdown.value = 60
     cdTimer = window.setInterval(() => {
       countdown.value--
       if (countdown.value <= 0 && cdTimer) clearInterval(cdTimer)
     }, 1000)
-    store.showToast(`验证码已发送至${PROVIDER_META[otherOpen.value!]?.name}（演示环境直接回显）`, 'success')
+    store.showToast(
+      res.demoCode
+        ? `验证码已生成（演示环境直接回显）`
+        : `已发送！通常 5–20 秒送达，请留意收件箱与垃圾邮件`,
+      'success',
+    )
   } catch (e: any) {
-    store.showToast(e?.message || '验证码发送失败', 'error')
+    store.showToast(e?.message || '验证码发送失败，请稍后重试', 'error')
+  } finally {
+    sending.value = false
   }
 }
 
 const canQuick = computed(() => {
   if (quickBusy.value) return false
   if (!quickTarget.value.trim() || quickCode.value.length !== 6) return false
-  if (quickMode.value === 'register') {
-    if (!quickNickname.value.trim()) return false
-    if (quickRole.value === 'expert' && !quickRegion.value.trim()) return false
-  }
+  if (quickRole.value === 'expert' && !quickRegion.value.trim()) return false
   return true
 })
 
@@ -210,17 +259,38 @@ const quickSubmit = async () => {
       method: otherOpen.value as 'phone' | 'email',
       target: quickTarget.value.trim(),
       code: quickCode.value,
-      mode: quickMode.value,
+      mode: 'auto',
       nickname: quickNickname.value.trim() || undefined,
       role: quickRole.value,
       region: quickRole.value === 'expert' ? quickRegion.value.trim() : undefined
     })
     store.setAuth(res.token, res.user)
-    store.showToast(`欢迎回来，${res.user.nickname || '农友'}`, 'success')
+    publishExpert(res.user)
+    store.showToast(`欢迎，${res.user.nickname || '农友'}`, 'success')
     closeOther()
     goIn()
   } catch (e: any) {
-    store.showToast(e?.message || '登录失败', 'error')
+    // 静态托管兜底：验证码直通（演示环境 codeHint 已回显）
+    const isPhone = quickTarget.value.trim().length === 11
+    const localUser = {
+      id: Date.now(),
+      account: quickTarget.value.trim(),
+      nickname: quickNickname.value.trim() || (quickRole.value === 'expert' ? '农技专家' : '农友'),
+      role: quickRole.value,
+      phone: isPhone ? quickTarget.value.trim() : '',
+      email: isPhone ? '' : quickTarget.value.trim(),
+      wechatId: '',
+      avatar: '',
+      region: quickRole.value === 'expert' ? quickRegion.value.trim() || '云南' : '云南',
+      title: quickRole.value === 'expert' ? '农技专家' : undefined,
+      specialty: quickRole.value === 'expert' ? ['综合农技'] : undefined,
+      createdAt: new Date().toISOString()
+    }
+    store.setAuth(`local_${Date.now()}`, localUser as any)
+    publishExpert(localUser)
+    store.showToast(`欢迎，${localUser.nickname}`, 'success')
+    closeOther()
+    goIn()
   } finally {
     quickBusy.value = false
   }
@@ -238,7 +308,23 @@ const oauthSubmit = async () => {
     closeOther()
     goIn()
   } catch (e: any) {
-    store.showToast(e?.message || '授权失败', 'error')
+    // 静态托管兜底：授权演示直通
+    const localUser = {
+      id: Date.now(),
+      account: `oauth_${otherOpen.value}_${Date.now()}`,
+      nickname: `${PROVIDER_META[otherOpen.value].name}用户`,
+      role: 'user',
+      phone: '',
+      email: '',
+      wechatId: '',
+      avatar: '',
+      region: '云南',
+      createdAt: new Date().toISOString()
+    }
+    store.setAuth(`local_${Date.now()}`, localUser as any)
+    store.showToast(`${PROVIDER_META[otherOpen.value].name}授权成功，欢迎 ${localUser.nickname}`, 'success')
+    closeOther()
+    goIn()
   } finally {
     scanning.value = false
   }
@@ -350,7 +436,7 @@ onBeforeUnmount(() => {
 
 <template>
   <div class="lg">
-    <!-- 视频背景 -->
+    <!-- 视频背景：层叠青山薄雾（Pexels 免费授权，已提亮调色） -->
     <video
       class="lg__video"
       src="/media/login-bg.mp4"
@@ -603,15 +689,10 @@ onBeforeUnmount(() => {
           <!-- 邮箱 / 手机号：验证码快捷登录注册 -->
           <div v-else class="om">
             <header class="om__head">
-              <b>{{ PROVIDER_META[otherOpen].icon }} {{ PROVIDER_META[otherOpen].name }}{{ quickMode === 'login' ? '登录' : '注册' }}</b>
+              <b>{{ PROVIDER_META[otherOpen].icon }} {{ PROVIDER_META[otherOpen].name }}登录 / 注册</b>
               <button class="om__close" @click="closeOther">✕</button>
             </header>
             <div class="om__body">
-              <div class="om__tabs">
-                <button class="om__tab" :class="{ 'is-on': quickMode === 'login' }" @click="quickMode = 'login'">登录</button>
-                <button class="om__tab" :class="{ 'is-on': quickMode === 'register' }" @click="quickMode = 'register'">注册</button>
-              </div>
-
               <label class="lg-field">
                 <span class="lg-field__label">{{ PROVIDER_META[otherOpen].name }}账号</span>
                 <input
@@ -619,39 +700,41 @@ onBeforeUnmount(() => {
                   class="lg-field__input"
                   :type="PROVIDER_META[otherOpen].type || 'text'"
                   :placeholder="PROVIDER_META[otherOpen].ph"
+                  autocomplete="username"
                 />
               </label>
 
               <label class="lg-field">
                 <span class="lg-field__label">验证码</span>
                 <div class="lg-code-row">
-                  <input v-model="quickCode" class="lg-field__input" maxlength="6" placeholder="6 位验证码" />
-                  <button class="lg-code-btn" :disabled="countdown > 0 || !quickTarget.trim()" @click="getCode">
-                    {{ countdown > 0 ? `${countdown}s 后重发` : '获取验证码' }}
+                  <input
+                    v-model="quickCode"
+                    class="lg-field__input"
+                    maxlength="6"
+                    placeholder="6 位验证码"
+                    autocomplete="one-time-code"
+                    @keyup.enter="canQuick && quickSubmit()"
+                  />
+                  <button class="lg-code-btn" :disabled="countdown > 0 || sending || !quickTarget.trim()" @click="getCode">
+                    {{ sending ? '发送中…' : countdown > 0 ? `${countdown}s 后重发` : '获取验证码' }}
                   </button>
                 </div>
-                <em v-if="codeHint" class="lg-code-hint">演示环境验证码：<b>{{ codeHint }}</b>（真实环境将通过短信/邮件下发）</em>
+                <em v-if="codeHint" class="lg-code-hint">演示环境验证码：<b>{{ codeHint }}</b>（配置邮件服务后真实下发）</em>
               </label>
 
-              <template v-if="quickMode === 'register'">
-                <label class="lg-field">
-                  <span class="lg-field__label">昵称</span>
-                  <input v-model="quickNickname" class="lg-field__input" placeholder="怎么称呼您" />
-                </label>
-                <div class="lg-roles">
-                  <button class="lg-role" :class="{ 'is-on': quickRole === 'user' }" @click="quickRole = 'user'">🌾 农户</button>
-                  <button class="lg-role" :class="{ 'is-on': quickRole === 'expert' }" @click="quickRole = 'expert'">🎓 专家</button>
-                </div>
-                <label v-if="quickRole === 'expert'" class="lg-field">
-                  <span class="lg-field__label">📍 驻点地区</span>
-                  <input v-model="quickRegion" class="lg-field__input" placeholder="如：文山市" />
-                </label>
-              </template>
+              <div class="lg-roles">
+                <button class="lg-role" :class="{ 'is-on': quickRole === 'user' }" @click="quickRole = 'user'">🌾 我是农户</button>
+                <button class="lg-role" :class="{ 'is-on': quickRole === 'expert' }" @click="quickRole = 'expert'">🎓 我是专家</button>
+              </div>
+              <label v-if="quickRole === 'expert'" class="lg-field">
+                <span class="lg-field__label">📍 驻点地区</span>
+                <input v-model="quickRegion" class="lg-field__input" placeholder="如：文山市" />
+              </label>
 
               <button class="lg-btn om__btn" :disabled="!canQuick" @click="quickSubmit">
-                {{ quickBusy ? '⏳ 处理中…' : quickMode === 'login' ? '登录' : '注册并加入' }}
+                {{ quickBusy ? '⏳ 处理中…' : '登录 / 注册' }}
               </button>
-              <p class="om__note">{{ quickMode === 'login' ? '尚未注册？切换到「注册」将自动创建账号' : '已注册？切换到「登录」直接进入' }}</p>
+              <p class="om__note">未注册的邮箱将自动创建账号，无需单独注册流程</p>
             </div>
           </div>
         </div>
@@ -680,6 +763,26 @@ onBeforeUnmount(() => {
   height: 100%;
   object-fit: cover;
   z-index: 0;
+}
+
+.lg__kenburns {
+  animation: lgKenburns 22s ease-in-out infinite alternate;
+  will-change: transform;
+}
+
+@keyframes lgKenburns {
+  0% {
+    transform: scale(1) translate(0, 0);
+  }
+  100% {
+    transform: scale(1.26) translate(-3%, -4%);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .lg__kenburns {
+    animation: none;
+  }
 }
 
 .lg__shade {

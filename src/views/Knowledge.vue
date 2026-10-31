@@ -15,6 +15,27 @@ const diseases = ref<Disease[]>([])
 const loading = ref(true)
 const keyword = ref('')
 const lookupOpen = ref(false)
+/** 严重度筛选：'' 全部 / high 高发(含毁灭性) / medium 中等 / low 轻微 */
+const severityFilter = ref('')
+/** 跨区作物展开状态 */
+const showRemote = ref(false)
+
+/** 当前地区可查的作物（知识库本地作物），跨区作物单独折叠 */
+const regionCrops = computed(() => store.localCrops.filter((c) => c.diagnosable !== false))
+const remoteCrops = computed(() => store.otherCrops.filter((c) => c.diagnosable !== false))
+
+const sevChips = [
+  { key: '', label: '全部' },
+  { key: 'high', label: '🔥 高发' },
+  { key: 'medium', label: '⚠️ 中等' },
+  { key: 'low', label: '✓ 轻微' }
+]
+const sevOf = (s: string) => (s === 'critical' ? 'high' : s)
+
+const severityCount = (key: string) => {
+  if (!key) return diseases.value.length
+  return diseases.value.filter((d) => sevOf(d.severity) === key).length
+}
 
 const severityMeta: Record<string, { label: string; color: string; bg: string }> = {
   critical: { label: '毁灭性', color: '#b91c1c', bg: '#fee2e2' },
@@ -25,8 +46,10 @@ const severityMeta: Record<string, { label: string; color: string; bg: string }>
 
 const filtered = computed(() => {
   const k = keyword.value.trim().toLowerCase()
-  if (!k) return diseases.value
-  return diseases.value.filter(
+  let list = diseases.value
+  if (severityFilter.value) list = list.filter((d) => sevOf(d.severity) === severityFilter.value)
+  if (!k) return list
+  return list.filter(
     (d) =>
       d.name.toLowerCase().includes(k) ||
       (d.alias || '').toLowerCase().includes(k) ||
@@ -59,11 +82,22 @@ watch(() => store.selectedCropId, load)
       desc="云南特色作物常见病虫害 · 图文对照速查，选作物或直接搜索症状"
       badge="图文速查"
       badge-icon="book"
+      image="/media/banners/b35872964_wide.jpg"
       @badge-click="lookupOpen = true"
     />
 
     <!-- 图文速查弹层 -->
     <QuickLookup :open="lookupOpen" :diseases="diseases" @close="lookupOpen = false" />
+
+    <!-- 共建入口条 -->
+    <button class="kb-join" @click="router.push('/atlas')">
+      <span class="kb-join__icon"><AppIcon name="leaf" :size="15" /></span>
+      <span class="kb-join__body">
+        <strong>病害图谱速查 · 共建</strong>
+        <small>按地区查阅全部作物，可补充家乡作物共建图谱</small>
+      </span>
+      <AppIcon name="arrow-right" :size="14" class="kb-join__arrow" />
+    </button>
 
     <!-- 搜索 -->
     <div class="search">
@@ -74,19 +108,57 @@ watch(() => store.selectedCropId, load)
       </button>
     </div>
 
-    <!-- 作物切换 -->
-    <div class="crop-tabs">
+    <!-- 严重度筛选 -->
+    <div class="sev-bar">
       <button
-        v-for="c in store.crops.filter((c) => c.diagnosable !== false)"
-        :key="c.id"
-        class="crop-tab"
-        :class="{ 'is-active': store.selectedCropId === c.id }"
-        @click="store.setCrop(c.id)"
+        v-for="s in sevChips"
+        :key="s.key"
+        class="sev-chip"
+        :class="{ 'is-on': severityFilter === s.key }"
+        @click="severityFilter = s.key"
       >
-        <span class="crop-tab__emoji">{{ c.emoji }}</span>
-        <span class="crop-tab__name">{{ c.name }}</span>
-        <span class="crop-tab__count">{{ c.diseaseCount }}</span>
+        {{ s.label }} <em>{{ severityCount(s.key) }}</em>
       </button>
+    </div>
+
+    <!-- 作物切换：跟随所处地区 -->
+    <div class="crop-tabs-wrap">
+      <div class="crop-tabs">
+        <button
+          v-for="c in regionCrops"
+          :key="c.id"
+          class="crop-tab"
+          :class="{ 'is-active': store.selectedCropId === c.id }"
+          @click="store.setCrop(c.id)"
+        >
+          <span class="crop-tab__emoji">{{ c.emoji }}</span>
+          <span class="crop-tab__name">{{ c.name }}</span>
+          <span class="crop-tab__count">{{ c.diseaseCount }}</span>
+        </button>
+        <button
+          v-if="remoteCrops.length"
+          class="crop-tab crop-tab--more"
+          :class="{ 'is-active': remoteCrops.some((c) => c.id === store.selectedCropId) }"
+          @click="showRemote = !showRemote"
+        >
+          <AppIcon name="grid" :size="14" />
+          <span class="crop-tab__name">其他 {{ remoteCrops.length }}</span>
+          <AppIcon :name="showRemote ? 'chevron-up' : 'chevron-down'" :size="12" />
+        </button>
+      </div>
+      <div v-if="showRemote" class="crop-tabs crop-tabs--remote">
+        <button
+          v-for="c in remoteCrops"
+          :key="c.id"
+          class="crop-tab"
+          :class="{ 'is-active': store.selectedCropId === c.id }"
+          @click="store.setCrop(c.id)"
+        >
+          <span class="crop-tab__emoji">{{ c.emoji }}</span>
+          <span class="crop-tab__name">{{ c.name }}</span>
+          <span class="crop-tab__count">{{ c.diseaseCount }}</span>
+        </button>
+      </div>
     </div>
 
     <!-- 作物简介 -->
@@ -181,6 +253,58 @@ watch(() => store.selectedCropId, load)
   color: var(--c-text-4);
 }
 
+/* 共建入口条 */
+.kb-join {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: calc(100% - 40px);
+  margin: 0 20px 14px;
+  padding: 11px 13px;
+  border-radius: 14px;
+  text-align: left;
+  background: linear-gradient(100deg, #f1f9f4, #fafdfb);
+  border: 1px solid #d9eddf;
+  transition: all var(--dur-fast);
+}
+
+.kb-join:active {
+  transform: scale(0.99);
+}
+
+.kb-join__icon {
+  width: 32px;
+  height: 32px;
+  border-radius: 11px;
+  display: grid;
+  place-items: center;
+  color: #fff;
+  background: linear-gradient(135deg, var(--c-primary-500), var(--c-primary-700));
+  box-shadow: 0 5px 12px rgba(var(--c-primary-rgb), 0.26);
+  flex-shrink: 0;
+}
+
+.kb-join__body {
+  flex: 1;
+  min-width: 0;
+}
+
+.kb-join__body strong {
+  display: block;
+  font-size: 12.5px;
+  font-weight: 800;
+  color: var(--c-text-1);
+}
+
+.kb-join__body small {
+  font-size: 10.5px;
+  color: var(--c-text-4);
+}
+
+.kb-join__arrow {
+  color: var(--c-primary-600);
+}
+
 /* 搜索 */
 .search {
   position: relative;
@@ -228,16 +352,76 @@ watch(() => store.selectedCropId, load)
 }
 
 /* 作物 tab */
-.crop-tabs {
+/* 严重度筛选条 */
+.sev-bar {
   display: flex;
+  flex-wrap: wrap;
   gap: 8px;
-  padding: 0 20px 14px;
-  overflow-x: auto;
-  scrollbar-width: none;
+  margin: 14px 0 2px;
 }
 
-.crop-tabs::-webkit-scrollbar {
-  display: none;
+.sev-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 7px 14px;
+  border-radius: var(--r-full);
+  background: var(--c-bg-card);
+  border: 1.5px solid var(--c-line-soft);
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--c-text-3);
+  transition: all var(--dur-fast) var(--ease-out);
+}
+
+.sev-chip em {
+  font-style: normal;
+  font-size: 10.5px;
+  color: var(--c-text-4);
+}
+
+.sev-chip:hover {
+  border-color: var(--c-primary-200);
+  color: var(--c-primary-700);
+}
+
+.sev-chip.is-on {
+  background: linear-gradient(135deg, var(--c-primary-500), var(--c-primary-700));
+  border-color: transparent;
+  color: #fff;
+  box-shadow: 0 3px 10px rgba(47, 152, 104, 0.28);
+}
+
+.sev-chip.is-on em { color: rgba(255, 255, 255, 0.75); }
+
+.crop-tabs-wrap {
+  margin-bottom: 4px;
+}
+
+.crop-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding: 0 20px 14px;
+}
+
+.crop-tabs--remote {
+  padding-top: 0;
+  padding-bottom: 12px;
+  margin: 0 20px 8px;
+  padding: 12px;
+  border-radius: var(--r-md);
+  background: var(--c-bg-muted);
+  border: 1px dashed var(--c-line);
+}
+
+.crop-tab--more {
+  border-style: dashed;
+  color: var(--c-text-3);
+}
+
+.crop-tab--more.is-active {
+  border-style: solid;
 }
 
 .crop-tab {

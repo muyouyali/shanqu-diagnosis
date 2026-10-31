@@ -56,8 +56,8 @@ onMounted(() => {
 
       <div class="sidebar__foot">
         <router-link to="/" class="sidebar__back">
-          <AppIcon name="arrow-left" :size="17" />
-          <span v-if="!collapsed">返回农户端</span>
+          <AppIcon name="home" :size="16" />
+          <span v-if="!collapsed">返回农户首页</span>
         </router-link>
       </div>
     </aside>

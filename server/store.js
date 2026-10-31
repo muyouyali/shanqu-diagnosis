@@ -591,11 +591,18 @@ export const deleteRecord = (id) => {
 }
 
 // ==================== 统计聚合 ====================
-export const getStats = ({ days = 30, cropId } = {}) => {
+export const getStats = ({ days = 30, cropId, region } = {}) => {
   const db = load()
   const since = Date.now() - days * 24 * 3600 * 1000
   let records = db.records.filter((r) => new Date(r.createdAt).getTime() >= since)
   if (cropId) records = records.filter((r) => r.cropId === cropId)
+  // 区域过滤：州市名模糊匹配（红河州 → 记录.region 含「红河」）
+  if (region) {
+    const key = String(region).replace(/(市|州|县|区|盟|地区)$/g, '')
+    const scoped = records.filter((r) => (r.region || '').includes(key))
+    // 该地区有数据才收窄，避免冷门地区预警空转
+    if (scoped.length) records = scoped
+  }
 
   // 病害排行
   const diseaseCount = new Map()

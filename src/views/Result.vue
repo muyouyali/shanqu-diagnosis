@@ -174,7 +174,8 @@ const submitReview = async () => {
     <div v-else-if="error" class="state">
       <AppIcon name="alert" :size="34" style="color: var(--c-danger)" />
       <p>{{ error }}</p>
-      <button class="btn btn--ghost" @click="router.push('/diagnose')">重新诊断</button>
+      <button class="btn btn--ghost" @click="router.back()">返回上一页</button>
+      <button class="btn btn--ghost" @click="router.push('/archive')">去我的档案</button>
     </div>
 
     <template v-else-if="result">

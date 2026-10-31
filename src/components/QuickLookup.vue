@@ -1,9 +1,9 @@
 <script setup lang="ts">
 /**
  * QuickLookup · 图文速查弹层
- * 两种速查方式：
- *  1. 拍照速查：上传/拍摄病部照片 → AI 视觉识别 → 疑似病害列表（可跳图谱详情或诊断结果）
- *  2. 症状速查：勾选症状关键词 → 实时筛选当前作物病害
+ * 拍照上传 + 症状自由描述放在同一页：
+ *  - 有照片：AI 视觉模型自由识别作物与病害（不限于当前选中作物）
+ *  - 有文字：按症状关键词实时匹配知识库病害，可与照片互相补充
  */
 import { ref, computed, watch } from 'vue'
 import { useRouter } from 'vue-router'
@@ -18,9 +18,7 @@ const emit = defineEmits<{ close: [] }>()
 const router = useRouter()
 const store = useAppStore()
 
-const tab = ref<'photo' | 'symptom'>('photo')
-
-/* ===== 拍照速查 ===== */
+/* ===== 照片上传 ===== */
 const imgPreview = ref('')
 const imgBase64 = ref('')
 const busy = ref(false)
@@ -58,29 +56,104 @@ const resetPhoto = () => {
   if (fileRef.value) fileRef.value.value = ''
 }
 
+/* ===== 症状自由描述 ===== */
+const symptomText = ref('')
+
+/** 当前作物高频症状关键词，点击可直接追加到描述 */
+const symptomChips = computed(() => {
+  const freq = new Map<string, number>()
+  for (const d of props.diseases) {
+    for (const k of d.symptomKeywords) freq.set(k, (freq.get(k) || 0) + 1)
+  }
+  return [...freq.entries()].sort((a, b) => b[1] - a[1]).slice(0, 12).map(([k]) => k)
+})
+
+const appendChip = (k: string) => {
+  if (symptomText.value.includes(k)) return
+  symptomText.value = (symptomText.value.trim() + (symptomText.value.trim() ? '，' : '') + k).slice(0, 200)
+}
+
+/** 全库症状匹配（跨作物）：AI 知识库检索，含作物名 */
+const crossMatches = ref<Array<{ id: string; name: string; cropName: string; symptoms: string[] }>>([])
+let searchTimer: ReturnType<typeof setTimeout> | null = null
+
+watch(symptomText, (v) => {
+  if (searchTimer) clearTimeout(searchTimer)
+  const text = v.trim()
+  if (text.length < 2) {
+    crossMatches.value = []
+    return
+  }
+  searchTimer = setTimeout(async () => {
+    try {
+      const res = await api.kbSearch(text)
+      crossMatches.value = (res.hits || []).slice(0, 4).map((h) => ({
+        id: String(h.id),
+        name: h.name,
+        cropName: h.cropName || '',
+        symptoms: h.symptoms || []
+      }))
+    } catch {
+      crossMatches.value = []
+    }
+  }, 350)
+})
+
+/** 文字症状实时匹配当前作物候选病害 */
+const textMatches = computed(() => {
+  const text = symptomText.value.trim()
+  if (text.length < 2) return []
+  const terms = text
+    .split(/[，,。；;、\s]+/)
+    .map((t) => t.trim())
+    .filter((t) => t.length >= 1)
+  const pool = terms.length ? terms : [text]
+  return props.diseases
+    .map((d) => {
+      const haystack = [d.name, d.alias || '', ...d.symptomKeywords, ...d.symptoms].join(' ')
+      const hits = pool.filter((t) => haystack.includes(t))
+      return { d, score: hits.length, hits }
+    })
+    .filter((r) => r.score > 0)
+    .sort((a, b) => b.score - a.score)
+    .slice(0, 5)
+})
+
 const matchDisease = (name: string) =>
   props.diseases.find((d) => name.includes(d.name) || d.name.includes(name) || (d.alias && name.includes(d.alias.split('、')[0])))
 
+/* ===== AI 识别（照片 + 文字一起提交） ===== */
+/** 至少有照片或已输入症状才能识别 */
+const canRun = computed(() => (!!imgBase64.value || symptomText.value.trim().length >= 2) && !busy.value)
+
 const runAI = async () => {
-  if (!imgBase64.value || busy.value) return
+  if (!canRun.value) return
   busy.value = true
   aiErr.value = ''
   aiResults.value = []
   try {
+    // cropId 传 'auto'：AI 先判断照片中的作物种类（不限当前选中作物），再给出病害结论
     const res = await api.diagnose({
-      cropId: store.selectedCropId,
+      cropId: 'auto',
       image: imgBase64.value,
-      region: store.user?.region ? String(store.user.region) : '云南',
+      symptomsText: symptomText.value.trim() || undefined,
+      region: store.user?.region ? String(store.user.region) : (store.region || '云南'),
       userId: store.user ? String(store.user.id) : undefined
     })
     aiRecordId.value = res.recordId ? String(res.recordId) : ''
     aiResults.value = (res.diagnosis?.results || []).slice(0, 3)
-    if (!aiResults.value.length) aiErr.value = '未能识别出疑似病害，请尝试更清晰的照片'
+    if (!aiResults.value.length) aiErr.value = '未能识别出疑似病害，请尝试更清晰的照片或补充症状描述'
   } catch (e: any) {
     aiErr.value = e?.message || '识别失败，请重试'
   } finally {
     busy.value = false
   }
+}
+
+/** 跳转跨库病害详情（详情页支持全库病害 id） */
+const goCrossDetail = (m: { id: string }) => {
+  emit('close')
+  router.push(`/knowledge/${m.id}`)
 }
 
 const goDetail = (name: string) => {
@@ -97,43 +170,12 @@ const goResult = () => {
   router.push(`/result/${aiRecordId.value}`)
 }
 
-/* ===== 症状速查 ===== */
-const selectedSymptoms = ref<string[]>([])
-
-/** 聚合当前作物病害的高频症状关键词 */
-const symptomChips = computed(() => {
-  const freq = new Map<string, number>()
-  for (const d of props.diseases) {
-    for (const k of d.symptomKeywords) freq.set(k, (freq.get(k) || 0) + 1)
-  }
-  return [...freq.entries()].sort((a, b) => b[1] - a[1]).slice(0, 14).map(([k]) => k)
-})
-
-const toggleSymptom = (k: string) => {
-  const i = selectedSymptoms.value.indexOf(k)
-  if (i >= 0) selectedSymptoms.value.splice(i, 1)
-  else selectedSymptoms.value.push(k)
-}
-
-const symptomResults = computed(() => {
-  if (!selectedSymptoms.value.length) return []
-  return props.diseases
-    .map((d) => {
-      const hit = d.symptomKeywords.filter((k) => selectedSymptoms.value.includes(k))
-      const hit2 = d.symptoms.join(' ').includes(selectedSymptoms.value.join('')) ? 0 : 0
-      return { d, score: hit.length + hit2, hits: hit }
-    })
-    .filter((r) => r.score > 0)
-    .sort((a, b) => b.score - a.score)
-})
-
 watch(
   () => props.open,
   (v) => {
     if (v) {
-      selectedSymptoms.value = []
+      symptomText.value = ''
       resetPhoto()
-      tab.value = 'photo'
     }
   }
 )
@@ -151,19 +193,9 @@ const severityLabel: Record<string, string> = { critical: '毁灭性', high: '�
             <button class="ql__close" @click="emit('close')">✕</button>
           </header>
 
-          <!-- 方式切换 -->
-          <div class="ql__tabs">
-            <button class="ql__tab" :class="{ 'is-on': tab === 'photo' }" @click="tab = 'photo'">
-              📷 拍照识别
-            </button>
-            <button class="ql__tab" :class="{ 'is-on': tab === 'symptom' }" @click="tab = 'symptom'">
-              📝 症状勾选
-            </button>
-          </div>
-
-          <!-- ① 拍照识别 -->
-          <div v-if="tab === 'photo'" class="ql__body">
-            <p class="ql__tip">拍摄或上传病部清晰照片，AI 视觉模型将对照「{{ store.crops.find((c) => c.id === store.selectedCropId)?.name }}」候选病害给出疑似结果</p>
+          <div class="ql__body">
+            <!-- ① 拍照上传 -->
+            <p class="ql__tip">上传病部照片，AI 视觉模型会自由识别作物种类与病害（不限当前选中作物）；再补充症状描述，结果更准</p>
 
             <input ref="fileRef" type="file" accept="image/*" capture="environment" hidden @change="onFile" />
 
@@ -177,15 +209,35 @@ const severityLabel: Record<string, string> = { critical: '毁灭性', high: '�
               <img :src="imgPreview" alt="病部照片" />
               <div class="ql__preview-actions">
                 <button class="ql__mini" @click="pickImage">换一张</button>
-                <button class="ql__mini ql__mini--go" :disabled="busy" @click="runAI">
-                  {{ busy ? '⏳ AI 识别中…' : '🔍 开始识别' }}
-                </button>
               </div>
             </div>
 
             <p v-if="aiErr" class="ql__err">⚠️ {{ aiErr }}</p>
 
-            <!-- 识别结果 -->
+            <!-- ② 症状自由描述 -->
+            <div class="ql__sym">
+              <label class="ql__sym-label">补充症状描述（选填，自由输入）</label>
+              <textarea
+                v-model="symptomText"
+                class="ql__sym-input"
+                rows="2"
+                maxlength="200"
+                placeholder="用大白话描述看到的现象，如：叶片发黄、根部长褐色斑点、下雨后烂果…"
+              />
+              <div class="ql__chips">
+                <button v-for="k in symptomChips" :key="k" class="ql__chip" @click="appendChip(k)">
+                  + {{ k }}
+                </button>
+              </div>
+            </div>
+
+            <!-- ③ 确认症状后再识别 -->
+            <button class="ql__go" :disabled="!canRun" @click="runAI">
+              {{ busy ? '⏳ AI 识别中…' : '🔍 开始识别' }}
+            </button>
+            <p v-if="!canRun && !busy" class="ql__go-hint">请先上传照片或输入至少 2 个字的症状描述</p>
+
+            <!-- AI 识别结果 -->
             <div v-if="aiResults.length" class="ql__results">
               <p class="ql__results-title">AI 识别结果（按置信度排序）</p>
               <div v-for="(r, i) in aiResults" :key="i" class="ql__result">
@@ -200,33 +252,32 @@ const severityLabel: Record<string, string> = { critical: '毁灭性', high: '�
               </div>
               <button class="ql__full" @click="goResult">查看完整诊断报告（用药方案 / 防治建议）→</button>
             </div>
-          </div>
 
-          <!-- ② 症状勾选 -->
-          <div v-else class="ql__body">
-            <p class="ql__tip">勾选田间观察到的症状，实时匹配当前作物的候选病害</p>
-
-            <div class="ql__chips">
-              <button
-                v-for="k in symptomChips"
-                :key="k"
-                class="ql__chip"
-                :class="{ 'is-on': selectedSymptoms.includes(k) }"
-                @click="toggleSymptom(k)"
+            <!-- 文字实时匹配 -->
+            <div v-if="crossMatches.length" class="ql__matches">
+              <p class="ql__results-title">全库症状匹配（不限当前作物）</p>
+              <div
+                v-for="m in crossMatches"
+                :key="m.id"
+                class="ql__result"
+                @click="goCrossDetail(m)"
               >
-                {{ k }}
-              </button>
+                <div class="ql__result-main">
+                  <b>{{ m.name }}</b>
+                  <span class="ql__crop-tag">{{ m.cropName || '知识库' }}</span>
+                </div>
+                <small class="ql__result-sub">{{ m.symptoms.slice(0, 2).join('；') }}</small>
+              </div>
             </div>
 
-            <div v-if="selectedSymptoms.length" class="ql__picked">
-              已选 {{ selectedSymptoms.length }} 项：
-              <span v-for="s in selectedSymptoms" :key="s" class="ql__picked-tag" @click="toggleSymptom(s)">{{ s }} ✕</span>
-              <button class="ql__picked-clear" @click="selectedSymptoms = []">清空</button>
-            </div>
-
-            <!-- 匹配结果 -->
-            <div v-if="symptomResults.length" class="ql__matches">
-              <div v-for="m in symptomResults" :key="m.d.id" class="ql__match" @click="emit('close'); router.push(`/knowledge/${m.d.id}`)">
+            <div v-if="textMatches.length" class="ql__matches">
+              <p class="ql__results-title">{{ store.crops.find((c) => c.id === store.selectedCropId)?.name || '当前作物' }}内匹配到 {{ textMatches.length }} 种病害</p>
+              <div
+                v-for="m in textMatches"
+                :key="m.d.id"
+                class="ql__match"
+                @click="emit('close'); router.push(`/knowledge/${m.d.id}`)"
+              >
                 <div class="ql__match-main">
                   <b>{{ m.d.name }}</b>
                   <span class="ql__match-hits">命中 {{ m.hits.join(' / ') }}</span>
@@ -235,8 +286,8 @@ const severityLabel: Record<string, string> = { critical: '毁灭性', high: '�
                 <i class="ql__match-arrow">›</i>
               </div>
             </div>
-            <div v-else-if="selectedSymptoms.length" class="ql__nomatch">
-              当前组合未匹配到病害，试试减少勾选项
+            <div v-else-if="symptomText.trim().length >= 2 && !aiResults.length" class="ql__nomatch">
+              当前描述暂未匹配到病害，试试更具体的词，或上传照片让 AI 识别
             </div>
           </div>
         </div>
@@ -255,6 +306,7 @@ const severityLabel: Record<string, string> = { critical: '毁灭性', high: '�
   display: grid;
   place-items: center;
   padding: 18px;
+  overscroll-behavior: contain;
 }
 
 .ql {
@@ -295,30 +347,6 @@ const severityLabel: Record<string, string> = { critical: '毁灭性', high: '�
   font-size: 13px;
 }
 
-.ql__tabs {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 8px;
-  padding: 14px 18px 0;
-}
-
-.ql__tab {
-  padding: 10px;
-  border-radius: 12px;
-  border: 1.5px solid var(--c-line);
-  background: var(--c-bg-page);
-  font-size: 13.5px;
-  font-weight: 700;
-  color: var(--c-text-2);
-  transition: all 0.15s;
-}
-
-.ql__tab.is-on {
-  border-color: var(--c-primary-500);
-  background: var(--c-primary-50);
-  color: var(--c-primary-700);
-}
-
 .ql__body {
   padding: 14px 18px 20px;
 }
@@ -336,7 +364,7 @@ const severityLabel: Record<string, string> = { critical: '毁灭性', high: '�
   flex-direction: column;
   align-items: center;
   gap: 7px;
-  padding: 34px 16px;
+  padding: 30px 16px;
   border: 2px dashed var(--c-primary-200);
   border-radius: 16px;
   background: var(--c-primary-50);
@@ -362,7 +390,7 @@ const severityLabel: Record<string, string> = { critical: '毁灭性', high: '�
 /* 预览 */
 .ql__preview img {
   width: 100%;
-  max-height: 260px;
+  max-height: 240px;
   object-fit: contain;
   border-radius: 14px;
   background: var(--c-bg-page);
@@ -401,6 +429,61 @@ const severityLabel: Record<string, string> = { critical: '毁灭性', high: '�
   border-radius: 10px;
   padding: 9px 12px;
   margin-top: 11px;
+}
+
+/* 症状描述 */
+.ql__sym {
+  margin-top: 14px;
+  padding-top: 13px;
+  border-top: 1px dashed var(--c-line);
+}
+
+.ql__sym-label {
+  display: block;
+  font-size: 12px;
+  font-weight: 800;
+  color: var(--c-text-2);
+  margin-bottom: 7px;
+}
+
+.ql__sym-input {
+  width: 100%;
+  padding: 10px 12px;
+  border-radius: 12px;
+  border: 1.5px solid var(--c-line);
+  background: var(--c-bg-page);
+  font-size: 12.5px;
+  line-height: 1.6;
+  color: var(--c-text-1);
+  resize: none;
+  transition: border-color 0.15s, background 0.15s;
+}
+
+.ql__sym-input:focus {
+  border-color: var(--c-primary-400);
+  background: #fff;
+  outline: none;
+}
+
+.ql__chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 9px;
+}
+
+.ql__chip {
+  padding: 5px 11px;
+  border-radius: 999px;
+  border: 1px dashed var(--c-primary-200);
+  background: var(--c-primary-50);
+  font-size: 11.5px;
+  color: var(--c-primary-700);
+  transition: all 0.13s;
+}
+
+.ql__chip:hover {
+  background: var(--c-primary-100);
 }
 
 /* AI 结果 */
@@ -483,54 +566,11 @@ const severityLabel: Record<string, string> = { critical: '毁灭性', high: '�
   border: 1.5px solid var(--c-primary-200);
 }
 
-/* 症状勾选 */
-.ql__chips {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 7px;
-  margin-bottom: 12px;
-}
-
-.ql__chip {
-  padding: 7px 13px;
-  border-radius: 999px;
-  border: 1.5px solid var(--c-line);
-  background: var(--c-bg-card);
-  font-size: 12px;
-  color: var(--c-text-2);
-  transition: all 0.13s;
-}
-
-.ql__chip.is-on {
-  background: var(--c-primary-500);
-  border-color: var(--c-primary-500);
-  color: #fff;
-  font-weight: 700;
-}
-
-.ql__picked {
-  display: flex;
-  align-items: center;
-  flex-wrap: wrap;
-  gap: 6px;
-  font-size: 11.5px;
-  color: var(--c-text-3);
-  margin-bottom: 11px;
-}
-
-.ql__picked-tag {
-  padding: 3px 9px;
-  border-radius: 999px;
-  background: var(--c-primary-100);
-  color: var(--c-primary-800);
-  font-weight: 700;
-  cursor: pointer;
-}
-
-.ql__picked-clear {
-  font-size: 11px;
-  color: var(--c-text-4);
-  text-decoration: underline;
+/* 文字匹配 */
+.ql__matches {
+  margin-top: 14px;
+  padding-top: 13px;
+  border-top: 1px dashed var(--c-line);
 }
 
 .ql__match {
@@ -597,9 +637,9 @@ const severityLabel: Record<string, string> = { critical: '毁灭性', high: '�
 }
 
 .ql__nomatch {
-  padding: 22px;
+  padding: 18px;
   text-align: center;
-  font-size: 12.5px;
+  font-size: 12px;
   color: var(--c-text-4);
 }
 
@@ -611,5 +651,56 @@ const severityLabel: Record<string, string> = { critical: '毁灭性', high: '�
 .ql-fade-enter-from,
 .ql-fade-leave-to {
   opacity: 0;
+}
+
+/* 识别主按钮（症状输入之后） */
+.ql__go {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  width: 100%;
+  height: 44px;
+  margin-top: 12px;
+  border-radius: var(--r-full);
+  font-size: 14px;
+  font-weight: 800;
+  color: #fff;
+  background: linear-gradient(135deg, var(--c-primary-500), var(--c-primary-700));
+  box-shadow: 0 6px 16px rgba(var(--c-primary-rgb), 0.3);
+  transition: all var(--dur-fast);
+}
+
+.ql__go:disabled {
+  opacity: 0.45;
+  box-shadow: none;
+  cursor: not-allowed;
+}
+
+.ql__go-hint {
+  margin-top: 6px;
+  font-size: 10.5px;
+  color: var(--c-text-4);
+  text-align: center;
+}
+
+/* 跨库匹配的作物名标签 */
+.ql__crop-tag {
+  flex-shrink: 0;
+  font-size: 9.5px;
+  font-weight: 700;
+  color: var(--c-primary-700);
+  background: var(--c-primary-50);
+  border: 1px solid var(--c-primary-200);
+  padding: 1px 7px;
+  border-radius: var(--r-full);
+}
+
+.ql__result-sub {
+  display: block;
+  margin-top: 2px;
+  font-size: 10.5px;
+  color: var(--c-text-4);
+  line-height: 1.5;
 }
 </style>

@@ -31,7 +31,7 @@
 import { chatVision, chatText, extractJSON, isConfigured, AIServiceError, metrics } from '../ai/adapter.js'
 import { buildDiagnosisPrompt, buildTreatmentPrompt, CROP_NAME } from '../ai/prompts.js'
 import { buildContext, retrievePesticide, ruleBasedDiagnose, getById } from '../kb/retriever.js'
-import { getDiseasesByCrop } from '../kb/diseases.js'
+import { getDiseasesByCrop, DISEASES } from '../kb/diseases.js'
 
 // ==================== 工具函数 ====================
 
@@ -43,7 +43,12 @@ const clamp = (n, min, max) => Math.min(Math.max(n, min), max)
 const normalizeDiagnosis = (raw, cropId) => {
   if (!raw || typeof raw !== 'object') return null
 
-  const validNames = new Set(getDiseasesByCrop(cropId).map((d) => d.name))
+  // auto 模式：不限定单一作物，校验范围放宽到全知识库（避免蓝莓照片被硬套成三七病害）
+  const validNames = new Set(
+    cropId === 'auto'
+      ? DISEASES.map((d) => d.name)
+      : getDiseasesByCrop(cropId).map((d) => d.name)
+  )
 
   let results = Array.isArray(raw.results) ? raw.results : []
 
@@ -378,10 +383,18 @@ export const runDiagnosisWorkflow = async (input) => {
         : '通过安全检查'
   })
 
+  // ---- auto 模式：按识别出的病害反查真实作物，用药指导与返回信息随之对应 ----
+  let resolvedCropId = input.cropId
+  if (input.cropId === 'auto') {
+    const topName = triage.diagnosis.results[0]?.name
+    const hit = DISEASES.find((d) => d.name === topName)
+    resolvedCropId = hit?.cropId || 'auto'
+  }
+
   // ---- Stage 3: 用药指导 ----
   const t3 = Date.now()
   const treatment = await runTreatmentAgent({
-    cropId: input.cropId,
+    cropId: resolvedCropId,
     diagnosis: triage.diagnosis,
     altitude: input.altitude,
     weather: input.weather,
@@ -405,8 +418,8 @@ export const runDiagnosisWorkflow = async (input) => {
   })
 
   return {
-    cropId: input.cropId,
-    cropName: CROP_NAME[input.cropId],
+    cropId: resolvedCropId,
+    cropName: CROP_NAME[resolvedCropId] || 'AI 自主识别',
     diagnosis: triage.diagnosis,
     gate,
     treatment: treatment.treatment,

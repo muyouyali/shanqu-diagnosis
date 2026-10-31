@@ -10,6 +10,7 @@ import type {
   RecordItem,
   StatsResponse,
   AlertResponse,
+  KbSearchResponse,
   ReviewResponse,
   HealthResponse,
   MetricsResponse
@@ -68,7 +69,7 @@ export const api = {
       .then((r) => r.data),
 
   /** 提交新作物（进入专家审核队列） */
-  submitCrop: (payload: Partial<CropSubmission> & { name: string; province: string; desc: string }) =>
+  submitCrop: (payload: Partial<CropSubmission> & { name: string; province: string; desc: string; city?: string; region?: string }) =>
     http.post<{ ok: boolean; item: CropSubmission }>('/crops/submit', payload).then((r) => r.data),
 
   /** 作物提交列表（后台审核用） */
@@ -93,16 +94,21 @@ export const api = {
   login: (payload: { account: string; password: string; method?: string }) =>
     http.post<{ ok: boolean; token: string; user: User }>('/auth/login', payload).then((r) => r.data),
 
-  /** 获取验证码（演示环境直接回显 demoCode） */
+  /** 获取验证码（配置 SMTP 后真实发邮件；未注册邮箱自动建档） */
   smsCode: (target: string) =>
-    http.post<{ ok: boolean; channel: 'sms' | 'email'; demoCode: string; ttl: number }>('/auth/sms-code', { target }).then((r) => r.data),
+    http
+      .post<{ ok: boolean; channel: 'sms' | 'email'; sent?: boolean; demoCode?: string; ttl: number }>(
+        '/auth/sms-code',
+        { target },
+      )
+      .then((r) => r.data),
 
-  /** 验证码快捷登录 / 注册（手机号 / 邮箱） */
+  /** 验证码快捷登录 / 注册（手机号 / 邮箱；mode=auto 时未注册自动创建） */
   quickAuth: (payload: {
     method: 'phone' | 'email'
     target: string
     code: string
-    mode: 'login' | 'register'
+    mode: 'login' | 'register' | 'auto'
     nickname?: string
     role?: 'user' | 'expert'
     title?: string
@@ -210,7 +216,17 @@ export const api = {
   stats: (params?: { days?: number; cropId?: string }) =>
     http.get<StatsResponse>('/stats', { params }).then((r) => r.data),
 
-  alerts: (days = 14) => http.get<AlertResponse>('/alerts', { params: { days } }).then((r) => r.data),
+  alerts: (days = 14, region?: string) =>
+    http.get<AlertResponse>('/alerts', { params: { days, region } }).then((r) => r.data),
+
+  kbSearch: (q: string, cropId?: string | null) =>
+    http.get<KbSearchResponse>('/kb/search', { params: { q, cropId: cropId || '' } }).then((r) => r.data),
+
+  geoReverse: (lat: number, lon: number) =>
+    http.get<{ ok: boolean; provider: string; names: string[] }>('/geo/reverse', {
+      params: { lat, lon },
+      timeout: 8000
+    }).then((r) => r.data),
 
   experts: (params: { cropId?: string; region?: string }) =>
     http.get<{ items: Expert[] }>('/experts', { params }).then((r) => r.data),

@@ -131,7 +131,13 @@ body {
   font-size: var(--fs-base);
   line-height: 1.6;
   color: var(--c-text-1);
-  background: var(--c-bg-page);
+  /* 页面底色带绿色氛围：顶部山雾感渐变 + 轻噪点质感 */
+  background:
+    radial-gradient(120% 420px at 50% -60px, rgba(47, 152, 104, 0.10), transparent 70%),
+    radial-gradient(60% 380px at 100% 120px, rgba(112, 196, 152, 0.07), transparent 70%),
+    radial-gradient(60% 380px at 0% 300px, rgba(47, 152, 104, 0.05), transparent 70%),
+    linear-gradient(180deg, #eef6f1 0%, #f3f8f5 320px, #f4f7f5 100%);
+  background-attachment: fixed;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
   overflow-x: hidden;

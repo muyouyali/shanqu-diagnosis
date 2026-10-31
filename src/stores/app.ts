@@ -3,6 +3,54 @@ import { ref, computed } from 'vue'
 import api from '@/api'
 import type { Crop, RecordItem, DiagnoseResponse, User, Message } from '@/types'
 import { provinceOfRegion } from '@/data/regions'
+import { sortByCity } from '@/data/cityCrops'
+import { KB_STATIC, ATLAS_STATIC } from '@/data/crops-static'
+
+/** 静态托管兜底：与后端 /api/crops 同构的作物列表构建 */
+const buildStaticCrops = (province: string): Crop[] => {
+  const localKb = province ? KB_STATIC.filter((c) => (c.regions || []).includes(province)) : []
+  const otherKb = KB_STATIC.filter((c) => !localKb.includes(c))
+  const atlasRaw = ((ATLAS_STATIC as Record<string, any[]>)[province] || []).map((a: any) => ({
+    ...a,
+    source: 'atlas'
+  }))
+  const atlas = atlasRaw
+    .filter((a: any) => !KB_STATIC.some((c) => c.name === a.name || (c.alias || '').includes(a.name)))
+    .map((a: any, i: number) => ({
+      id: `atlas-${province}-${i}`,
+      name: a.name,
+      alias: a.alias || '',
+      emoji: a.emoji || '🌱',
+      latin: '',
+      tagline: a.desc || '',
+      desc: a.desc || '',
+      season: a.season || '',
+      altitude: a.altitude || '',
+      color: '#4f8f6b',
+      intro: a.desc || '',
+      keyPoints: [],
+      pests: a.pests || '',
+      regions: province ? [province] : [],
+      diseaseCount: 0,
+      diagnosable: false,
+      source: 'atlas'
+    }))
+  return [...localKb, ...atlas, ...otherKb] as Crop[]
+}
+
+/**
+ * 地区兜底：把地区映射到其所属省份（provinceOfRegion 未收录时也能正确归类）
+ * 静态托管下 GPS 可能返回任意县市名，这里用省份关键词做二次匹配
+ */
+const provinceOf = (region: string): string => {
+  const p = provinceOfRegion(region)
+  if (p) return p
+  const KEY = ['云南', '贵州', '四川', '重庆', '广西', '西藏', '湖南', '湖北', '广东', '福建',
+    '浙江', '江西', '陕西', '甘肃', '海南', '安徽', '河南', '山西', '山东', '河北', '辽宁',
+    '吉林', '黑龙江', '江苏', '内蒙古', '宁夏', '青海', '新疆', '北京', '天津', '上海', '台湾']
+  return KEY.find((k) => region.includes(k)) || '云南'
+}
+
 
 const USER_KEY = 'ylnz_user_id'
 
@@ -28,6 +76,8 @@ export const useAppStore = defineStore('app', () => {
 
   // ---------- 作物 ----------
   const crops = ref<Crop[]>([])
+  /** 是否处于静态兜底模式（后端不可用） */
+  const offlineCrops = ref(false)
   const cropsLoaded = ref(false)
   const cropsProvince = ref('')
   const selectedCropId = ref<string>(localStorage.getItem('ylnz_crop') || 'sanqi')
@@ -37,16 +87,46 @@ export const useAppStore = defineStore('app', () => {
   /**
    * 加载作物（按当前地区返回：知识库本地作物 + 地区百科作物 + 其余知识库作物）
    * 地区变化时需重新拉取，保证「选哪个地方就显示哪个地方的作物」
+   * 后端不可用（静态托管）时：用打包的静态数据集按省份本地构建，保证作物仍与定位地区匹配
    */
   const loadCrops = async (force = false) => {
-    const province = provinceOfRegion(region.value)
+    const province = provinceOf(region.value)
     if (cropsLoaded.value && !force && cropsProvince.value === province) return crops.value
-    const res = await api.crops({ region: region.value })
-    crops.value = res.items
+    try {
+      const res = await api.crops({ region: region.value })
+      crops.value = res.items
+      offlineCrops.value = false
+    } catch {
+      // 静态托管兜底：与后端 /api/crops 同构的本地构建
+      crops.value = buildStaticCrops(province)
+      offlineCrops.value = true
+    }
+    // 云南州市级特色作物置顶（与后端排序逻辑一致）
+    crops.value = sortByCity(crops.value, region.value)
     cropsProvince.value = province
     cropsLoaded.value = true
+    // 当前选中作物不在本地区主推列表中时，自动切到本地第一个可诊断作物
+    if (localCrops.value.length && !localCrops.value.some((c) => c.id === selectedCropId.value)) {
+      setCrop(localCrops.value[0].id)
+    }
     return crops.value
   }
+
+  /** 本地区主推作物（知识库本地作物 + 地区百科/共建作物），顺序即展示顺序 */
+  const localCrops = computed<Crop[]>(() => {
+    const province = cropsProvince.value || provinceOf(region.value)
+    return crops.value.filter(
+      (c) =>
+        (c.regions || []).includes(province) ||
+        c.source === 'atlas' ||
+        c.source === 'community'
+    )
+  })
+
+  /** 跨区作物（知识库收录但本省非主产区），仅作参考展示 */
+  const otherCrops = computed<Crop[]>(() =>
+    crops.value.filter((c) => !localCrops.value.includes(c))
+  )
 
   const setCrop = (id: string) => {
     selectedCropId.value = id
@@ -59,6 +139,14 @@ export const useAppStore = defineStore('app', () => {
   const unread = ref(0)
 
   const isExpert = computed(() => user.value?.role === 'expert')
+
+  /**
+   * 诊断记录归属 id：登录后按账号隔离，未登录用设备 id。
+   * 解决「农户做的诊断，换专家账号登录还能看到」的串档问题。
+   */
+  const recordsUserId = computed(() =>
+    user.value ? String(user.value.id) : userId.value
+  )
 
   /** 应用启动时恢复登录态（token 失效则静默清掉）；并发调用共享同一次请求 */
   let restorePromise: Promise<void> | null = null
@@ -161,10 +249,15 @@ export const useAppStore = defineStore('app', () => {
 
   return {
     userId,
+    recordsUserId,
     region,
     setRegion,
     crops,
     cropsLoaded,
+    offlineCrops,
+    cropsProvince,
+    localCrops,
+    otherCrops,
     loadCrops,
     selectedCropId,
     selectedCrop,

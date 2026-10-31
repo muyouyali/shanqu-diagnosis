@@ -54,6 +54,65 @@ app.use(express.json({ limit: '20mb' }))
 
 // ==================== 基础信息 ====================
 
+// 知识库检索演示（RAG 面板用）：返回 top-K 命中与匹配度
+app.get('/api/kb/search', (req, res) => {
+  const q = String(req.query.q || '').trim()
+  if (!q) return res.json({ hits: [], total: { docs: getDocCount(), diseases: DISEASES.length, crops: CROPS.length } })
+  const cropId = String(req.query.cropId || '').trim() || null
+  const kb = resolveKbContext(q, cropId, 5)
+  res.json({
+    hits: kb.hits.map((h) => ({
+      id: h.id,
+      name: h.disease.name,
+      cropId: h.cropId,
+      cropName: CROP_NAME[h.cropId] || '',
+      score: h.scoreNormalized,
+      type: h.disease.type,
+      symptoms: h.disease.symptoms.slice(0, 3),
+      treatment: (h.disease.treatment || []).slice(0, 2),
+      alias: h.disease.alias || ''
+    })),
+    total: { docs: getDocCount(), diseases: DISEASES.length, crops: CROPS.length }
+  })
+})
+
+// 坐标 → 地名反查中转：服务端直连免费服务，绕过浏览器网络限制
+app.get('/api/geo/reverse', async (req, res) => {
+  const lat = Number(req.query.lat)
+  const lon = Number(req.query.lon)
+  if (!Number.isFinite(lat) || !Number.isFinite(lon)) {
+    return res.status(400).json({ error: '缺少经纬度' })
+  }
+  const providers = [
+    {
+      name: 'bigdatacloud',
+      url: `https://api.bigdatacloud.net/data/reverse-geocode-client?latitude=${lat}&longitude=${lon}&localityLanguage=zh`,
+      parse: (j) => [j.city, j.locality, j.principalSubdivision].filter(Boolean)
+    },
+    {
+      name: 'nominatim',
+      url: `https://nominatim.openstreetmap.org/reverse?format=jsonv2&lat=${lat}&lon=${lon}&accept-language=zh-CN`,
+      parse: (j) => {
+        const a = j.address || {}
+        return [a.county, a.city, a.district, a.state].filter(Boolean)
+      }
+    }
+  ]
+  for (const p of providers) {
+    try {
+      const r = await Promise.race([
+        fetch(p.url, { headers: { Accept: 'application/json', 'User-Agent': 'yunling-nongzhen/1.0' }, signal: AbortSignal.timeout(5000) }),
+        new Promise((_, rej) => setTimeout(() => rej(new Error('timeout')), 5500))
+      ])
+      if (!r.ok) continue
+      const j = await r.json()
+      const names = p.parse(j)
+      if (names.length) return res.json({ ok: true, provider: p.name, names })
+    } catch { /* 尝试下一个服务 */ }
+  }
+  res.status(502).json({ error: '反查服务均不可用' })
+})
+
 app.get('/api/health', (req, res) => {
   res.json({
     ok: true,
@@ -127,6 +186,32 @@ app.get('/api/crops', (req, res) => {
     }))
 
   let items = [...localKb, ...atlasCrops, ...otherKb]
+  // 云南州市级特色优先：所选州市的主导作物排到最前（主攻云南，其他省保留省级粒度）
+  const CITY_SPECIALTY = {
+    文山市: ['sanqi'],
+    昭通市: ['tianma', 'walnut'],
+    普洱市: ['tea', 'coffee'],
+    红河州: ['shiliu'],
+    曲靖市: ['moyu'],
+    昆明市: ['blueberry', 'citrus'],
+    丽江市: ['walnut', 'blueberry'],
+    大理白族自治州: ['walnut'],
+    保山市: ['coffee', 'tea'],
+    临沧市: ['tea'],
+    西双版纳州: ['tea', 'coffee'],
+    德宏州: ['coffee', 'tea'],
+    怒江州: ['walnut'],
+    迪庆州: ['walnut'],
+    楚雄州: ['walnut', 'moyu'],
+    玉溪市: ['citrus', 'blueberry']
+  }
+  const specialty = CITY_SPECIALTY[region] || []
+  if (specialty.length) {
+    items = [
+      ...items.filter((c) => specialty.includes(c.id)),
+      ...items.filter((c) => !specialty.includes(c.id))
+    ]
+  }
   // 传了 keyword 视为跨区搜索：本地结果置顶，其余保持知识库优先
   if (keyword) {
     const k = keyword
@@ -146,7 +231,7 @@ app.get('/api/crops', (req, res) => {
 
 // 用户提交新作物
 app.post('/api/crops/submit', (req, res) => {
-  const { name, alias, province, altitude, season, emoji, desc, pests, submitter, contact } =
+  const { name, alias, province, city, altitude, season, emoji, desc, pests, submitter, contact } =
     req.body || {}
 
   if (!name || String(name).trim().length < 2) {
@@ -167,6 +252,7 @@ app.post('/api/crops/submit', (req, res) => {
     name: String(name).trim(),
     alias: String(alias || '').trim(),
     province,
+    city: String(city || '').trim(),
     altitude: String(altitude || '').trim() || '待补充',
     season: String(season || '').trim() || '待补充',
     emoji: emoji || '🌱',
@@ -213,7 +299,8 @@ app.get('/api/crops/:cropId/diseases', (req, res) => {
 app.post('/api/diagnose', async (req, res) => {
   const { cropId, image, symptomsText, altitude, weather, stage, area, region, userId } = req.body || {}
 
-  if (!cropId || !CROP_NAME[cropId]) {
+  // cropId 可为 'auto'：AI 自由识别作物种类（图文速查跨作物识别用）
+  if (cropId !== 'auto' && (!cropId || !CROP_NAME[cropId])) {
     return res.status(400).json({ error: '请选择作物' })
   }
   if (!image && !symptomsText) {
@@ -762,8 +849,55 @@ app.post('/api/auth/login', (req, res) => {
 // ==================== 多方式登录：验证码 / 快捷登录注册 / 模拟 OAuth ====================
 const codeStore = new Map() // target -> { code, exp }
 
-// 发送验证码（演示环境直接返回验证码；接入真实短信/邮件服务时替换此实现）
-app.post('/api/auth/sms-code', (req, res) => {
+// ---- 邮件发送（SMTP）：配置 SMTP_HOST/USER/PASS 后自动启用真实发信 ----
+let mailTransporter = null
+;(async () => {
+  try {
+    if (process.env.SMTP_HOST && process.env.SMTP_USER && process.env.SMTP_PASS) {
+      const nodemailer = await import('nodemailer')
+      mailTransporter = nodemailer.default.createTransport({
+        host: process.env.SMTP_HOST,
+        port: Number(process.env.SMTP_PORT || 465),
+        secure: String(process.env.SMTP_SECURE ?? 'true') === 'true',
+        auth: { user: process.env.SMTP_USER, pass: process.env.SMTP_PASS },
+        // 连接池 + 复用，缩短后续发信耗时
+        pool: true,
+        maxConnections: 2,
+        maxMessages: 50,
+        connectionTimeout: 15000,
+        greetingTimeout: 12000,
+        socketTimeout: 20000,
+      })
+      await mailTransporter.verify()
+      console.log('[mail] SMTP 已配置并连接成功，验证码将通过邮件真实发送')
+    } else {
+      console.log('[mail] SMTP 未配置，验证码走演示回显模式')
+    }
+  } catch (e) {
+    console.warn('[mail] SMTP 初始化失败，回退演示模式:', e.message)
+    mailTransporter = null
+  }
+})()
+
+async function sendMailCode(to, code) {
+  const from = process.env.SMTP_FROM || process.env.SMTP_USER
+  await mailTransporter.sendMail({
+    from: `"云岭农诊" <${from}>`,
+    to,
+    subject: `【云岭农诊】登录验证码 ${code}`,
+    text: `您的登录验证码为：${code}（5 分钟内有效）。如非本人操作，请忽略本邮件。—— 云岭农诊 · 山地特色经济作物病虫害多 Agent 诊断系统`,
+    html: `<div style="max-width:520px;margin:0 auto;font-family:'PingFang SC','Microsoft YaHei',sans-serif;background:#f4f8f5;border-radius:12px;padding:28px 32px;">
+      <h2 style="color:#1f7a4d;margin:0 0 6px;">🌱 云岭农诊</h2>
+      <p style="color:#555;font-size:14px;margin:0 0 18px;">山地特色经济作物病虫害多 Agent 智能诊断系统</p>
+      <p style="color:#333;font-size:15px;">您的登录验证码为：</p>
+      <div style="font-size:32px;font-weight:700;letter-spacing:8px;color:#1f7a4d;background:#fff;border:1px dashed #9fd4b4;border-radius:10px;padding:14px 0;text-align:center;margin:0 0 14px;">${code}</div>
+      <p style="color:#888;font-size:13px;">验证码 5 分钟内有效。如非本人操作，请忽略本邮件。</p>
+    </div>`,
+  })
+}
+
+// 发送验证码（邮箱走真实 SMTP；未配置 SMTP 或手机号短信时降级演示回显）
+app.post('/api/auth/sms-code', async (req, res) => {
   const { target } = req.body || {}
   const t = String(target || '').trim().toLowerCase()
   const isPhone = /^1\d{10}$/.test(t)
@@ -773,8 +907,20 @@ app.post('/api/auth/sms-code', (req, res) => {
   }
   const code = String(Math.floor(100000 + Math.random() * 900000))
   codeStore.set(t, { code, exp: Date.now() + 5 * 60 * 1000 })
-  // 演示环境无短信/邮件通道，直接回显；生产环境请接入对应服务后改为 { ok: true }
-  res.json({ ok: true, channel: isPhone ? 'sms' : 'email', demoCode: code, ttl: 300 })
+
+  // 邮箱 + 已配置 SMTP → 真实发送
+  if (isEmail && mailTransporter) {
+    try {
+      await sendMailCode(t, code)
+      return res.json({ ok: true, channel: 'email', sent: true, ttl: 300 })
+    } catch (e) {
+      console.error('[mail] 发送失败，降级演示回显:', e.message)
+      return res.json({ ok: true, channel: 'email', sent: false, demoCode: code, ttl: 300 })
+    }
+  }
+
+  // 手机号短信或未配置 SMTP：演示回显（接入短信服务商后替换）
+  res.json({ ok: true, channel: isPhone ? 'sms' : 'email', sent: false, demoCode: code, ttl: 300 })
 })
 
 // 验证码快捷登录 / 注册（手机号 / 邮箱）
@@ -790,10 +936,9 @@ app.post('/api/auth/quick', (req, res) => {
 
   let user = store.findUserByAccount(t)
   const wantRegister = mode === 'register'
-  if (user && wantRegister) {
-    return res.status(409).json({ error: '该账号已注册，请直接登录' })
-  }
-  if (!user && !wantRegister) {
+  // 邮箱验证码：未注册时自动建档（业界通行做法，降低注册门槛）
+  const autoRegisterEmail = m === 'email'
+  if (!user && wantRegister === false && !autoRegisterEmail) {
     return res.status(404).json({ error: '该账号尚未注册，请先注册' })
   }
   if (!user) {
@@ -802,7 +947,9 @@ app.post('/api/auth/quick', (req, res) => {
       user = store.createUser({
         account: t,
         password: `qc_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
-        nickname: nickname || (m === 'phone' ? `机友${t.slice(-4)}` : `邮友${t.slice(1, 5)}`),
+        nickname:
+          nickname ||
+          (m === 'phone' ? `机友${t.slice(-4)}` : t.split('@')[0].slice(0, 12) || '新用户'),
         role: isExpert ? 'expert' : 'user',
         title: isExpert ? title : '',
         specialty: isExpert ? specialty : [],
@@ -1150,11 +1297,55 @@ app.get('/api/stats', (req, res) => {
   res.json({ ...stats, cropNames: CROP_NAME })
 })
 
+// 预警结果内存缓存：10 分钟内直接复用，AI 刷新放后台
+let alertCache = { at: 0, data: null }
+
 app.get('/api/alerts', async (req, res) => {
   const days = Number(req.query.days) || 14
-  const stats = store.getStats({ days })
+  const region = req.query.region || ''
+  const stats = store.getStats({ days, region })
 
+  // 缓存按地区区分，切地区后预警立即对应
+  if (alertCache.data && alertCache.region === region && Date.now() - alertCache.at < 10 * 60 * 1000) {
+    return res.json(alertCache.data)
+  }
+
+  // 有旧缓存但已过期：立即返回旧值，后台静默刷新（stale-while-revalidate）
+  if (alertCache.data && alertCache.region === region && !alertCache.refreshing) {
+    alertCache.refreshing = (async () => {
+      try {
+        const statsText2 = [
+          `近 ${days} 天共 ${stats.total} 次诊断`,
+          `需人工复核 ${stats.escalated} 次（${stats.escalatedRate}%）`,
+          `平均置信度 ${stats.avgConfidence}`,
+          `高发病害：${stats.topDiseases.slice(0, 5).map((d) => `${d.name}(${d.count}次)`).join('、')}`,
+          `区域分布：${stats.regions.slice(0, 5).map((r) => `${r.name}(${r.count})`).join('、')}`
+        ].join('\n')
+        if (isConfigured()) {
+          const { system, user } = buildAlertPrompt({ stats: statsText2 })
+          const rr = await Promise.race([
+            chatText({ system, user, temperature: 0.3, jsonMode: true, maxTokens: 600 }),
+            new Promise((_, reject) => setTimeout(() => reject(new Error('alerts ai timeout')), 6000))
+          ])
+          const jr = extractJSON(rr.content)
+          if (jr) {
+            alertCache = {
+              at: Date.now(),
+              region,
+              data: { ...jr, stats: { total: stats.total, days, escalatedRate: stats.escalatedRate, region } }
+            }
+          }
+        }
+      } catch { /* 后台刷新失败则保留旧值 */ } finally {
+        alertCache.refreshing = null
+      }
+    })()
+    return res.json(alertCache.data)
+  }
+
+  const scopeLabel = region ? `地区「${region}」` : '全平台'
   const statsText = [
+    `统计范围：${scopeLabel}`,
     `近 ${days} 天共 ${stats.total} 次诊断`,
     `需人工复核 ${stats.escalated} 次（${stats.escalatedRate}%）`,
     `平均置信度 ${stats.avgConfidence}`,
@@ -1172,7 +1363,11 @@ app.get('/api/alerts', async (req, res) => {
   if (isConfigured()) {
     try {
       const { system, user } = buildAlertPrompt({ stats: statsText })
-      const r = await chatText({ system, user, temperature: 0.3, jsonMode: true, maxTokens: 600 })
+      // 首页预警不做长等待：6 秒内未返回就降级规则兜底，避免骨架屏久转
+      const r = await Promise.race([
+        chatText({ system, user, temperature: 0.3, jsonMode: true, maxTokens: 600 }),
+        new Promise((_, reject) => setTimeout(() => reject(new Error('alerts ai timeout')), 6000))
+      ])
       result = extractJSON(r.content)
     } catch (err) {
       console.warn('[GET /api/alerts] 模型分析失败:', err.message)
@@ -1199,6 +1394,7 @@ app.get('/api/alerts', async (req, res) => {
     result = {
       headline,
       level,
+      scope: region,
       analysis: `近 ${days} 天累计诊断 ${stats.total} 次，其中 ${top ? `「${top.name}」出现 ${top.count} 次，占比 ${((top.count / (stats.total || 1)) * 100).toFixed(1)}%` : '无集中病害'}。需人工复核比例 ${rate}%，${rate > 15 ? '说明疑难病例偏多，建议加强基层技术力量' : '整体可控'}。`,
       actions: [
         top ? `针对「${top.name}」发布专项防控提示，重点覆盖${stats.regions[0]?.name || '高发区域'}` : '保持常规监测',
@@ -1208,7 +1404,9 @@ app.get('/api/alerts', async (req, res) => {
     }
   }
 
-  res.json({ ...result, stats: { total: stats.total, days, escalatedRate: stats.escalatedRate } })
+  const payload = { ...result, stats: { total: stats.total, days, escalatedRate: stats.escalatedRate } }
+  alertCache = { at: Date.now(), data: payload }
+  res.json(payload)
 })
 
 // 一键推送灾害预警公告：专家端与农户端消息中心同时收到

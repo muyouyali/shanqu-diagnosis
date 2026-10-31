@@ -16,6 +16,8 @@ const review = ref<ReviewResponse | null>(null)
 const reviewLoading = ref(false)
 const filterCrop = ref<string>('')
 const activeTab = ref<'records' | 'review'>('records')
+/** 登录态下本机遗留的游客记录数（与账号记录互相隔离） */
+const guestCount = ref(0)
 
 const filtered = computed(() =>
   filterCrop.value ? records.value.filter((r) => r.cropId === filterCrop.value) : records.value
@@ -30,8 +32,17 @@ const recoveryMeta: Record<string, { label: string; color: string; bg: string; i
 const load = async () => {
   loading.value = true
   try {
-    const res = await api.records({ userId: store.userId, limit: 60 })
+    const res = await api.records({ userId: store.recordsUserId, limit: 60 })
     records.value = res.items
+    // 登录态下若本机还有历史游客记录，给出提示（记录已按账号隔离，互不可见）
+    if (store.user && store.recordsUserId !== store.userId) {
+      try {
+        const guest = await api.records({ userId: store.userId, limit: 1 })
+        guestCount.value = Number(guest.total || 0)
+      } catch {
+        guestCount.value = 0
+      }
+    }
   } catch (err) {
     store.showToast((err as Error).message, 'error')
   } finally {
@@ -39,7 +50,11 @@ const load = async () => {
   }
 }
 
-onMounted(load)
+onMounted(async () => {
+  // 先恢复登录态再查询：否则 recordsUserId 会落在游客 id 上，登录用户看到 0 条
+  await store.restoreUser().catch(() => {})
+  await load()
+})
 
 const runReview = async () => {
   if (reviewLoading.value) return
@@ -47,7 +62,7 @@ const runReview = async () => {
   try {
     review.value = await api.review({
       cropId: filterCrop.value || undefined,
-      userId: store.userId
+      userId: store.recordsUserId
     })
   } catch (err) {
     store.showToast((err as Error).message, 'error')
@@ -86,6 +101,7 @@ const fmtDate = (iso: string) => {
       desc="记录每次诊断，AI 复盘帮您找出病害规律、给出下季种植建议"
       :badge="`${records.length} 条诊断记录`"
       badge-icon="camera"
+      image="/media/banners/b39686331_wide.jpg"
     />
 
     <!-- 统计概览 -->
@@ -126,6 +142,11 @@ const fmtDate = (iso: string) => {
 
     <!-- ===== 记录列表 ===== -->
     <template v-if="activeTab === 'records'">
+      <!-- 游客记录隔离提示 -->
+      <div v-if="guestCount > 0 && !records.length" class="guest-hint">
+        <AppIcon name="alert" :size="14" />
+        本机还有 {{ guestCount }} 条<b>游客身份</b>的历史诊断（与当前账号互相隔离）。退出登录后可查看。
+      </div>
       <!-- 作物筛选 -->
       <div class="filter-row">
         <button class="filter" :class="{ 'is-active': filterCrop === '' }" @click="filterCrop = ''">全部</button>
@@ -729,5 +750,24 @@ const fmtDate = (iso: string) => {
   .record-list {
     width: calc(100% - 64px);
   }
+}
+
+/* 游客记录隔离提示 */
+.guest-hint {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding: 10px 13px;
+  margin-bottom: 12px;
+  border-radius: 12px;
+  background: #fffbeb;
+  border: 1px solid #fde68a;
+  color: #92400e;
+  font-size: 11.5px;
+  line-height: 1.5;
+}
+
+.guest-hint b {
+  font-weight: 800;
 }
 </style>

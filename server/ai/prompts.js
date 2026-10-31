@@ -16,6 +16,13 @@ const CROP_NAME = Object.fromEntries(CROPS.map((c) => [c.id, c.name]))
  * 构建作物候选病害列表（约束模型输出空间，显著降低幻觉）
  */
 const buildCandidateList = (cropId) => {
+  // auto 模式：不限单一作物，给出全库概览（按作物分组），由模型先判断作物种类
+  if (cropId === 'auto') {
+    return CROPS.map((c) => {
+      const ds = getDiseasesByCrop(c.id)
+      return `- ${c.name}：${ds.map((d) => d.name).join('、') || '（暂无收录病害）'}`
+    }).join('\n')
+  }
   const list = getDiseasesByCrop(cropId)
   return list
     .map((d) => `- ${d.name}（${d.type}）：典型症状 ${(d.symptomKeywords || []).slice(0, 5).join('、')}`)
@@ -41,11 +48,14 @@ export const DIAGNOSIS_SYSTEM = `你是"云岭农诊"系统的初诊智能体，
 用农户听得懂的话描述症状，避免堆砌专业术语；必要术语首次出现时用括号解释。`
 
 export const buildDiagnosisPrompt = ({ cropId, symptomsText, altitude, weather, stage, area, history }) => {
-  const cropName = CROP_NAME[cropId] || '未知作物'
-  const candidates = buildCandidateList(cropId)
+  const isAuto = cropId === 'auto'
+  const cropName = isAuto ? 'AI 自主识别' : (CROP_NAME[cropId] || '未知作物')
+  const candidates = buildCandidateList(isAuto ? 'auto' : cropId)
 
   const contextLines = [
-    `作物：${cropName}`,
+    isAuto
+      ? '作物：未指定（请先根据照片判断作物种类，如蓝莓、三七、柑橘等，再判断病害）'
+      : `作物：${cropName}`,
     altitude ? `种植海拔：${altitude}` : null,
     weather ? `近期天气：${weather}` : null,
     stage ? `生长阶段：${stage}` : null,
@@ -56,12 +66,19 @@ export const buildDiagnosisPrompt = ({ cropId, symptomsText, altitude, weather, 
     .filter(Boolean)
     .join('\n')
 
+  const autoNote = isAuto
+    ? `【重要 · 自由识别模式】
+本次未指定作物。请先根据照片特征判断作物种类（结合农户所在地区为云南，优先考虑：三七、蓝莓、柑橘、石榴、核桃、天麻、茶树、咖啡、魔芋、花椒、苹果、马铃薯等云南山地作物），再给出该作物的病害结论。
+病害名称优先使用下方"全知识库候选病害"中的规范名称；若照片中的作物/病害确实不在库中，可给出规范病害名但必须如实降低置信度（≤0.4）并在 differential 中说明"知识库暂未收录该作物病害"。
+若是生理性问题（日灼、药害、缺素），在 observations 中说明，results 可以为空。\n`
+    : ''
+
   const user = `请根据提供的照片和以下信息进行初步诊断。
 
 【基础信息】
 ${contextLines}
-
-【${cropName}的候选病害库】
+${autoNote}
+【${isAuto ? '全知识库候选病害（按作物分组）' : `${cropName}的候选病害库`}】
 ${candidates}
 
 【输出要求】
@@ -71,7 +88,7 @@ ${candidates}
   "observations": "客观描述你在照片中看到的症状（颜色、形状、分布位置、有无霉层等），120字以内",
   "results": [
     {
-      "name": "病害名称（必须来自候选库）",
+      "name": "病害名称（指定作物时必须来自候选库；自由识别模式用规范病害名）",
       "confidence": 0.85,
       "confidenceLevel": "high|medium|low",
       "symptomMatch": ["照片中与该病害吻合的症状点，2-4条"],

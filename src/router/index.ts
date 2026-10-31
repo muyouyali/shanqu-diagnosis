@@ -37,6 +37,12 @@ const routes = [
         meta: { title: '病害图谱' }
       },
       {
+        path: 'atlas',
+        name: 'atlas',
+        component: () => import('@/views/KnowledgeHub.vue'),
+        meta: { title: '病害图谱速查' }
+      },
+      {
         path: 'profile',
         name: 'profile',
         component: () => import('@/views/Profile.vue'),

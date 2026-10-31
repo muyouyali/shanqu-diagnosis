@@ -3,38 +3,16 @@ import { ref, computed, watch, onMounted } from 'vue'
 import AppIcon from '@/components/AppIcon.vue'
 import SceneryBanner from '@/components/SceneryBanner.vue'
 import { provinceOfRegion } from '@/data/regions'
+import { fetchRealWeather } from '@/data/liveWeather'
 import api from '@/api'
-
-interface WeatherDay {
-  day: string
-  cond: string
-  rainProb: number
-  tempLow: number
-  tempHigh: number
-  humidity: number
-  risk: number
-}
-interface WeatherWarning {
-  type: string
-  severity: 'green' | 'blue' | 'yellow' | 'orange' | 'red'
-  day: string
-  desc: string
-  actions: string[]
-}
-interface WeatherData {
-  region: string
-  source?: string
-  days: WeatherDay[]
-  warnings: WeatherWarning[]
-  riskPeak: number
-  riskLevel: 'low' | 'medium' | 'high'
-  cropNote: string
-}
+import type { WeatherData } from '@/types'
 
 const props = defineProps<{ region: string; cropId?: string }>()
 const weather = ref<WeatherData | null>(null)
 const loading = ref(true)
 const showDetail = ref(false)
+/** 真实气象源标记（徽标展示用） */
+const live = ref(false)
 
 const SEV_TONE: Record<string, { color: string; bg: string }> = {
   red: { color: '#dc2626', bg: '#fee2e2' },
@@ -60,12 +38,26 @@ const riskTone = computed(() => {
 
 const load = async () => {
   loading.value = true
+  const region = props.region
+  const cropId = props.cropId
+  // 优先浏览器直连 Open-Meteo（更快且与地区严格对应），失败再走后端
+  const real = await fetchRealWeather(region, cropId)
+  if (region !== props.region) return
+  if (real) {
+    weather.value = real
+    live.value = true
+    loading.value = false
+    return
+  }
   try {
-    weather.value = await api.weather(props.region, props.cropId)
+    const res = await api.weather(region, cropId)
+    if (region !== props.region) return
+    weather.value = res
+    live.value = /open-meteo|真实/i.test((res as any).source || '')
   } catch {
     /* 天气失败不阻断 */
   } finally {
-    loading.value = false
+    if (region === props.region) loading.value = false
   }
 }
 
@@ -91,6 +83,8 @@ onMounted(load)
           <span class="weather__title">
             <AppIcon name="map-pin" :size="13" />
             {{ weather.region }} · 未来 7 天
+            <i v-if="live" class="weather__live">实时</i>
+            <i v-if="(weather as any).resolvedCoord" class="weather__coord">{{ (weather as any).resolvedCoord }}</i>
             <i v-if="hasWarnings" class="weather__warn-dot"></i>
           </span>
           <span class="weather__risk" :style="{ color: riskTone.color, background: riskTone.bg }">
@@ -529,5 +523,26 @@ onMounted(load)
   .weather__strip {
     grid-template-columns: repeat(7, 1fr);
   }
+}
+
+/* 实时气象徽标 */
+.weather__live {
+  font-style: normal;
+  font-size: 9px;
+  font-weight: 800;
+  letter-spacing: 0.4px;
+  color: #fff;
+  background: linear-gradient(135deg, #16a34a, #0d9488);
+  padding: 1px 6px;
+  border-radius: var(--r-full);
+  margin-left: 2px;
+  vertical-align: 1px;
+}
+
+.weather__coord {
+  font-style: normal;
+  font-size: 9px;
+  color: var(--c-text-4);
+  font-variant-numeric: tabular-nums;
 }
 </style>

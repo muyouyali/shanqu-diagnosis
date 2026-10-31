@@ -7,6 +7,7 @@ import AppIcon from '@/components/AppIcon.vue'
 import { useAppStore } from '@/stores/app'
 import { PROVINCES } from '@/data/regions'
 import RegionPicker from '@/components/RegionPicker.vue'
+import { mergeExperts, scoreExpert, addLocalConsult } from '@/data/localExperts'
 import type { Expert } from '@/types'
 
 const router = useRouter()
@@ -18,15 +19,32 @@ const cropName = ref('')
 /** 云南州市选项（取自地区数据） */
 const selRegion = computed(() => store.region || '')
 
+/** 本地区可问作物优先（最多 12 个），不足时用跨区作物补齐 */
+const askCrops = computed(() => {
+  const pool = [...store.localCrops, ...store.otherCrops].filter((c) => c.diagnosable !== false)
+  const seen = new Set<string>()
+  return pool.filter((c) => (seen.has(c.id) ? false : seen.add(c.id))).slice(0, 12)
+})
+
 const reload = async () => {
   loading.value = true
   try {
     cropName.value = store.crops.find((c) => c.id === store.selectedCropId)?.name || ''
-    const res = await api.experts({
-      cropId: store.selectedCropId || undefined,
-      region: selRegion.value || undefined
-    })
-    experts.value = res.items
+    let remote: Expert[] = []
+    try {
+      const res = await api.experts({
+        cropId: store.selectedCropId || undefined,
+        region: selRegion.value || undefined
+      })
+      remote = res.items
+    } catch {
+      // 静态托管兜底：内置专家种子 + 本机注册专家
+      remote = []
+    }
+    // 合并：本机新注册专家置顶，保证「注册的专家及时出现」
+    experts.value = mergeExperts(remote as any)
+      .map((e) => scoreExpert(e as any, cropName.value, selRegion.value))
+      .sort((a, b) => b.match - a.match) as Expert[]
   } catch (e: any) {
     store.showToast(e?.message || '专家列表加载失败', 'error')
   } finally {
@@ -83,8 +101,18 @@ const submitAsk = async () => {
     })
     sent.value = true
     store.showToast('咨询已发送，专家将在消息中心收到并回复', 'success')
-  } catch (e: any) {
-    store.showToast(e?.message || '发送失败', 'error')
+  } catch {
+    // 静态托管兜底：咨询单落到本地，演示闭环不断
+    addLocalConsult({
+      userId: Number(store.user?.id) || 0,
+      userName: store.user?.nickname || '农户',
+      expertId: target.value.id,
+      cropId: store.selectedCropId || null,
+      region: selRegion.value || '',
+      question: question.value.trim()
+    })
+    sent.value = true
+    store.showToast('咨询已提交，专家端「待回复咨询」可见', 'success')
   } finally {
     sending.value = false
   }
@@ -117,7 +145,7 @@ watch(selRegion, () => reload())
         <span class="ax__pick-label">作物</span>
         <div class="ax__chips">
           <button
-            v-for="c in store.crops.slice(0, 12)"
+            v-for="c in askCrops"
             :key="c.id"
             class="ax__chip"
             :class="{ 'is-on': store.selectedCropId === c.id }"

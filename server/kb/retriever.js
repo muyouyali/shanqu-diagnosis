@@ -262,7 +262,8 @@ export const retrievePesticide = (query, cropId) => {
  * 这让系统在 API 故障时依然能给出方向性判断，符合"演示不崩"的工程要求。
  */
 export const ruleBasedDiagnose = (cropId, textFeatures) => {
-  const pool = cropId ? DISEASES.filter((d) => d.cropId === cropId) : DISEASES
+  // auto/空：不限单一作物，规则引擎遍历全库
+  const pool = cropId && cropId !== 'auto' ? DISEASES.filter((d) => d.cropId === cropId) : DISEASES
   const tokens = new Set(tokenize(textFeatures || ''))
 
   const scored = pool.map((d) => {

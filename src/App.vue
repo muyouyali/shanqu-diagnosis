@@ -2,6 +2,7 @@
 import { onMounted, onUnmounted } from 'vue'
 import { useAppStore } from '@/stores/app'
 import AppIcon from '@/components/AppIcon.vue'
+import { autoLocateOnce } from '@/data/autoLocate'
 
 const store = useAppStore()
 
@@ -12,7 +13,11 @@ const onAuthExpired = () => {
   store.showToast('登录已过期，请重新登录', 'error')
 }
 
-onMounted(() => window.addEventListener('ylnz:auth-expired', onAuthExpired))
+onMounted(() => {
+  window.addEventListener('ylnz:auth-expired', onAuthExpired)
+  // 启动时静默 IP 定位一次：天气/作物/预警自动对准用户所在州市
+  autoLocateOnce()
+})
 onUnmounted(() => window.removeEventListener('ylnz:auth-expired', onAuthExpired))
 </script>
 

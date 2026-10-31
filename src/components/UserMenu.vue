@@ -27,7 +27,8 @@ const roleIcon = ref('')
 const loadStats = async () => {
   if (!store.user) return
   try {
-    const res = await api.records({ userId: String(store.user.id), limit: 1 })
+    // 与诊断提交/档案页共用同一设备标识，避免登录后统计变 0
+    const res = await api.records({ userId: store.recordsUserId, limit: 1 })
     myRecords.value = Number(res.total || 0)
   } catch {
     myRecords.value = 0
@@ -151,25 +152,19 @@ const onLogout = async () => {
               <span class="u-item__txt">个人中心</span>
               <i class="u-item__arrow">›</i>
             </button>
-            <button class="u-item" @click="go('/archive')">
-              <span class="u-item__ico">🗂️</span>
-              <span class="u-item__txt">诊断档案</span>
+            <button class="u-item" @click="go('/atlas')">
+              <span class="u-item__ico">📚</span>
+              <span class="u-item__txt">病害图谱速查</span>
               <i class="u-item__arrow">›</i>
             </button>
-            <button class="u-item" @click="go('/knowledge')">
-              <span class="u-item__ico">📚</span>
-              <span class="u-item__txt">共建知识图谱</span>
+            <button v-if="!store.isExpert" class="u-item" @click="go('/ask-expert')">
+              <span class="u-item__ico">🎓</span>
+              <span class="u-item__txt">向专家提问</span>
               <i class="u-item__arrow">›</i>
             </button>
             <button v-if="store.isExpert" class="u-item u-item--hl" @click="go('/admin')">
               <span class="u-item__ico">🖥️</span>
               <span class="u-item__txt">农技站后台</span>
-              <i class="u-item__arrow">›</i>
-            </button>
-            <button class="u-item" @click="onBell(); closeMenu()">
-              <span class="u-item__ico">🔔</span>
-              <span class="u-item__txt">消息通知</span>
-              <i v-if="store.unread > 0" class="u-item__dot">{{ store.unread > 9 ? '9+' : store.unread }}</i>
               <i class="u-item__arrow">›</i>
             </button>
           </nav>

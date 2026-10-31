@@ -95,6 +95,8 @@ export interface CropSubmission {
   name: string
   alias: string
   province: string
+  /** 所属州市 / 县区（可选） */
+  city?: string
   altitude: string
   season: string
   emoji: string
@@ -263,6 +265,23 @@ export interface AlertResponse {
   stats: { total: number; days: number; escalatedRate: number }
 }
 
+export interface KbHit {
+  id: number | string
+  name: string
+  cropId: string
+  cropName: string
+  score: number
+  type: string
+  symptoms: string[]
+  treatment: string[]
+  alias?: string
+}
+
+export interface KbSearchResponse {
+  hits: KbHit[]
+  total: { docs: number; diseases: number; crops: number }
+}
+
 export interface ReviewResponse {
   pattern: string
   riskLevel: 'high' | 'medium' | 'low'
@@ -297,4 +316,37 @@ export interface MetricsResponse {
   lastModel: string | null
   history: { model: string; latencyMs: number; tokens: number; at: string }[]
   config: HealthResponse['ai']
+}
+
+/** 7 天天气与病害风险（后端 /api/weather 与前端实时兜底共用） */
+export interface WeatherDay {
+  day: string
+  cond: string
+  rainProb: number
+  tempLow: number
+  tempHigh: number
+  humidity: number
+  risk: number
+  precipitationMm?: number
+}
+
+export interface WeatherWarning {
+  type: string
+  severity: 'green' | 'blue' | 'yellow' | 'orange' | 'red'
+  day?: string
+  desc?: string
+  content?: string
+  actions?: string[]
+}
+
+export interface WeatherData {
+  region: string
+  source?: string
+  /** 实际解析到的坐标（便于核对地区对应） */
+  resolvedCoord?: string
+  days: WeatherDay[]
+  warnings: WeatherWarning[]
+  riskPeak: number
+  riskLevel: 'low' | 'medium' | 'high'
+  cropNote: string
 }

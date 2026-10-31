@@ -22,6 +22,35 @@ const done = ref(false)
 const pendingReviews = computed(() => reviews.value.filter((r) => r.status === 'pending'))
 const pendingConsults = computed(() => consults.value.filter((c) => c.status === 'pending'))
 
+/**
+ * 复核请求按「当前专家擅长领域对口」优先排序：
+ * 请求携带 cropId，与当前登录专家的 specialty 匹配的排到最前并标记「对口」
+ */
+const currentSpecialty = computed(() => (store.user as any)?.specialty || [])
+
+const cropNameOf = (cropId?: string | null) => {
+  const c = store.crops.find((x) => x.id === cropId)
+  return c?.name || cropId || ''
+}
+
+const isMatchedExpert = (r: ReviewRequest) => {
+  const crop = cropNameOf(r.cropId)
+  if (!crop) return false
+  return currentSpecialty.value.some((s: string) => crop.includes(s) || s.includes(crop))
+}
+
+const sortedReviews = computed(() => {
+  const list = [...reviews.value]
+  return list.sort((a, b) => {
+    const am = isMatchedExpert(a) ? 1 : 0
+    const bm = isMatchedExpert(b) ? 1 : 0
+    if (am !== bm) return bm - am
+    // 同级时待复核优先，再按时间倒序
+    if ((a.status === 'pending') !== (b.status === 'pending')) return a.status === 'pending' ? -1 : 1
+    return a.createdAt < b.createdAt ? 1 : -1
+  })
+})
+
 const openHandle = (kindIn: 'review' | 'consult', item: ReviewRequest | Consult) => {
   kind.value = kindIn
   target.value = item
@@ -103,17 +132,20 @@ onMounted(async () => {
         <AppIcon name="check-circle" :size="26" />
         <p>暂无待复核请求<br />农户在诊断结果页点击「申请人工复核」后会出现在这里</p>
       </div>
-      <div v-for="r in reviews" :key="r.id" class="rv-card" :class="{ 'is-done': r.status === 'done' }">
+      <div v-for="r in sortedReviews" :key="r.id" class="rv-card" :class="{ 'is-done': r.status === 'done' }">
         <div class="rv-card__top">
           <span class="rv-card__badge" :class="r.status">
             {{ r.status === 'pending' ? '待复核' : '已复核' }}
           </span>
           <strong class="rv-card__title">
             诊断记录 #{{ r.recordId }}
-            <small>{{ r.userName }} · {{ r.region || '未填地区' }}</small>
+            <small>{{ r.userName }} · {{ r.region || '未填地区' }}<template v-if="r.cropId"> · {{ cropNameOf(r.cropId) }}</template></small>
           </strong>
           <small class="rv-card__time">{{ fmt(r.createdAt) }}</small>
         </div>
+        <span v-if="isMatchedExpert(r) && r.status === 'pending'" class="rv-card__match">
+          <AppIcon name="check" :size="11" /> 与您擅长领域对口，建议优先处理
+        </span>
         <p v-if="r.question" class="rv-card__q">补充说明：{{ r.question }}</p>
         <p v-if="r.opinion" class="rv-card__opinion">复核意见：{{ r.opinion }}</p>
         <button v-if="r.status === 'pending'" class="rv-card__btn" @click="openHandle('review', r)">
@@ -276,6 +308,20 @@ onMounted(async () => {
 
 .rv-card.is-done {
   opacity: 0.72;
+}
+
+.rv-card__match {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  margin-top: 8px;
+  padding: 3px 10px;
+  border-radius: 999px;
+  font-size: 10.5px;
+  font-weight: 700;
+  color: #1a7f45;
+  background: #e8f7ee;
+  border: 1px solid #c8ead4;
 }
 
 .rv-card__top {
