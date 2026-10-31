@@ -296,6 +296,85 @@ app.get('/api/crops/:cropId/diseases', (req, res) => {
 
 // ==================== 核心：多 Agent 诊断 ====================
 
+// ==================== 异步诊断任务（应对网关 60s 超时） ====================
+/**
+ * 托管网关对长请求 60s 即 504，而多 Agent 链路常超 60s。
+ * 改为：POST /api/diagnose/submit 立即返回 taskId，后台继续执行，
+ * 前端轮询 GET /api/diagnose/task/:id 取结果。
+ */
+const diagTasks = new Map() // id -> { status, result, error, createdAt }
+setInterval(() => {
+  const cutoff = Date.now() - 10 * 60 * 1000
+  for (const [k, v] of diagTasks) if (v.createdAt < cutoff) diagTasks.delete(k)
+}, 60 * 1000).unref()
+
+app.post('/api/diagnose/submit', (req, res) => {
+  const { cropId, image, symptomsText, region, userId } = req.body || {}
+  if (cropId !== 'auto' && (!cropId || !CROP_NAME[cropId])) {
+    return res.status(400).json({ error: '请选择作物' })
+  }
+  if (!image && !symptomsText) {
+    return res.status(400).json({ error: '请上传照片或描述症状' })
+  }
+  const id = 'dt_' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6)
+  diagTasks.set(id, { status: 'running', result: null, error: null, createdAt: Date.now() })
+
+  // 后台异步执行，响应不被网关超时打断
+  ;(async () => {
+    try {
+      const body = req.body || {}
+      const result = await runDiagnosisWorkflow({
+        cropId: body.cropId,
+        imageBase64: body.image,
+        symptomsText: body.symptomsText,
+        altitude: body.altitude,
+        weather: body.weather,
+        stage: body.stage,
+        area: body.area
+      })
+      const record = store.createRecord({
+        userId: body.userId || 'guest',
+        cropId: body.cropId,
+        cropName: result.cropName,
+        region: body.region || '未标注',
+        altitude: body.altitude,
+        weather: body.weather,
+        stage: body.stage,
+        area: body.area,
+        symptomsText: body.symptomsText || '',
+        hasImage: Boolean(body.image),
+        diagnosis: result.diagnosis,
+        gate: result.gate,
+        treatment: result.treatment,
+        trace: result.trace,
+        meta: result.meta
+      })
+      const task = diagTasks.get(id)
+      if (task) {
+        task.status = 'done'
+        task.result = { ...result, recordId: record.id }
+      }
+    } catch (err) {
+      console.error('[diagTask]', err)
+      const task = diagTasks.get(id)
+      if (task) {
+        task.status = 'error'
+        task.error = err.message || '诊断服务异常'
+      }
+    }
+  })()
+
+  res.json({ taskId: id })
+})
+
+app.get('/api/diagnose/task/:id', (req, res) => {
+  const task = diagTasks.get(req.params.id)
+  if (!task) return res.status(404).json({ error: '任务不存在或已过期' })
+  if (task.status === 'running') return res.json({ status: 'running' })
+  if (task.status === 'error') return res.status(503).json({ status: 'error', error: task.error })
+  res.json({ status: 'done', ...task.result })
+})
+
 app.post('/api/diagnose', async (req, res) => {
   const { cropId, image, symptomsText, altitude, weather, stage, area, region, userId } = req.body || {}
 

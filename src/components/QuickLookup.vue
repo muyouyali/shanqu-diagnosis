@@ -39,14 +39,44 @@ const onFile = (e: Event) => {
   }
   const reader = new FileReader()
   reader.onload = () => {
-    const dataUrl = String(reader.result)
-    imgPreview.value = dataUrl
-    imgBase64.value = dataUrl
-    aiResults.value = []
-    aiErr.value = ''
+    // 压缩到最长边 1024px 再上传：视觉模型处理更快，诊断整体提速明显
+    compressImage(String(reader.result), 1024, 0.82)
+      .then((small) => {
+        imgPreview.value = small
+        imgBase64.value = small
+        aiResults.value = []
+        aiErr.value = ''
+      })
+      .catch(() => {
+        // 压缩失败则用原图
+        imgPreview.value = String(reader.result)
+        imgBase64.value = String(reader.result)
+        aiResults.value = []
+        aiErr.value = ''
+      })
   }
   reader.readAsDataURL(file)
 }
+
+/** 等比压缩图片（前端 canvas），返回 jpeg dataURL */
+const compressImage = (dataUrl: string, maxSide: number, quality: number): Promise<string> =>
+  new Promise((resolve, reject) => {
+    const img = new Image()
+    img.onload = () => {
+      const scale = Math.min(1, maxSide / Math.max(img.width, img.height))
+      const w = Math.round(img.width * scale)
+      const h = Math.round(img.height * scale)
+      const canvas = document.createElement('canvas')
+      canvas.width = w
+      canvas.height = h
+      const ctx = canvas.getContext('2d')
+      if (!ctx) return reject(new Error('no ctx'))
+      ctx.drawImage(img, 0, 0, w, h)
+      resolve(canvas.toDataURL('image/jpeg', quality))
+    }
+    img.onerror = reject
+    img.src = dataUrl
+  })
 
 const resetPhoto = () => {
   imgPreview.value = ''
@@ -126,26 +156,52 @@ const matchDisease = (name: string) =>
 /** 至少有照片或已输入症状才能识别 */
 const canRun = computed(() => (!!imgBase64.value || symptomText.value.trim().length >= 2) && !busy.value)
 
+/** 识别耗时计时（多 Agent 链路约 30–90 秒，让用户知道系统在正常工作） */
+const elapsed = ref(0)
+let timer: number | undefined
+
 const runAI = async () => {
   if (!canRun.value) return
   busy.value = true
+  elapsed.value = 0
   aiErr.value = ''
   aiResults.value = []
+  timer = window.setInterval(() => (elapsed.value += 1), 1000)
   try {
-    // cropId 传 'auto'：AI 先判断照片中的作物种类（不限当前选中作物），再给出病害结论
-    const res = await api.diagnose({
+    const payload = {
       cropId: 'auto',
       image: imgBase64.value,
       symptomsText: symptomText.value.trim() || undefined,
       region: store.user?.region ? String(store.user.region) : (store.region || '云南'),
       userId: store.user ? String(store.user.id) : undefined
-    })
+    }
+    // 优先走异步任务模式：提交立即返回，避免托管网关 60s 掐断长请求（504「网络异常」）
+    let res: any = null
+    try {
+      const { taskId } = await api.submitDiagnose(payload)
+      // 轮询结果，最长等 5 分钟
+      for (let i = 0; i < 250; i++) {
+        await new Promise((r) => setTimeout(r, 1200))
+        const st = await api.pollDiagnoseTask(taskId)
+        if (st.status === 'done') {
+          res = st as any
+          break
+        }
+        if (st.status === 'error') throw new Error(st.error || '识别失败，请重试')
+      }
+      if (!res) throw new Error('识别超时，请稍后重试')
+    } catch (subErr: any) {
+      // 异步接口不可用（如纯静态部署）→ 回退同步调用
+      if (subErr?.message?.includes('任务') || subErr?.message?.includes('超时')) throw subErr
+      res = await api.diagnose(payload)
+    }
     aiRecordId.value = res.recordId ? String(res.recordId) : ''
     aiResults.value = (res.diagnosis?.results || []).slice(0, 3)
     if (!aiResults.value.length) aiErr.value = '未能识别出疑似病害，请尝试更清晰的照片或补充症状描述'
   } catch (e: any) {
     aiErr.value = e?.message || '识别失败，请重试'
   } finally {
+    if (timer) window.clearInterval(timer)
     busy.value = false
   }
 }
@@ -233,7 +289,7 @@ const severityLabel: Record<string, string> = { critical: '毁灭性', high: '�
 
             <!-- ③ 确认症状后再识别 -->
             <button class="ql__go" :disabled="!canRun" @click="runAI">
-              {{ busy ? '⏳ AI 识别中…' : '🔍 开始识别' }}
+              {{ busy ? `⏳ AI 识别中… ${elapsed}s（多 Agent 分析约 30–90 秒）` : '🔍 开始识别' }}
             </button>
             <p v-if="!canRun && !busy" class="ql__go-hint">请先上传照片或输入至少 2 个字的症状描述</p>
 

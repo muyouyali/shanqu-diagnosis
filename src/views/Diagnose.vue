@@ -145,7 +145,8 @@ const submit = async () => {
   }, 1400)
 
   try {
-    const result = await api.diagnose({
+    // 优先异步任务模式：提交立即返回，后台执行，避免托管网关 60s 掐断（504）
+    const payload = {
       cropId: currentCrop.value.id,
       image: image.value || undefined,
       symptomsText: symptomsText.value || undefined,
@@ -155,7 +156,26 @@ const submit = async () => {
       area: area.value || undefined,
       region: store.region,
       userId: store.recordsUserId
-    })
+    }
+    let result: any = null
+    try {
+      const { taskId } = await api.submitDiagnose(payload)
+      for (let i = 0; i < 250; i++) {
+        await new Promise((r) => setTimeout(r, 1200))
+        const st = await api.pollDiagnoseTask(taskId)
+        if (st.status === 'done') {
+          result = st as any
+          break
+        }
+        if (st.status === 'error') throw new Error(st.error || '诊断失败，请重试')
+      }
+      if (!result) throw new Error('TASK_TIMEOUT')
+    } catch (e: any) {
+      if (e?.message === 'TASK_TIMEOUT') throw new Error('诊断超时，请稍后重试')
+      // 异步接口不可用（纯静态部署）→ 同步调用兜底
+      if (e?.message?.includes('失败') || e?.message?.includes('超时')) throw e
+      result = await api.diagnose(payload)
+    }
 
     store.setLastResult(result, image.value)
     clearInterval(stepTimer)

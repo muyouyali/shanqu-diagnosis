@@ -195,7 +195,7 @@ const runTriageAgent = async ({ cropId, imageBase64, symptomsText, altitude, wea
         user,
         imageBase64,
         temperature: 0.2,
-        maxTokens: 1600
+        maxTokens: 1200
       })
       raw = extractJSON(res.content)
       // 模型正常返回但没识别到病斑（如健康植株/非病害照片）→ results 为空，走降级而非报错
@@ -282,7 +282,7 @@ const runTreatmentAgent = async ({ cropId, diagnosis, altitude, weather, stage }
         user: `${user}\n\n【知识库检索到的防治措施参考】\n${kb.context || '（无）'}`,
         temperature: 0.3,
         jsonMode: true,
-        maxTokens: 2200
+        maxTokens: 1400
       })
       raw = extractJSON(res.content)
     } catch (err) {

@@ -198,7 +198,24 @@ export const api = {
     area?: string
     region?: string
     userId?: string
-  }) => http.post<DiagnoseResponse>('/diagnose', payload).then((r) => r.data),
+  }) =>
+    // 多 Agent 链路（视觉识别 + 用药指导串行）实测可能超过 90s，单独放宽超时
+    http.post<DiagnoseResponse>('/diagnose', payload, { timeout: 300000 }).then((r) => r.data),
+
+  /** 异步提交诊断：立即返回 taskId（托管网关 60s 会掐断长请求，必须走任务模式） */
+  submitDiagnose: (payload: {
+    cropId: string
+    image?: string
+    symptomsText?: string
+    region?: string
+    userId?: string
+  }) => http.post<{ taskId: string }>('/diagnose/submit', payload).then((r) => r.data),
+
+  /** 轮询异步诊断任务结果 */
+  pollDiagnoseTask: (taskId: string) =>
+    http.get<Partial<DiagnoseResponse> & { status: string; error?: string }>(
+      `/diagnose/task/${taskId}`
+    ).then((r) => r.data),
 
   qa: (payload: { question: string; cropId?: string; history?: { role: string; content: string }[] }) =>
     http.post<QAResponse>('/qa', payload).then((r) => r.data),
