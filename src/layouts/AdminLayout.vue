@@ -96,10 +96,24 @@ onMounted(() => {
   min-height: 100dvh;
   /* 与农户端一致的「云岭山地」氛围背景 */
   background:
-    radial-gradient(120% 420px at 50% -60px, rgba(47, 152, 104, 0.10), transparent 70%),
-    radial-gradient(60% 380px at 100% 120px, rgba(112, 196, 152, 0.07), transparent 70%),
-    linear-gradient(180deg, #eef6f1 0%, #f3f8f5 320px, #f4f7f5 100%);
+    radial-gradient(120% 480px at 50% -80px, rgba(47, 152, 104, 0.16), transparent 72%),
+    radial-gradient(60% 420px at 100% 140px, rgba(112, 196, 152, 0.11), transparent 70%),
+    linear-gradient(180deg, #e3f2e9 0%, #ecf5f0 340px, #f2f6f4 100%);
   background-attachment: fixed;
+}
+
+/* 专家端内容区同样铺山峦剪影（与农户端 body::before 同源） */
+.admin::after {
+  content: '';
+  position: fixed;
+  inset: auto 0 0 0;
+  height: 260px;
+  z-index: 0;
+  pointer-events: none;
+  background-repeat: no-repeat;
+  background-position: center bottom;
+  background-size: 100% 100%;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 1440 260'%3E%3Cpath d='M0 260 L0 170 Q200 90 420 160 Q640 225 860 150 Q1080 80 1240 150 Q1360 200 1440 170 L1440 260 Z' fill='rgba(47,152,104,0.08)'/%3E%3Cpath d='M0 260 L0 200 Q180 130 400 185 Q620 240 840 175 Q1060 115 1250 180 Q1370 218 1440 200 L1440 260 Z' fill='rgba(24,79,57,0.07)'/%3E%3C/svg%3E");
 }
 
 /* ===== 侧边栏 ===== */
@@ -220,6 +234,9 @@ onMounted(() => {
   min-width: 0;
   display: flex;
   flex-direction: column;
+  /* 抬到山峦装饰层之上 */
+  position: relative;
+  z-index: 1;
 }
 
 .topbar {

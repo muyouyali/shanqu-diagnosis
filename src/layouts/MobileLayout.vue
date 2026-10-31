@@ -98,7 +98,8 @@ const go = (path: string) => {
   min-height: 100dvh;
   display: flex;
   flex-direction: column;
-  background: var(--c-bg-page);
+  /* 不再铺不透明底色，让全局「云岭山地」背景装饰（body::before）透出 */
+  background: transparent;
 }
 
 .mobile-shell__main {

@@ -131,36 +131,39 @@ body {
   font-size: var(--fs-base);
   line-height: 1.6;
   color: var(--c-text-1);
-  /* 页面底色带绿色氛围：顶部山雾感渐变 + 轻噪点质感 */
-  background:
-    radial-gradient(120% 420px at 50% -60px, rgba(47, 152, 104, 0.10), transparent 70%),
-    radial-gradient(60% 380px at 100% 120px, rgba(112, 196, 152, 0.07), transparent 70%),
-    radial-gradient(60% 380px at 0% 300px, rgba(47, 152, 104, 0.05), transparent 70%),
-    linear-gradient(180deg, #eef6f1 0%, #f3f8f5 320px, #f4f7f5 100%);
+  /* 底色由 ::before 装饰层统一绘制（渐变 + 山峦 + 雾带），保证装饰可见 */
+  background: #f2f6f4;
   background-attachment: fixed;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
   overflow-x: hidden;
 }
 
-/* ===== 全局背景装饰：山峦剪影 + 晨雾（农户端 / 专家端共用氛围） ===== */
+/* ===== 全局背景装饰：晨雾渐变 + 山峦剪影（农户端 / 专家端共用氛围） ===== */
 body::before {
   content: '';
   position: fixed;
   inset: 0;
-  z-index: -2;
+  z-index: -1;
   pointer-events: none;
-  background-repeat: no-repeat, no-repeat, no-repeat;
-  background-position: left bottom, right bottom, center bottom;
-  background-size: min(60vw, 760px) auto, min(52vw, 660px) auto, 100% 100%;
-  /* 远山 / 近山 / 底部雾带 三层剪影，低透明度不干扰阅读 */
+  background-repeat: no-repeat, no-repeat, no-repeat, no-repeat, no-repeat, no-repeat;
+  background-position:
+    50% -80px, 100% 140px, 0% 320px,
+    left bottom, right bottom, center bottom;
+  background-size:
+    120% 480px, 60% 420px, 60% 420px,
+    min(60vw, 760px) auto, min(52vw, 660px) auto, 100% 100%;
+  /* 前 3 层：晨雾渐变；后 3 层：远山 / 近山 / 雾带剪影 */
   background-image:
-    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 760 300'%3E%3Cpath d='M0 300 L0 190 Q90 120 180 165 Q260 200 340 150 Q430 95 520 150 Q610 195 700 140 Q740 118 760 130 L760 300 Z' fill='rgba(47,152,104,0.055)'/%3E%3C/svg%3E"),
-    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 660 240'%3E%3Cpath d='M0 240 L0 150 Q110 70 230 130 Q340 185 450 110 Q560 45 660 120 L660 240 Z' fill='rgba(24,79,57,0.05)'/%3E%3C/svg%3E"),
-    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 1440 260'%3E%3Cpath d='M0 260 L0 170 Q200 90 420 160 Q640 225 860 150 Q1080 80 1240 150 Q1360 200 1440 170 L1440 260 Z' fill='rgba(47,152,104,0.04)'/%3E%3C/svg%3E");
+    radial-gradient(120% 480px at 50% -80px, rgba(47, 152, 104, 0.16), transparent 72%),
+    radial-gradient(60% 420px at 100% 140px, rgba(112, 196, 152, 0.11), transparent 70%),
+    radial-gradient(60% 420px at 0% 320px, rgba(47, 152, 104, 0.08), transparent 70%),
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 760 300'%3E%3Cpath d='M0 300 L0 190 Q90 120 180 165 Q260 200 340 150 Q430 95 520 150 Q610 195 700 140 Q740 118 760 130 L760 300 Z' fill='rgba(47,152,104,0.13)'/%3E%3C/svg%3E"),
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 660 240'%3E%3Cpath d='M0 240 L0 150 Q110 70 230 130 Q340 185 450 110 Q560 45 660 120 L660 240 Z' fill='rgba(24,79,57,0.11)'/%3E%3C/svg%3E"),
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 1440 260'%3E%3Cpath d='M0 260 L0 170 Q200 90 420 160 Q640 225 860 150 Q1080 80 1240 150 Q1360 200 1440 170 L1440 260 Z' fill='rgba(47,152,104,0.09)'/%3E%3C/svg%3E");
 }
 
-/* 顶部晨雾光晕：两端一致的「高原清晨」氛围 */
+/* 页面主体纵向渐变（在内容之下、装饰之上不再需要，保留淡色即可） */
 body::after {
   content: '';
   position: fixed;
@@ -168,11 +171,11 @@ body::after {
   left: 50%;
   transform: translateX(-50%);
   width: min(1100px, 92vw);
-  height: 420px;
+  height: 460px;
   z-index: -1;
   pointer-events: none;
-  background: radial-gradient(50% 60% at 50% 40%, rgba(143, 214, 176, 0.14), transparent 70%);
-  filter: blur(6px);
+  background: radial-gradient(50% 60% at 50% 40%, rgba(143, 214, 176, 0.22), transparent 72%);
+  filter: blur(8px);
 }
 
 #app {
