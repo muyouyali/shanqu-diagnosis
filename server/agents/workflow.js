@@ -40,12 +40,12 @@ const clamp = (n, min, max) => Math.min(Math.max(n, min), max)
 /**
  * 校验并规范化初诊结果（防御模型输出漂移）
  */
-const normalizeDiagnosis = (raw, cropId) => {
+const normalizeDiagnosis = (raw, cropId, customCrop) => {
   if (!raw || typeof raw !== 'object') return null
 
-  // auto 模式：不限定单一作物，校验范围放宽到全知识库（避免蓝莓照片被硬套成三七病害）
+  // auto / 自定义作物模式：不限定单一作物，校验范围放宽到全知识库（避免蓝莓照片被硬套成三七病害）
   const validNames = new Set(
-    cropId === 'auto'
+    cropId === 'auto' || customCrop
       ? DISEASES.map((d) => d.name)
       : getDiseasesByCrop(cropId).map((d) => d.name)
   )
@@ -173,7 +173,7 @@ export const validateChemicalPlan = (plan, cropId) => {
 }
 
 // ==================== Agent 1：初诊 ====================
-const runTriageAgent = async ({ cropId, imageBase64, symptomsText, altitude, weather, stage, area, history }) => {
+const runTriageAgent = async ({ cropId, imageBase64, symptomsText, altitude, weather, stage, area, history, customCrop }) => {
   const { system, user } = buildDiagnosisPrompt({
     cropId,
     symptomsText,
@@ -181,7 +181,8 @@ const runTriageAgent = async ({ cropId, imageBase64, symptomsText, altitude, wea
     weather,
     stage,
     area,
-    history
+    history,
+    customCrop
   })
 
   let raw = null
@@ -236,7 +237,7 @@ const runTriageAgent = async ({ cropId, imageBase64, symptomsText, altitude, wea
     }
   }
 
-  const diagnosis = normalizeDiagnosis(raw, cropId)
+  const diagnosis = normalizeDiagnosis(raw, cropId, customCrop)
   if (!diagnosis) {
     throw new AIServiceError('模型输出格式异常', 'PARSE_FAILED', '模型未返回符合契约的诊断结果')
   }
@@ -419,7 +420,7 @@ export const runDiagnosisWorkflow = async (input) => {
 
   return {
     cropId: resolvedCropId,
-    cropName: CROP_NAME[resolvedCropId] || 'AI 自主识别',
+    cropName: input.customCrop || CROP_NAME[resolvedCropId] || 'AI 自主识别',
     diagnosis: triage.diagnosis,
     gate,
     treatment: treatment.treatment,

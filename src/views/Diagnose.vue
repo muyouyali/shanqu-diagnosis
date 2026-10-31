@@ -23,7 +23,7 @@ const weather = ref('')
 const stage = ref('')
 const area = ref('')
 const submitting = ref(false)
-const showExtra = ref(false)
+const showExtra = ref(true)
 const inputRef = ref<HTMLInputElement | null>(null)
 
 const weatherOptions = ['连续降雨', '阴雨连绵', '晴转多云', '高温干旱', '晴', '霜冻']
@@ -47,6 +47,10 @@ const FLOW_DESC: Record<string, string> = {
 }
 
 const currentCrop = computed(() => store.selectedCrop)
+
+/** 自定义作物：知识库未收录的作物也能诊断（走 AI 自由识别 + 农户自填作物名） */
+const isCustomCrop = ref(false)
+const customCropName = ref('')
 
 const canSubmit = computed(() => Boolean(image.value || symptomsText.value.trim()))
 
@@ -131,7 +135,11 @@ const resetForm = () => {
 
 const submit = async () => {
   if (!canSubmit.value || submitting.value) return
-  if (!currentCrop.value) {
+  if (isCustomCrop.value && !customCropName.value.trim()) {
+    store.showToast('请输入作物名称', 'error')
+    return
+  }
+  if (!isCustomCrop.value && !currentCrop.value) {
     store.showToast('请先选择作物', 'error')
     return
   }
@@ -147,7 +155,8 @@ const submit = async () => {
   try {
     // 优先异步任务模式：提交立即返回，后台执行，避免托管网关 60s 掐断（504）
     const payload = {
-      cropId: currentCrop.value.id,
+      cropId: isCustomCrop.value ? 'auto' : currentCrop.value?.id || 'auto',
+      customCrop: isCustomCrop.value ? customCropName.value.trim() || undefined : undefined,
       image: image.value || undefined,
       symptomsText: symptomsText.value || undefined,
       altitude: altitude.value || undefined,
@@ -290,6 +299,29 @@ const submit = async () => {
           <p v-if="showRemote" class="remote-tip">
             以下作物在 {{ store.cropsProvince }} 非主产区，知识库已收录诊断模型，可按需选择
           </p>
+        </div>
+
+        <!-- 自定义作物：不在列表中的作物也能诊断 -->
+        <div class="remote-wrap">
+          <button
+            class="crop-chip"
+            :class="{ 'is-active': isCustomCrop }"
+            @click="isCustomCrop = !isCustomCrop"
+          >
+            <span class="crop-chip__emoji">✏️</span>
+            <span>其他作物</span>
+          </button>
+          <div v-if="isCustomCrop" class="field" style="margin-top: 10px">
+            <input
+              v-model="customCropName"
+              class="input"
+              placeholder="输入作物名称，如：辣椒、玉米、百合…"
+              maxlength="12"
+            />
+            <p class="remote-tip">
+              知识库未收录的作物也能诊断：AI 将结合您的照片与通用植保知识判断，结果中会标注可靠性
+            </p>
+          </div>
         </div>
       </section>
 
@@ -447,7 +479,7 @@ const submit = async () => {
             <AppIcon name="leaf" :size="26" :stroke="1.8" />
           </div>
           <h3 class="progress-card__title">多 Agent 正在协同诊断</h3>
-          <p class="progress-card__sub">{{ currentCrop?.name }} · 请稍候</p>
+          <p class="progress-card__sub">{{ isCustomCrop ? customCropName || '自定义作物' : currentCrop?.name }} · 请稍候</p>
 
           <div class="steps">
             <div

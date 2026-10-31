@@ -287,7 +287,7 @@ export const api = {
 
   /** 流式问答（SSE）：onEvent 回调 { sources, delta, done } */
   qaStream: async (
-    payload: { question: string; cropId?: string },
+    payload: { question: string; cropId?: string; customCrop?: string },
     onEvent: (type: 'sources' | 'delta' | 'done', data: any) => void
   ) => {
     const resp = await fetch('/api/qa/stream', {

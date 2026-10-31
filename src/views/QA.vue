@@ -26,6 +26,10 @@ const regionCrops = computed(() => store.localCrops.filter((c) => c.diagnosable 
 const remoteCrops = computed(() => store.otherCrops.filter((c) => c.diagnosable !== false))
 const showRemote = ref(false)
 
+/** 自定义作物：不在列表中的作物也能问答（AI 结合通用植保知识作答） */
+const customCropMode = ref(false)
+const customCropName = ref('')
+
 const quickQuestions = computed(() => {
   const map: Record<string, string[]> = {
     sanqi: ['三七根腐病怎么防？', '三七叶子发黄是缺素还是病了？', '雨季三七要注意什么？'],
@@ -46,7 +50,7 @@ const scrollToBottom = async () => {
 }
 
 const WELCOME =
-  '您好！我是云岭农诊的农技问答助手。\n\n关于三七、蓝莓、柑橘、茶叶、天麻、核桃的病虫害、用药、施肥问题，您都可以用大白话问我。我的回答都来自植保手册和技术资料，不会乱编，回答过程逐字流式呈现。'
+  '您好！我是云岭农诊的农技问答助手。\n\n关于三七、蓝莓、柑橘、茶叶、天麻、核桃的病虫害、用药、施肥问题，您都可以用大白话问我。其他作物（如辣椒、玉米、百合等）也能问——点上方「✏️ 其他作物」填一下作物名即可。回答都来自植保手册和技术资料，不会乱编，回答过程逐字流式呈现。'
 
 const HISTORY_KEY = 'ylnz_qa_history'
 const saveHistory = () => {
@@ -109,17 +113,24 @@ const send = async (text?: string) => {
   }
 
   try {
-    await api.qaStream({ question: q, cropId: store.selectedCropId }, (type, data) => {
-      if (type === 'sources') {
-        placeholder.sources = data.sources
-      } else if (type === 'delta') {
-        full += data.delta
-        placeholder.content = full
-        scrollToBottom()
-      } else if (type === 'done') {
-        finalize({ usedFallback: data.usedFallback, streaming: false })
+    await api.qaStream(
+      {
+        question: q,
+        cropId: customCropMode.value ? undefined : store.selectedCropId,
+        customCrop: customCropMode.value ? customCropName.value.trim() || '通用' : undefined
+      },
+      (type, data) => {
+        if (type === 'sources') {
+          placeholder.sources = data.sources
+        } else if (type === 'delta') {
+          full += data.delta
+          placeholder.content = full
+          scrollToBottom()
+        } else if (type === 'done') {
+          finalize({ usedFallback: data.usedFallback, streaming: false })
+        }
       }
-    })
+    )
     // 兜底：若服务端未发 done（连接中断）
     if (messages.value.indexOf(placeholder) !== -1) {
       finalize({ streaming: false })
@@ -336,11 +347,29 @@ const RAG_STEPS = [
           其他地区 {{ remoteCrops.length }}
           <AppIcon :name="showRemote ? 'chevron-up' : 'chevron-down'" :size="11" />
         </button>
+        <button
+          class="crop-switch__more"
+          :class="{ 'is-open': customCropMode }"
+          @click="customCropMode = !customCropMode"
+        >
+          ✏️ 其他作物
+        </button>
       </div>
       <button v-if="messages.length > 1" class="crop-switch-bar__clear" @click="clearChat">
         <AppIcon name="x" :size="12" />
         清空会话
       </button>
+    </div>
+
+    <!-- 自定义作物输入 -->
+    <div v-if="customCropMode" class="crop-switch crop-switch--remote">
+      <input
+        v-model="customCropName"
+        class="input"
+        style="flex: 1; min-width: 0"
+        placeholder="输入作物名称（如：辣椒、玉米、百合），AI 可回答任意作物问题"
+        maxlength="12"
+      />
     </div>
 
     <div v-if="showRemote" class="crop-switch crop-switch--remote">

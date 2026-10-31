@@ -81,6 +81,31 @@ const markRecovery = async (r: RecordItem, status: 'improved' | 'stable' | 'wors
   }
 }
 
+/** 删除单条诊断记录（带二次确认） */
+const removeRecord = async (r: RecordItem) => {
+  if (!window.confirm(`确定删除「${r.diagnosis?.results?.[0]?.name || '未知'}」这条诊断记录吗？删除后不可恢复。`)) return
+  try {
+    await api.deleteRecord(r.id)
+    records.value = records.value.filter((x) => x.id !== r.id)
+    store.showToast('已删除该记录', 'success')
+  } catch (err) {
+    store.showToast((err as Error).message || '删除失败', 'error')
+  }
+}
+
+/** 清空全部诊断记录（带二次确认） */
+const clearRecords = async () => {
+  if (!records.value.length) return
+  if (!window.confirm(`确定清空全部 ${records.value.length} 条诊断记录吗？删除后不可恢复。`)) return
+  try {
+    await Promise.all(records.value.map((r) => api.deleteRecord(r.id).catch(() => null)))
+    records.value = []
+    store.showToast('已清空全部记录', 'success')
+  } catch (err) {
+    store.showToast((err as Error).message || '删除失败', 'error')
+  }
+}
+
 const riskMeta: Record<string, { label: string; color: string }> = {
   high: { label: '高风险', color: 'var(--c-danger)' },
   medium: { label: '中等风险', color: 'var(--c-accent-500)' },
@@ -137,6 +162,13 @@ const fmtDate = (iso: string) => {
         @click="activeTab = 'review'; !review && runReview()"
       >
         <AppIcon name="sparkle" :size="15" /> AI 复盘
+      </button>
+      <button
+        v-if="records.length"
+        class="tabs__item tabs__item--danger"
+        @click="clearRecords"
+      >
+        <AppIcon name="x" :size="15" /> 清空全部
       </button>
     </nav>
 
@@ -201,7 +233,7 @@ const fmtDate = (iso: string) => {
             <AppIcon name="arrow-right" :size="15" class="record__arrow" />
           </button>
 
-          <!-- 恢复情况标记 -->
+          <!-- 恢复情况标记 + 记录管理 -->
           <div class="record__foot">
             <span class="record__foot-label">现在怎么样了</span>
             <div class="record__recovery">
@@ -215,6 +247,7 @@ const fmtDate = (iso: string) => {
               >
                 {{ m.label }}
               </button>
+              <button class="recovery-btn recovery-btn--danger" @click="removeRecord(r)">🗑 删除</button>
             </div>
           </div>
         </div>
@@ -361,6 +394,12 @@ const fmtDate = (iso: string) => {
   font-weight: 600;
   color: var(--c-text-3);
   transition: all var(--dur-base) var(--ease-out);
+}
+
+.tabs__item--danger {
+  flex: 0 0 auto;
+  padding: 0 12px;
+  color: var(--c-danger);
 }
 
 .tabs__item.is-active {
@@ -575,6 +614,10 @@ const fmtDate = (iso: string) => {
 .recovery-btn.is-active {
   border-color: currentColor;
   font-weight: 600;
+}
+
+.recovery-btn--danger {
+  color: var(--c-danger);
 }
 
 /* 复盘 */

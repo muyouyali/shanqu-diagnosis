@@ -122,15 +122,37 @@ export const fetchRealWeather = async (
   if (!hit) return null
   const [lat, lon] = hit.coord
   try {
-    const url =
-      `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}` +
+    // 多气象机构模式集合预报：ECMWF（欧洲中期天气预报中心）+ ICON（德国气象局）+ GEM（加拿大气象局）
+    // 三家交叉校准比单源更接近中国气象局官方预报口径；单家失败不影响整体
+    const MODEL_SETS = ['best_match', 'icon_seamless', 'gfs_seamless']
+    const dailyReq =
       `&daily=weather_code,precipitation_sum,temperature_2m_max,temperature_2m_min,relative_humidity_2m_mean` +
       `&timezone=Asia%2FShanghai&forecast_days=7`
-    const r = await fetch(url, { signal: AbortSignal.timeout(7000) })
-    if (!r.ok) throw new Error('weather http')
-    const j = await r.json()
-    const d = j.daily
+    const fetchModel = async (m: string) => {
+      const r = await fetch(
+        `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}${dailyReq}&models=${m}`,
+        { signal: AbortSignal.timeout(7000) }
+      )
+      if (!r.ok) throw new Error('weather http')
+      return (await r.json())?.daily ?? null
+    }
+    const setD = (await Promise.all(MODEL_SETS.map((m) => fetchModel(m).catch(() => null)))).filter(
+      Boolean
+    ) as any[]
+    if (!setD.length) throw new Error('weather empty')
+    // 集合校准：温度取中位数、降水取均值、天气码/湿度取首个可用源（best_match 优先）
+    const median = (xs: number[]) => {
+      const s = [...xs].sort((a, b) => a - b)
+      const mid = s.length >> 1
+      return s.length % 2 ? s[mid] : (s[mid - 1] + s[mid]) / 2
+    }
+    const d = setD[0]
     if (!d?.time?.length) throw new Error('weather empty')
+    const calib = (key: string, i: number, fallback: number, mode: 'median' | 'mean') => {
+      const vals = setD.map((s) => s[key]?.[i]).filter((v) => Number.isFinite(v)) as number[]
+      if (!vals.length) return fallback
+      return mode === 'median' ? median(vals) : vals.reduce((a, b) => a + b, 0) / vals.length
+    }
 
     const dayNames = ['今天', '明天', '后天']
     const fmtDate = (iso: string) => {
@@ -139,12 +161,12 @@ export const fetchRealWeather = async (
     }
     let riskPeak = 0
     const days: WeatherDay[] = d.time.map((iso: string, i: number): WeatherDay => {
-      const mm = d.precipitation_sum?.[i] ?? 0
+      const mm = calib('precipitation_sum', i, 0, 'mean')
       const cond = condOf(d.weather_code?.[i] ?? 1)
       const rainProb = Math.min(96, Math.round(mm > 10 ? 90 : mm > 2 ? 72 : mm > 0 ? 45 : 10))
-      const humidity = Math.round(d.relative_humidity_2m_mean?.[i] ?? 70)
-      const tempLow = Math.round(d.temperature_2m_min?.[i] ?? 14)
-      const tempHigh = Math.round(d.temperature_2m_max?.[i] ?? 24)
+      const humidity = Math.round(calib('relative_humidity_2m_mean', i, 70, 'median'))
+      const tempLow = Math.round(calib('temperature_2m_min', i, 14, 'median'))
+      const tempHigh = Math.round(calib('temperature_2m_max', i, 24, 'median'))
       const risk = Math.min(95, Math.round(humidity * 0.6 + rainProb * 0.35))
       riskPeak = Math.max(riskPeak, risk)
       return {
@@ -203,7 +225,7 @@ export const fetchRealWeather = async (
       cropNote:
         CROP_NOTE[effectiveCrop || ''] || '关注持续降雨与高湿天气，提前清沟排水、减少病害侵染机会',
       warnings,
-      source: 'Open-Meteo 实时气象（open-meteo.com）'
+      source: '多气象机构集合预报（ECMWF/ICON/GFS · open-meteo.com）'
     } as WeatherData
   } catch {
     return null

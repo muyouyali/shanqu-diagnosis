@@ -309,8 +309,8 @@ setInterval(() => {
 }, 60 * 1000).unref()
 
 app.post('/api/diagnose/submit', (req, res) => {
-  const { cropId, image, symptomsText, region, userId } = req.body || {}
-  if (cropId !== 'auto' && (!cropId || !CROP_NAME[cropId])) {
+  const { cropId, image, symptomsText, region, userId, customCrop } = req.body || {}
+  if (cropId !== 'auto' && !customCrop && (!cropId || !CROP_NAME[cropId])) {
     return res.status(400).json({ error: '请选择作物' })
   }
   if (!image && !symptomsText) {
@@ -330,7 +330,8 @@ app.post('/api/diagnose/submit', (req, res) => {
         altitude: body.altitude,
         weather: body.weather,
         stage: body.stage,
-        area: body.area
+        area: body.area,
+        customCrop: body.customCrop
       })
       const record = store.createRecord({
         userId: body.userId || 'guest',
@@ -376,10 +377,10 @@ app.get('/api/diagnose/task/:id', (req, res) => {
 })
 
 app.post('/api/diagnose', async (req, res) => {
-  const { cropId, image, symptomsText, altitude, weather, stage, area, region, userId } = req.body || {}
+  const { cropId, image, symptomsText, altitude, weather, stage, area, region, userId, customCrop } = req.body || {}
 
-  // cropId 可为 'auto'：AI 自由识别作物种类（图文速查跨作物识别用）
-  if (cropId !== 'auto' && (!cropId || !CROP_NAME[cropId])) {
+  // cropId 可为 'auto'（AI 自由识别）或自定义作物（customCrop，知识库未必收录）
+  if (cropId !== 'auto' && !customCrop && (!cropId || !CROP_NAME[cropId])) {
     return res.status(400).json({ error: '请选择作物' })
   }
   if (!image && !symptomsText) {
@@ -394,7 +395,8 @@ app.post('/api/diagnose', async (req, res) => {
       altitude,
       weather,
       stage,
-      area
+      area,
+      customCrop
     })
 
     // 落库（含图片会过大，故在记录中保留缩略图可选的逻辑：此处仅存元信息）
@@ -504,7 +506,7 @@ app.post('/api/advisory', async (req, res) => {
 // ==================== 流式问答（SSE，打字机效果） ====================
 
 app.post('/api/qa/stream', async (req, res) => {
-  const { question, cropId, region } = req.body || {}
+  const { question, cropId, region, customCrop } = req.body || {}
   if (!question || !String(question).trim()) {
     return res.status(400).json({ error: '请输入问题' })
   }
@@ -538,7 +540,8 @@ app.post('/api/qa/stream', async (req, res) => {
 
   if (isConfigured()) {
     try {
-      const cropName = cropId ? CROP_NAME[cropId] : ''
+      // 支持自定义作物名：知识库未收录的作物也能咨询
+      const cropName = customCrop || (cropId ? CROP_NAME[cropId] : '')
       const { system, user } = buildQAPrompt({
         question: String(question),
         context: kb.context,
@@ -615,13 +618,14 @@ app.post('/api/qa/stream', async (req, res) => {
 // ==================== RAG 知识库问答（非流式，兼容保留） ====================
 
 app.post('/api/qa', async (req, res) => {
-  const { question, cropId, history } = req.body || {}
+  const { question, cropId, history, customCrop } = req.body || {}
   if (!question || !String(question).trim()) {
     return res.status(400).json({ error: '请输入问题' })
   }
 
   const kb = resolveKbContext(question, cropId || null)
-  const cropName = cropId ? CROP_NAME[cropId] : ''
+  // 支持自定义作物名（知识库未收录的作物也能咨询，AI 结合通用植保知识作答）
+  const cropName = customCrop || (cropId ? CROP_NAME[cropId] : '')
   const { system, user } = buildQAPrompt({
     question,
     context: kb.context,

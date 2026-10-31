@@ -47,14 +47,15 @@ export const DIAGNOSIS_SYSTEM = `你是"云岭农诊"系统的初诊智能体，
 【语言风格】
 用农户听得懂的话描述症状，避免堆砌专业术语；必要术语首次出现时用括号解释。`
 
-export const buildDiagnosisPrompt = ({ cropId, symptomsText, altitude, weather, stage, area, history }) => {
-  const isAuto = cropId === 'auto'
-  const cropName = isAuto ? 'AI 自主识别' : (CROP_NAME[cropId] || '未知作物')
-  const candidates = buildCandidateList(isAuto ? 'auto' : cropId)
+export const buildDiagnosisPrompt = ({ cropId, symptomsText, altitude, weather, stage, area, history, customCrop }) => {
+  const isAuto = cropId === 'auto' || Boolean(customCrop)
+  // 自定义作物：农户自己输入的作物名（如玉米、辣椒），知识库未必收录，AI 需结合通用植保知识判断
+  const cropName = customCrop || (isAuto ? 'AI 自主识别' : (CROP_NAME[cropId] || '未知作物'))
+  const candidates = customCrop ? buildCandidateList('auto') : buildCandidateList(isAuto ? 'auto' : cropId)
 
   const contextLines = [
     isAuto
-      ? '作物：未指定（请先根据照片判断作物种类，如蓝莓、三七、柑橘等，再判断病害）'
+      ? `作物：${cropName}${customCrop ? '（农户自填，优先按该作物判断病害；若确非该作物，先说明再判断）' : '（未指定，请先根据照片判断作物种类，如蓝莓、三七、柑橘等，再判断病害）'}`
       : `作物：${cropName}`,
     altitude ? `种植海拔：${altitude}` : null,
     weather ? `近期天气：${weather}` : null,
@@ -66,7 +67,11 @@ export const buildDiagnosisPrompt = ({ cropId, symptomsText, altitude, weather, 
     .filter(Boolean)
     .join('\n')
 
-  const autoNote = isAuto
+  const autoNote = customCrop
+    ? `【重要 · 自定义作物模式】
+农户自填作物为「${customCrop}」。请优先按该作物判断病害；若知识库候选中收录了该作物病害，用规范名；若未收录，结合通用植保知识给出规范病害名，但必须如实降低置信度（≤0.4）并在 differential 中说明"知识库暂未收录该作物病害，结论基于通用植保知识"。
+若是生理性问题（日灼、药害、缺素），在 observations 中说明，results 可以为空。\n`
+    : isAuto
     ? `【重要 · 自由识别模式】
 本次未指定作物。请先根据照片特征判断作物种类（结合农户所在地区为云南，优先考虑：三七、蓝莓、柑橘、石榴、核桃、天麻、茶树、咖啡、魔芋、花椒、苹果、马铃薯等云南山地作物），再给出该作物的病害结论。
 病害名称优先使用下方"全知识库候选病害"中的规范名称；若照片中的作物/病害确实不在库中，可给出规范病害名但必须如实降低置信度（≤0.4）并在 differential 中说明"知识库暂未收录该作物病害"。
