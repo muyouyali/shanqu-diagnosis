@@ -151,16 +151,16 @@ body::before {
   inset: 0;
   z-index: -1;
   pointer-events: none;
-  /* 第一层：白色遮罩（顶部半透 → 中部浓以保可读 → 底部又透出山景）；第二层：真实晨雾群山照片 */
+  /* 第一层：白色遮罩（顶部半透 → 中部浓以保可读 → 底部又透出山景）；第二层：定制梯田晨光照片 */
   background:
     linear-gradient(
       180deg,
-      rgba(240, 249, 244, 0.50) 0%,
-      rgba(245, 250, 247, 0.86) 30%,
-      rgba(247, 251, 249, 0.93) 55%,
-      rgba(244, 250, 246, 0.80) 100%
+      rgba(240, 249, 244, 0.42) 0%,
+      rgba(245, 250, 247, 0.82) 30%,
+      rgba(247, 251, 249, 0.9) 55%,
+      rgba(240, 249, 244, 0.72) 100%
     ),
-    url('/media/banners/b39686331_wide.jpg') center bottom / cover no-repeat;
+    url('/media/bg-yunling.jpg') center 30% / cover no-repeat;
   background-attachment: fixed, fixed;
 }
 
