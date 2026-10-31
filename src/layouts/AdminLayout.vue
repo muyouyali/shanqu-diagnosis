@@ -94,7 +94,12 @@ onMounted(() => {
 .admin {
   display: flex;
   min-height: 100dvh;
-  background: var(--c-bg-page);
+  /* 与农户端一致的「云岭山地」氛围背景 */
+  background:
+    radial-gradient(120% 420px at 50% -60px, rgba(47, 152, 104, 0.10), transparent 70%),
+    radial-gradient(60% 380px at 100% 120px, rgba(112, 196, 152, 0.07), transparent 70%),
+    linear-gradient(180deg, #eef6f1 0%, #f3f8f5 320px, #f4f7f5 100%);
+  background-attachment: fixed;
 }
 
 /* ===== 侧边栏 ===== */
@@ -223,12 +228,26 @@ onMounted(() => {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  background: rgba(255, 255, 255, 0.8);
-  backdrop-filter: blur(16px);
-  border-bottom: 1px solid var(--c-line-soft);
+  background: linear-gradient(180deg, rgba(240, 249, 244, 0.88), rgba(255, 255, 255, 0.78));
+  backdrop-filter: saturate(170%) blur(18px);
+  -webkit-backdrop-filter: saturate(170%) blur(18px);
+  border-bottom: 1px solid rgba(47, 152, 104, 0.12);
+  box-shadow: 0 2px 14px rgba(24, 68, 48, 0.04);
   position: sticky;
   top: 0;
   z-index: 20;
+}
+
+/* 顶栏底部品牌色渐变细线（与农户端导航一致） */
+.topbar::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: -1px;
+  height: 2px;
+  background: linear-gradient(90deg, transparent, rgba(47, 152, 104, 0.3) 18%, rgba(112, 196, 152, 0.45) 50%, rgba(47, 152, 104, 0.3) 82%, transparent);
+  pointer-events: none;
 }
 
 .topbar__left {
