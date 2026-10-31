@@ -131,39 +131,38 @@ body {
   font-size: var(--fs-base);
   line-height: 1.6;
   color: var(--c-text-1);
-  /* 底色由 ::before 装饰层统一绘制（渐变 + 山峦 + 雾带），保证装饰可见 */
-  background: #f2f6f4;
-  background-attachment: fixed;
+  /* 背景统一由 ::before 装饰层绘制（真实山景 + 遮罩），body 保持透明避免遮挡 */
+  background: transparent;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
   overflow-x: hidden;
 }
 
-/* ===== 全局背景装饰：晨雾渐变 + 山峦剪影（农户端 / 专家端共用氛围） ===== */
+html {
+  background: #eef4f0;
+}
+
+/* ===== 全局背景装饰：真实山景照片 + 渐变遮罩（农户端 / 专家端共用氛围） ===== */
 body::before {
   content: '';
   position: fixed;
   inset: 0;
   z-index: -1;
   pointer-events: none;
-  background-repeat: no-repeat, no-repeat, no-repeat, no-repeat, no-repeat, no-repeat;
-  background-position:
-    50% -80px, 100% 140px, 0% 320px,
-    left bottom, right bottom, center bottom;
-  background-size:
-    120% 480px, 60% 420px, 60% 420px,
-    min(60vw, 760px) auto, min(52vw, 660px) auto, 100% 100%;
-  /* 前 3 层：晨雾渐变；后 3 层：远山 / 近山 / 雾带剪影 */
-  background-image:
-    radial-gradient(120% 480px at 50% -80px, rgba(47, 152, 104, 0.16), transparent 72%),
-    radial-gradient(60% 420px at 100% 140px, rgba(112, 196, 152, 0.11), transparent 70%),
-    radial-gradient(60% 420px at 0% 320px, rgba(47, 152, 104, 0.08), transparent 70%),
-    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 760 300'%3E%3Cpath d='M0 300 L0 190 Q90 120 180 165 Q260 200 340 150 Q430 95 520 150 Q610 195 700 140 Q740 118 760 130 L760 300 Z' fill='rgba(47,152,104,0.13)'/%3E%3C/svg%3E"),
-    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 660 240'%3E%3Cpath d='M0 240 L0 150 Q110 70 230 130 Q340 185 450 110 Q560 45 660 120 L660 240 Z' fill='rgba(24,79,57,0.11)'/%3E%3C/svg%3E"),
-    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 1440 260'%3E%3Cpath d='M0 260 L0 170 Q200 90 420 160 Q640 225 860 150 Q1080 80 1240 150 Q1360 200 1440 170 L1440 260 Z' fill='rgba(47,152,104,0.09)'/%3E%3C/svg%3E");
+  /* 第一层：白色遮罩（顶部半透 → 中部浓以保可读 → 底部又透出山景）；第二层：真实晨雾群山照片 */
+  background:
+    linear-gradient(
+      180deg,
+      rgba(240, 249, 244, 0.50) 0%,
+      rgba(245, 250, 247, 0.86) 30%,
+      rgba(247, 251, 249, 0.93) 55%,
+      rgba(244, 250, 246, 0.80) 100%
+    ),
+    url('/media/banners/b39686331_wide.jpg') center bottom / cover no-repeat;
+  background-attachment: fixed, fixed;
 }
 
-/* 页面主体纵向渐变（在内容之下、装饰之上不再需要，保留淡色即可） */
+/* 顶部晨雾光晕：两端一致的「高原清晨」氛围 */
 body::after {
   content: '';
   position: fixed;
@@ -174,7 +173,7 @@ body::after {
   height: 460px;
   z-index: -1;
   pointer-events: none;
-  background: radial-gradient(50% 60% at 50% 40%, rgba(143, 214, 176, 0.22), transparent 72%);
+  background: radial-gradient(50% 60% at 50% 40%, rgba(143, 214, 176, 0.20), transparent 72%);
   filter: blur(8px);
 }
 
