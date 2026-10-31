@@ -39,6 +39,15 @@ const quickQuestions = computed(() => {
     tianma: ['天麻烂麻是什么原因？', '天麻窖里积水怎么处理？', '麻种下地前怎么消毒？'],
     walnut: ['核桃黑果是病还是虫？', '核桃枯枝是什么病？', '举肢蛾什么时候打药？']
   }
+  // 自定义作物 → 通用植保建议，并把作物名带进去
+  if (customCropMode.value) {
+    const name = customCropName.value.trim()
+    return [
+      name ? `${name}常见病虫害有哪些？` : '常见作物病害怎么预防？',
+      name ? `${name}叶子发黄是什么原因？` : '叶片发黄是缺素还是病了？',
+      name ? `${name}打什么药，安全间隔期多久？` : '雨季病害防控要注意什么？'
+    ]
+  }
   return map[store.selectedCropId] || map.sanqi
 })
 

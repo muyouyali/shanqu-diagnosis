@@ -189,6 +189,9 @@ watch(() => store.selectedCropId, load)
       <AppIcon name="search" :size="30" />
       <p>没有找到相关病害</p>
       <small>换个关键词试试，或切换作物</small>
+      <button class="empty__ask" @click="router.push('/qa')">
+        💬 去农技问答问其他作物（AI 支持任意作物）
+      </button>
     </div>
 
     <div v-else class="disease-list">
@@ -579,6 +582,17 @@ watch(() => store.selectedCropId, load)
   padding: 60px 20px;
   text-align: center;
   color: var(--c-text-4);
+}
+
+.empty__ask {
+  margin-top: 14px;
+  padding: 8px 16px;
+  border-radius: var(--r-full);
+  background: var(--c-primary-50, #eef7f0);
+  border: 1px solid var(--c-primary-200, #bfe0c8);
+  color: var(--c-primary-700);
+  font-size: 12.5px;
+  font-weight: 600;
 }
 
 .empty :deep(.icon) {
