@@ -1692,7 +1692,7 @@ const hueOf = (name: string) => {
     border-radius: 0 0 40px 40px;
   }
   .hero__title {
-    font-size: 36px;
+    font-size: 42px;
   }
   .hero__content {
     padding-top: 32px;
@@ -1748,7 +1748,7 @@ const hueOf = (name: string) => {
     padding-top: 44px;
   }
   .hero__title {
-    font-size: 40px;
+    font-size: 46px;
     margin-bottom: 12px;
   }
   .hero__desc {
