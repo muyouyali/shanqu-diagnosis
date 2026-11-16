@@ -829,12 +829,28 @@ export const deleteCropSubmission = (id) => {
   return true
 }
 
+/** 州市名归一化：去掉 行政区后缀 与 自治 前缀，便于「红河州」vs「红河州屏边县」类模糊匹配 */
+const normRegion = (s = '') =>
+  String(s).replace(/自治州|自治县|地区|州|市|县|区/g, '')
+
+/** 州市匹配：归一化后互相包含即视为同一产区 */
+const regionMatch = (a, b) => {
+  if (!a || !b) return false
+  const x = normRegion(a)
+  const y = normRegion(b)
+  return !!x && !!y && (x.includes(y) || y.includes(x))
+}
+
 /** 已通过审核的作物（进入地区作物百科） */
-export const listApprovedCrops = (province) => {
+export const listApprovedCrops = (province, region) => {
   const db = load()
-  return db.cropSubmissions.filter(
-    (r) => r.status === 'approved' && (!province || r.province === province)
-  )
+  return db.cropSubmissions.filter((r) => {
+    if (r.status !== 'approved') return false
+    if (province && r.province !== province) return false
+    // 州市级过滤：填了州市的共建作物只在对应产区展示，避免「选了 A 市却出现 B 市特产」
+    if (region && r.city && !regionMatch(r.city, region)) return false
+    return true
+  })
 }
 
 // ==================== 病害样本共建（农户提交 → 专家审核 → 并入知识库） ====================
