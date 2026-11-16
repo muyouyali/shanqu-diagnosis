@@ -819,8 +819,8 @@ onBeforeUnmount(() => {
                   </div>
                   <div class="qr__scan">{{ scanning ? '✓ 已授权' : '请使用微信扫一扫' }}</div>
                 </div>
-                <p class="om__note">
-                  当前为演示版本，微信登录采用模拟方式，点击下方按钮即可完成登录体验 ✅
+                <p class="om__note om__note--center">
+                  当前为演示版本，微信登录采用模拟体验模式
                 </p>
                 <AppButton block variant="primary" :loading="scanning" @click="oauthSubmit">
                   {{ scanning ? '✓ 授权成功，正在进入…' : '模拟微信扫码成功' }}
@@ -878,7 +878,7 @@ onBeforeUnmount(() => {
               <AppButton block variant="primary" :loading="quickBusy" :disabled="!canQuick" @click="quickSubmit">
                 {{ quickBusy ? '⏳ 处理中…' : '登录 / 注册' }}
               </AppButton>
-              <p class="om__note">未注册的{{ otherOpen === 'email' ? '邮箱' : '手机号' }}将自动创建账号，无需单独注册流程</p>
+              <p class="om__note om__note--center">未注册的手机号将自动创建账号，无需单独注册流程</p>
             </div>
           </div>
         </div>
@@ -1654,6 +1654,12 @@ onBeforeUnmount(() => {
   color: rgba(255, 255, 255, 0.65);
   line-height: 1.7;
   margin-bottom: 12px;
+}
+
+.om__note--center {
+  text-align: center;
+  margin-left: auto;
+  margin-right: auto;
 }
 
 .wx-iframe {

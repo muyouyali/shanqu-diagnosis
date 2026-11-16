@@ -264,7 +264,7 @@ const hueOf = (name: string) => {
         </h1>
         <p class="hero__desc">
           拍张照片，AI 农技员帮您判断病虫害<br />
-          针对云南山地作物专门优化
+          以云南山地作物为核心样本优化 · 支持全国多地作物病虫害诊断
         </p>
 
         <button class="hero__cta" @click="goDiagnose()">
