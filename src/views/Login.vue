@@ -333,7 +333,17 @@ const startScan = async () => {
     const qr = await api.scanQr()
     if (otherOpen.value !== 'scan') return
     scanTicket.value = qr.ticket
-    scanImg.value = qr.qrDataUrl
+    /* 前端本地生成二维码：地址取当前站点 origin + sharecode，
+       保证线上 CDN 门禁（sharecode 校验）下手机扫码可直达确认页 */
+    const sc = new URLSearchParams(window.location.search).get('sharecode')
+    const url =
+      `${window.location.origin}/scan-login?ticket=${qr.ticket}` + (sc ? `&sharecode=${sc}` : '')
+    const QRCode = (await import('qrcode')).default
+    scanImg.value = await QRCode.toDataURL(url, {
+      width: 360,
+      margin: 1,
+      color: { dark: '#12331f' }
+    })
     scanTimer = window.setInterval(pollScan, 2000)
   } catch (e: any) {
     scanErr.value = e?.message || '二维码生成失败，请点击下方按钮重试'
