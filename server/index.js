@@ -241,6 +241,7 @@ app.get('/api/crops', (req, res) => {
   let items = [...localKb, ...atlasCrops, ...otherKb]
   // 州市级特色优先：所选州市的主导作物排到最前（id = 知识库作物；名称子串 = 地区百科作物）
   const CITY_SPECIALTY = {
+    文山州: ['sanqi', 'pepper'],
     文山市: ['sanqi'],
     昭通市: ['tianma', 'walnut', '苹果'],
     普洱市: ['tea', 'coffee'],
