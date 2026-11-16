@@ -398,9 +398,15 @@ export const api = {
     payload: { question: string; cropId?: string; customCrop?: string },
     onEvent: (type: 'sources' | 'delta' | 'done', data: any) => void
   ) => {
+    // 必须显式携带登录 token：原生 fetch 不会走 axios 拦截器，
+    // 漏带会导致服务端把登录用户的提问落成"游客"，档案页历史问答查不到
+    const token = localStorage.getItem('ylnz_token')
     const resp = await fetch('/api/qa/stream', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: {
+        'Content-Type': 'application/json',
+        ...(token ? { 'X-Token': token, Authorization: `Bearer ${token}` } : {})
+      },
       body: JSON.stringify(payload)
     })
     if (!resp.ok || !resp.body) throw new Error('流式服务不可用')
