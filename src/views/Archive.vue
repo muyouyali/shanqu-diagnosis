@@ -2165,6 +2165,17 @@ const submitSample = async () => {
   box-shadow: 0 -12px 40px rgba(0, 0, 0, 0.2);
 }
 
+/* 宽屏：弹窗垂直水平居中（窄屏保留底部抽屉形态） */
+@media (min-width: 720px) {
+  .sf-mask {
+    align-items: center;
+  }
+  .sf {
+    border-radius: var(--r-xl);
+    box-shadow: 0 12px 40px rgba(0, 0, 0, 0.2);
+  }
+}
+
 .sf__head {
   display: flex;
   align-items: flex-start;

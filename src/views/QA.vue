@@ -107,6 +107,14 @@ const clearChat = () => {
   store.showToast('会话已清空', 'success')
 }
 const copiedId = ref<number | null>(null)
+
+/** 回答行渲染：转义 HTML 后把 **文本** 转为加粗，不让标记符暴露给农户 */
+const fmtLine = (line: string): string =>
+  line
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>')
 const copyAnswer = async (m: Msg) => {
   try {
     await navigator.clipboard.writeText(m.content.replace(/\*\*/g, ''))
@@ -471,9 +479,12 @@ const RAG_STEPS = [
 
           <template v-else>
             <div class="msg__bubble" :class="{ 'typing-caret': m.streaming, 'msg__bubble--nohit': m.noHit }">
-              <p v-for="(line, j) in m.content.split('\n')" :key="j" :class="{ 'is-empty': !line.trim() }">
-                {{ line }}
-              </p>
+              <p
+                v-for="(line, j) in m.content.split('\n')"
+                :key="j"
+                :class="{ 'is-empty': !line.trim() }"
+                v-html="fmtLine(line)"
+              />
             </div>
 
             <!-- 空召回兜底：知识库无资料时的行动引导（答案为固定文案，非模型生成） -->
