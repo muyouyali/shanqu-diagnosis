@@ -245,19 +245,13 @@ const demo = async (role: 'user' | 'expert') => {
   }
 }
 
-/* ================= 其他登录方式（微信 / 扫码 / 邮箱 / 手机验证码） ================= */
-type QuickProvider = 'wechat' | 'email' | 'phone' | 'scan'
+/* ================= 其他登录方式（微信 / 邮箱 / 手机验证码） ================= */
+type QuickProvider = 'wechat' | 'email' | 'phone'
 const otherOpen = ref<QuickProvider | null>(null)
 const wechatReal = ref(false)
 const wechatQrUrl = ref('')
 const wechatErr = ref('')
 const wechatMissing = ref<string[]>([])
-/* 自研跨设备扫码登录：真实二维码 + 手机确认页 + 电脑端轮询自动登录 */
-const scanImg = ref('')
-const scanTicket = ref('')
-const scanStatus = ref<'pending' | 'scanned' | 'confirmed' | 'expired'>('pending')
-const scanErr = ref('')
-let scanTimer: number | undefined
 const quickTarget = ref('')
 const quickCode = ref('')
 const quickNickname = ref('')
@@ -268,17 +262,12 @@ const codeHint = ref('')
 const countdown = ref(0)
 let cdTimer: number | undefined
 
-const PROVIDER_META: Record<Exclude<QuickProvider, 'wechat' | 'scan'>, { name: string; ph: string; type: string }> = {
+const PROVIDER_META: Record<Exclude<QuickProvider, 'wechat'>, { name: string; ph: string; type: string }> = {
   email: { name: '邮箱', ph: 'you@example.com', type: 'email' },
   phone: { name: '手机号', ph: '13800000000', type: 'tel' }
 }
 
 const otherLogin = async (p: QuickProvider) => {
-  if (p === 'scan') {
-    otherOpen.value = p
-    startScan()
-    return
-  }
   if (p === 'wechat') {
     // 查询服务端是否配置了微信开放平台：配置→真实扫码；未配置→演示模拟
     wechatReal.value = false
@@ -310,84 +299,8 @@ const otherLogin = async (p: QuickProvider) => {
 
 const closeOther = () => {
   otherOpen.value = null
-  stopScanTimer()
   if (cdTimer) clearInterval(cdTimer)
   countdown.value = 0
-}
-
-/* ---- 自研跨设备扫码登录：生成真实二维码 → 轮询状态 → 确认后自动登录 ---- */
-const stopScanTimer = () => {
-  if (scanTimer) {
-    clearInterval(scanTimer)
-    scanTimer = undefined
-  }
-}
-
-/**
- * 解析当前站点的 sharecode（线上 CDN 门禁参数）：
- * 登录页 URL 通常已被路由守卫改写为 /login?redirect=/?sharecode=xxx，
- * sharecode 藏在 redirect 参数里，需要兜底解析，否则手机扫码会被 CDN 403
- */
-const resolveSharecode = (): string => {
-  const fromSearch = new URLSearchParams(window.location.search).get('sharecode')
-  if (fromSearch) return fromSearch
-  const redirect = String(route.query.redirect || '')
-  const m = redirect.match(/sharecode=([^&]+)/)
-  if (m) return decodeURIComponent(m[1])
-  return 'GLPAG2O5G2' // 本部署的固定分享码兜底
-}
-
-const startScan = async () => {
-  stopScanTimer()
-  scanImg.value = ''
-  scanErr.value = ''
-  scanStatus.value = 'pending'
-  scanTicket.value = ''
-  try {
-    const qr = await api.scanQr()
-    if (otherOpen.value !== 'scan') return
-    scanTicket.value = qr.ticket
-    /* 前端本地生成二维码：地址取当前站点 origin + sharecode，
-       保证线上 CDN 门禁（sharecode 校验）下手机扫码可直达确认页 */
-    const sc = resolveSharecode()
-    const url =
-      `${window.location.origin}/scan-login?ticket=${qr.ticket}` + (sc ? `&sharecode=${sc}` : '')
-    const QRCode = (await import('qrcode')).default
-    scanImg.value = await QRCode.toDataURL(url, {
-      width: 360,
-      margin: 1,
-      color: { dark: '#12331f' }
-    })
-    scanTimer = window.setInterval(pollScan, 2000)
-  } catch (e: any) {
-    scanErr.value = e?.message || '二维码生成失败，请点击下方按钮重试'
-  }
-}
-
-const pollScan = async () => {
-  if (!scanTicket.value || otherOpen.value !== 'scan') return
-  try {
-    const st = await api.scanPoll(scanTicket.value)
-    if (st.status === 'expired') {
-      scanStatus.value = 'expired'
-      stopScanTimer()
-      return
-    }
-    if (st.status === 'confirmed' && st.token) {
-      scanStatus.value = 'confirmed'
-      stopScanTimer()
-      const user = await api.meWithToken(st.token)
-      store.setAuth(st.token, user)
-      publishExpert(user)
-      store.showToast(`扫码登录成功，欢迎 ${user.nickname || '农友'}`, 'success')
-      closeOther()
-      goIn()
-    } else {
-      scanStatus.value = st.status
-    }
-  } catch {
-    /* 网络抖动，下一轮继续轮询 */
-  }
 }
 
 const sending = ref(false)
@@ -813,19 +726,6 @@ onBeforeUnmount(() => {
               </span>
               <em>微信</em>
             </button>
-            <button type="button" class="lg-other__item" title="手机扫码登录（真实可用，无需微信）" @click="otherLogin('scan')">
-              <span class="lg-other__ico">
-                <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">
-                  <path d="M4 8V5.5A1.5 1.5 0 0 1 5.5 4H8" />
-                  <path d="M16 4h2.5A1.5 1.5 0 0 1 20 5.5V8" />
-                  <path d="M20 16v2.5a1.5 1.5 0 0 1-1.5 1.5H16" />
-                  <path d="M8 20H5.5A1.5 1.5 0 0 1 4 18.5V16" />
-                  <path d="M7 7h3v3H7zM14 7h3v3h-3zM7 14h3v3H7z" />
-                  <path d="M14 14h1.5M17 14h1M14 17h3M18 17h1" />
-                </svg>
-              </span>
-              <em>扫码登录</em>
-            </button>
             <button type="button" class="lg-other__item" title="邮箱登录 / 注册" @click="otherLogin('email')">
               <span class="lg-other__ico">
                 <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">
@@ -929,38 +829,6 @@ onBeforeUnmount(() => {
                 </AppButton>
               </template>
               <p v-if="wechatErr" class="om__note" style="color: #ffb3ab">{{ wechatErr }}</p>
-            </div>
-          </div>
-
-          <!-- 扫码登录：自研跨设备真实扫码（无需微信资质，手机扫码→确认→电脑自动登录） -->
-          <div v-else-if="otherOpen === 'scan'" class="om">
-            <header class="om__head">
-              <b>📱 扫码登录</b>
-              <button type="button" class="om__close" @click="closeOther">✕</button>
-            </header>
-            <div class="om__body om__body--qr">
-              <template v-if="scanImg">
-                <div class="qr" :class="{ 'is-done': scanStatus === 'confirmed' }">
-                  <img class="qr__img" :src="scanImg" alt="登录二维码" />
-                  <div class="qr__scan">
-                    {{
-                      scanStatus === 'confirmed'
-                        ? '✓ 已确认，正在进入'
-                        : scanStatus === 'scanned'
-                          ? '✓ 已扫码，请在手机上确认'
-                          : '请用手机「扫一扫」'
-                    }}
-                  </div>
-                </div>
-                <p class="om__note">
-                  📷 推荐<b>手机自带「相机」扫码</b>（微信内扫码可能被提示"继续访问"，点继续即可；若被微信拦截打不开，请改用相机扫）。<br />
-                  扫码后手机浏览器打开确认页 → 填手机号点「确认登录」→ 电脑端自动进入系统。真实跨设备登录，无需第三方资质；首次使用自动创建账号。
-                </p>
-              </template>
-              <p v-else-if="!scanErr" class="om__note">正在生成二维码…</p>
-              <p v-if="scanStatus === 'expired'" class="om__note" style="color: #ffd9a0">二维码已过期，请点击下方按钮刷新</p>
-              <p v-if="scanErr" class="om__note" style="color: #ffb3ab">{{ scanErr }}</p>
-              <button type="button" class="om__refresh" @click="startScan">刷新二维码</button>
             </div>
           </div>
 
@@ -1750,15 +1618,6 @@ onBeforeUnmount(() => {
   border-radius: 14px;
   background: #fff;
   position: relative;
-}
-
-/* 真实二维码图片（自研扫码登录） */
-.qr__img {
-  display: block;
-  width: 166px;
-  height: 166px;
-  margin: 0 auto;
-  border-radius: 8px;
 }
 
 .qr__grid {
