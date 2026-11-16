@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, ref, onMounted, onUnmounted } from 'vue'
+import { computed, ref, onMounted, onUnmounted, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import AppIcon from '@/components/AppIcon.vue'
 import UserMenu from '@/components/UserMenu.vue'
@@ -36,6 +36,13 @@ onMounted(() => {
     setTimeout(() => (tour.value = true), 1200)
   }
 })
+/* 引导不阻塞操作：用户跳转到其他页面时自动结束引导（遮罩不拦截任何点击） */
+watch(
+  () => route.path,
+  (p) => {
+    if (tour.value && p !== '/') finishTour()
+  }
+)
 const finishTour = () => {
   tour.value = false
   localStorage.setItem(TOUR_KEY, '1')
@@ -116,7 +123,7 @@ const go = (path: string) => {
 
     <!-- 首次访问漫游引导（参考 Element Plus Tour）：逐步介绍核心功能区 -->
     <Teleport to="body">
-      <div v-if="tour" class="tour-mask" @click.self="finishTour">
+      <div v-if="tour" class="tour-mask">
         <div class="tour-card">
           <div class="tour-card__step">第 {{ tourStep + 1 }} 步 / 共 {{ tourSteps.length }} 步</div>
           <h3 class="tour-card__title">{{ tourSteps[tourStep].title }}</h3>
@@ -449,7 +456,10 @@ const go = (path: string) => {
   place-items: center;
   background: rgba(14, 30, 23, 0.55);
   backdrop-filter: blur(4px);
+  /* 引导不阻塞操作：遮罩不拦截点击，页面照常可用 */
+  pointer-events: none;
 }
+
 .tour-card {
   width: min(92vw, 420px);
   padding: 26px 26px 20px;
@@ -457,6 +467,7 @@ const go = (path: string) => {
   background: #fff;
   box-shadow: var(--sh-lg);
   text-align: center;
+  pointer-events: auto;
 }
 .tour-card__step {
   font-size: 11.5px;
