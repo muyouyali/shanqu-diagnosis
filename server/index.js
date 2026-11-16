@@ -208,7 +208,7 @@ app.get('/api/crops', (req, res) => {
   // 地区百科作物：知识库未收录，仅作资料展示与问答参考（州市级条目优先于省级）
   const atlasRaw = [
     ...((ATLAS_CITY[region] || ATLAS[province]) || []).map((a) => ({ ...a, source: 'atlas' })),
-    ...store.listApprovedCrops(province).map((s) => ({
+    ...store.listApprovedCrops(province, region).map((s) => ({
       name: s.name,
       alias: s.alias || '',
       emoji: s.emoji || '🌱',

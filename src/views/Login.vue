@@ -563,7 +563,7 @@ onBeforeUnmount(() => {
           />
           <AppInput
             v-model="regAccount"
-            label="📱 账号 / 手机号"
+            label="📱 账号"
             placeholder="用于登录"
             autocomplete="username"
             :error="errRegAccount"
@@ -743,7 +743,7 @@ onBeforeUnmount(() => {
                   <circle cx="12" cy="17.5" r="0.6" fill="currentColor" />
                 </svg>
               </span>
-              <em>验证码登录</em>
+              <em>手机号登录</em>
             </button>
           </div>
         </div>
@@ -878,7 +878,7 @@ onBeforeUnmount(() => {
               <AppButton block variant="primary" :loading="quickBusy" :disabled="!canQuick" @click="quickSubmit">
                 {{ quickBusy ? '⏳ 处理中…' : '登录 / 注册' }}
               </AppButton>
-              <p class="om__note om__note--center">未注册的手机号将自动创建账号，无需单独注册流程</p>
+              <p class="om__note om__note--center">未注册的{{ otherOpen === 'email' ? '邮箱' : '手机号' }}将自动创建账号，无需单独注册流程</p>
             </div>
           </div>
         </div>

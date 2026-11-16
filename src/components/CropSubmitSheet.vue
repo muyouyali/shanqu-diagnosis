@@ -64,7 +64,11 @@ watch(
 )
 
 const canSubmit = computed(
-  () => form.value.name.trim().length >= 2 && !!form.value.province && form.value.desc.trim().length >= 8
+  () =>
+    form.value.name.trim().length >= 2 &&
+    !!form.value.province &&
+    !!form.value.city &&
+    form.value.desc.trim().length >= 8
 )
 
 /** 选择自定义图标：压缩为 96px base64 */
@@ -162,9 +166,9 @@ const submit = async () => {
                   </select>
                 </div>
                 <div class="cs__field">
-                  <span class="cs__label">州市 / 县区</span>
+                  <span class="cs__label">州市 / 县区 <i>*</i></span>
                   <select v-model="form.city" class="cs__input">
-                    <option value="">不限（全省）</option>
+                    <option value="">请选择产区</option>
                     <option v-for="c in cityOptions" :key="c" :value="c">{{ c }}</option>
                   </select>
                 </div>

@@ -20,6 +20,8 @@ const router = useRouter()
 const mode = ref<'crops' | 'samples'>('crops')
 
 const list = ref<CropSubmission[]>([])
+/** 全量提交（不随筛选变化）：用于顶部统计卡各状态总数 */
+const allSubs = ref<CropSubmission[]>([])
 const loading = ref(true)
 const status = ref<'pending' | 'approved' | 'rejected' | 'all'>('pending')
 const active = ref<CropSubmission | null>(null)
@@ -43,14 +45,15 @@ const load = async () => {
   loading.value = true
   let remote: CropSubmission[] = []
   try {
-    const res = await api.cropSubmissions({ status: status.value })
+    // 拉全量（不带 status）：顶部统计卡需始终显示各状态总数，不随筛选变化
+    const res = await api.cropSubmissions({})
     remote = res.items
   } catch {
     // 静态托管：远端不可用时仅用本地数据
     remote = []
   }
   // 合并本地兜底提交（去重：远端同名同期的优先）
-  const local = listLocalSubsFiltered({ status: status.value === 'all' ? undefined : status.value })
+  const local = listLocalSubsFiltered()
   const keys = new Set(remote.map((s) => `${s.name}|${s.createdAt}`))
   const merged = [
     ...remote,
@@ -58,7 +61,8 @@ const load = async () => {
       .filter((l) => !keys.has(`${l.name}|${l.createdAt}`))
       .map((l) => l as unknown as CropSubmission)
   ]
-  list.value = merged.sort((a, b) => (a.createdAt < b.createdAt ? 1 : -1))
+  allSubs.value = merged.sort((a, b) => (a.createdAt < b.createdAt ? 1 : -1))
+  list.value = allSubs.value.filter((s) => status.value === 'all' || s.status === status.value)
   loading.value = false
 }
 
@@ -70,12 +74,13 @@ onMounted(() => {
 
 const switchStatus = (s: typeof status.value) => {
   status.value = s
-  load()
+  // 全量数据已在前端：本地过滤即可，无需重新请求
+  list.value = allSubs.value.filter((x) => s === 'all' || x.status === s)
 }
 
 const counts = computed(() => {
   const m: Record<string, number> = { pending: 0, approved: 0, rejected: 0 }
-  for (const it of list.value) m[it.status] = (m[it.status] || 0) + 1
+  for (const it of allSubs.value) m[it.status] = (m[it.status] || 0) + 1
   return m
 })
 

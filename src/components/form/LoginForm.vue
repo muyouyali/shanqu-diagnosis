@@ -34,7 +34,7 @@ const PHONE_RE = /^1[3-9]\d{9}$/
 const validateAccount = () => {
   const v = account.value.trim()
   if (!v) {
-    errAccount.value = '请输入账号或手机号'
+    errAccount.value = '请输入账号'
   } else if (/^\d{11}$/.test(v) && !PHONE_RE.test(v)) {
     errAccount.value = '手机号格式不正确（应为 1 开头的 11 位数字）'
   } else {
@@ -82,8 +82,8 @@ const onSubmit = () => {
   <form class="lform" novalidate @submit.prevent="onSubmit">
     <AppInput
       :model-value="account"
-      label="👤 账号 / 手机号"
-      placeholder="手机号 / 账号"
+      label="👤 账号"
+      placeholder="请输入账号"
       autocomplete="username"
       :error="errAccount"
       @update:model-value="onAccountInput"
