@@ -68,6 +68,12 @@ const activeTab = ref<'records' | 'review' | 'expert' | 'qa' | 'samples'>('recor
 /** 登录态下本机遗留的游客记录数（与账号记录互相隔离） */
 const guestCount = ref(0)
 
+/** 点击头部「N 条诊断记录」徽章：切到记录标签并滚动到列表 */
+const goRecords = () => {
+  activeTab.value = 'records'
+  document.querySelector('.tabs')?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+}
+
 /* ==================== 专家复核工单记录 ==================== */
 const expertTickets = ref<ReviewRequest[]>([])
 const ticketsLoading = ref(false)
@@ -412,6 +418,7 @@ const submitSample = async () => {
       :badge="`${records.length} 条诊断记录`"
       badge-icon="camera"
       image="/media/banners/b39686331_wide.jpg"
+      @badge-click="goRecords"
     />
 
     <!-- 统计概览 -->
