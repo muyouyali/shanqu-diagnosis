@@ -206,8 +206,11 @@ app.get('/api/crops', (req, res) => {
   const otherKb = kbCrops.filter((c) => !localKb.includes(c))
 
   // 地区百科作物：知识库未收录，仅作资料展示与问答参考（州市级条目优先于省级）
+  // 具体州市只匹配本市条目，不回退省级——避免「文山市出现昭通苹果」类跨区串显；
+  // 仅当未选具体地区（全省视图）时才使用省级百科
+  const isProvinceView = !region || region === province
   const atlasRaw = [
-    ...((ATLAS_CITY[region] || ATLAS[province]) || []).map((a) => ({ ...a, source: 'atlas' })),
+    ...((ATLAS_CITY[region] || (isProvinceView ? ATLAS[province] : null)) || []).map((a) => ({ ...a, source: 'atlas' })),
     ...store.listApprovedCrops(province, region).map((s) => ({
       name: s.name,
       alias: s.alias || '',

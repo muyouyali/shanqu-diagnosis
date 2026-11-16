@@ -7,14 +7,18 @@ import { sortByCity } from '@/data/cityCrops'
 import { KB_STATIC, ATLAS_STATIC } from '@/data/crops-static'
 
 /** 静态托管兜底：与后端 /api/crops 同构的作物列表构建 */
-const buildStaticCrops = (province: string): Crop[] => {
+const buildStaticCrops = (province: string, region = ''): Crop[] => {
   const localKb = province ? KB_STATIC.filter((c) => (c.regions || []).includes(province)) : []
   const otherKb = KB_STATIC.filter((c) => !localKb.includes(c))
   localKb.forEach((c) => { (c as any).local = true })
-  const atlasRaw = ((ATLAS_STATIC as Record<string, any[]>)[province] || []).map((a: any) => ({
-    ...a,
-    source: 'atlas'
-  }))
+  // 与后端一致：具体州市不回退省级百科，避免跨区串显
+  const isProvinceView = !region || region === province
+  const atlasRaw = (((ATLAS_STATIC as Record<string, any[]>)[province] || []) as any[])
+    .filter(() => isProvinceView)
+    .map((a: any) => ({
+      ...a,
+      source: 'atlas'
+    }))
   const atlas = atlasRaw
     .filter((a: any) => !KB_STATIC.some((c) => c.name === a.name || (c.alias || '').includes(a.name)))
     .map((a: any, i: number) => ({
@@ -100,7 +104,7 @@ export const useAppStore = defineStore('app', () => {
       offlineCrops.value = false
     } catch {
       // 静态托管兜底：与后端 /api/crops 同构的本地构建
-      crops.value = buildStaticCrops(province)
+      crops.value = buildStaticCrops(province, region.value)
       offlineCrops.value = true
     }
     // 云南州市级特色作物置顶（与后端排序逻辑一致）
