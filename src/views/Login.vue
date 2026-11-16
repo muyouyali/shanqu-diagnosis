@@ -323,6 +323,20 @@ const stopScanTimer = () => {
   }
 }
 
+/**
+ * 解析当前站点的 sharecode（线上 CDN 门禁参数）：
+ * 登录页 URL 通常已被路由守卫改写为 /login?redirect=/?sharecode=xxx，
+ * sharecode 藏在 redirect 参数里，需要兜底解析，否则手机扫码会被 CDN 403
+ */
+const resolveSharecode = (): string => {
+  const fromSearch = new URLSearchParams(window.location.search).get('sharecode')
+  if (fromSearch) return fromSearch
+  const redirect = String(route.query.redirect || '')
+  const m = redirect.match(/sharecode=([^&]+)/)
+  if (m) return decodeURIComponent(m[1])
+  return 'GLPAG2O5G2' // 本部署的固定分享码兜底
+}
+
 const startScan = async () => {
   stopScanTimer()
   scanImg.value = ''
@@ -335,7 +349,7 @@ const startScan = async () => {
     scanTicket.value = qr.ticket
     /* 前端本地生成二维码：地址取当前站点 origin + sharecode，
        保证线上 CDN 门禁（sharecode 校验）下手机扫码可直达确认页 */
-    const sc = new URLSearchParams(window.location.search).get('sharecode')
+    const sc = resolveSharecode()
     const url =
       `${window.location.origin}/scan-login?ticket=${qr.ticket}` + (sc ? `&sharecode=${sc}` : '')
     const QRCode = (await import('qrcode')).default
