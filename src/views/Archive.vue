@@ -673,7 +673,8 @@ const submitSample = async () => {
         </div>
       </div>
 
-      <div v-else class="empty">
+      <!-- 空态：既没有分析结果也没有已保存报告时才显示（此前 v-else 挂在已保存列表上，分析完成后仍会错误出现） -->
+      <div v-if="!review && !savedReports.length" class="empty">
         <AppIcon name="sparkle" :size="32" />
         <p>暂无复盘数据</p>
         <button class="btn btn--primary" @click="runReview">开始分析</button>
@@ -1775,8 +1776,13 @@ const submitSample = async () => {
   .record-list,
   .skeleton-list,
   .review-card,
+  .rv-stat,
   .suggestions,
   .focus-card,
+  .rv-actions,
+  .saved-rv,
+  .review-loading,
+  .empty,
   .co-build,
   .guest-hint,
   .qa-list,
