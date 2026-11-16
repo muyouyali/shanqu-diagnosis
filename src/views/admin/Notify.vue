@@ -17,12 +17,12 @@ const sent = ref<Message[]>([])
 const loading = ref(true)
 const active = ref<Message | null>(null)
 
-/** 历史消息里筛出本专家发出的 */
+/** 已发送列表走专属接口：本专家发出的全部消息（私信 + 公告） */
 const load = async () => {
   loading.value = true
   try {
-    const res = await api.messages()
-    sent.value = res.items.filter((m) => m.from === 'expert')
+    const res = await api.sentMessages()
+    sent.value = res.items
   } catch (e: any) {
     store.showToast(e?.message || '加载失败', 'error')
   } finally {
@@ -55,6 +55,19 @@ const send = async () => {
 const fmt = (iso: string) => {
   const d = new Date(iso)
   return `${d.getMonth() + 1}/${d.getDate()} ${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`
+}
+
+/** 删除一条已发送消息 */
+const removeSent = async (m: Message) => {
+  if (!confirm(`确定删除「${m.title}」吗？用户端将同步移除。`)) return
+  try {
+    await api.deleteSentMessage(m.id)
+    store.showToast('已删除', 'success')
+    if (active.value?.id === m.id) active.value = null
+    await load()
+  } catch (e: any) {
+    store.showToast(e?.message || '删除失败', 'error')
+  }
 }
 </script>
 
@@ -115,6 +128,13 @@ const fmt = (iso: string) => {
           </div>
           <h4>{{ m.title }}<AppIcon name="arrow-right" :size="13" class="nt-msg__arrow" /></h4>
           <p>{{ m.content }}</p>
+          <button
+            class="nt-msg__del"
+            title="删除这条消息"
+            @click.stop="removeSent(m)"
+          >
+            <AppIcon name="trash" :size="13" /> 删除
+          </button>
         </article>
       </section>
     </div>
@@ -156,7 +176,7 @@ const fmt = (iso: string) => {
   justify-content: space-between;
   gap: 20px;
   padding: 30px 32px;
-  border-radius: 18px;
+  border-radius: var(--r-lg);
   background:
     radial-gradient(120% 180% at 100% 0%, rgba(255, 255, 255, 0.14), transparent 55%),
     linear-gradient(120deg, #14532d, #1a7f45 70%, #2f9e5f);
@@ -271,7 +291,7 @@ const fmt = (iso: string) => {
   position: absolute;
   right: 12px;
   bottom: 12px;
-  font-size: 11px;
+  font-size: 12.5px;
   font-style: normal;
   color: var(--c-text-4);
 }
@@ -311,6 +331,29 @@ const fmt = (iso: string) => {
 
 .nt-msg:hover {
   background: var(--c-bg-subtle);
+}
+
+.nt-msg__del {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  margin-top: 8px;
+  padding: 4px 10px;
+  border-radius: var(--r-full);
+  border: 1px solid #f3c1c0;
+  background: transparent;
+  font-size: 12px;
+  color: #d9534f;
+  opacity: 0;
+  transition: all var(--dur-fast);
+}
+
+.nt-msg:hover .nt-msg__del {
+  opacity: 1;
+}
+
+.nt-msg__del:hover {
+  background: #fdf3f2;
 }
 
 .nt-msg:hover h4 {
@@ -416,7 +459,7 @@ const fmt = (iso: string) => {
   max-height: 80vh;
   display: flex;
   flex-direction: column;
-  border-radius: 16px;
+  border-radius: var(--r-lg);
   background: var(--c-bg-card);
   box-shadow: 0 24px 60px rgba(0, 0, 0, 0.24);
   overflow: hidden;

@@ -269,7 +269,7 @@ const maxCount = () => Math.max(1, ...(stats.value?.topDiseases || []).map((d) =
   border-radius: 7px;
   display: grid;
   place-items: center;
-  font-size: 11px;
+  font-size: 12.5px;
   font-weight: 700;
   background: var(--c-bg-muted);
   color: var(--c-text-4);
@@ -390,12 +390,12 @@ const maxCount = () => Math.max(1, ...(stats.value?.topDiseases || []).map((d) =
 }
 
 .kpi__k {
-  font-size: 10.5px;
+  font-size: 11.5px;
   color: var(--c-text-4);
 }
 
 .amodal__foot {
-  font-size: 10.5px;
+  font-size: 11.5px;
   color: var(--c-text-4);
   text-align: center;
   line-height: 1.6;

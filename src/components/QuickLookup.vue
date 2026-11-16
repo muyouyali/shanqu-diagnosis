@@ -370,7 +370,7 @@ const severityLabel: Record<string, string> = { critical: '毁灭性', high: '�
   max-height: 88vh;
   overflow-y: auto;
   background: #fff;
-  border-radius: 20px;
+  border-radius: var(--r-xl);
   box-shadow: 0 24px 60px rgba(10, 40, 22, 0.3);
 }
 
@@ -385,7 +385,7 @@ const severityLabel: Record<string, string> = { critical: '毁灭性', high: '�
   background: linear-gradient(118deg, #0f3d22, #17643a 70%, #2f9e5f);
   color: #fff;
   font-size: 15px;
-  border-radius: 20px 20px 0 0;
+  border-radius: var(--r-xl) var(--r-xl) 0 0;
 }
 
 .ql__head b {
@@ -422,7 +422,7 @@ const severityLabel: Record<string, string> = { critical: '毁灭性', high: '�
   gap: 7px;
   padding: 30px 16px;
   border: 2px dashed var(--c-primary-200);
-  border-radius: 16px;
+  border-radius: var(--r-lg);
   background: var(--c-primary-50);
   color: var(--c-primary-700);
   cursor: pointer;
@@ -439,7 +439,7 @@ const severityLabel: Record<string, string> = { critical: '毁灭性', high: '�
 }
 
 .ql__upload small {
-  font-size: 10.5px;
+  font-size: 11.5px;
   color: var(--c-text-4);
 }
 
@@ -578,7 +578,7 @@ const severityLabel: Record<string, string> = { critical: '毁灭性', high: '�
   display: flex;
   align-items: center;
   gap: 7px;
-  font-size: 10.5px;
+  font-size: 11.5px;
   color: var(--c-text-3);
 }
 
@@ -659,13 +659,13 @@ const severityLabel: Record<string, string> = { critical: '毁灭性', high: '�
 }
 
 .ql__match-hits {
-  font-size: 10.5px;
+  font-size: 11.5px;
   color: var(--c-primary-700);
 }
 
 .ql__match-sev {
   flex-shrink: 0;
-  font-size: 10px;
+  font-size: 11.5px;
   font-weight: 700;
   padding: 2px 8px;
   border-radius: 6px;
@@ -735,7 +735,7 @@ const severityLabel: Record<string, string> = { critical: '毁灭性', high: '�
 
 .ql__go-hint {
   margin-top: 6px;
-  font-size: 10.5px;
+  font-size: 11.5px;
   color: var(--c-text-4);
   text-align: center;
 }
@@ -743,7 +743,7 @@ const severityLabel: Record<string, string> = { critical: '毁灭性', high: '�
 /* 跨库匹配的作物名标签 */
 .ql__crop-tag {
   flex-shrink: 0;
-  font-size: 9.5px;
+  font-size: 11.5px;
   font-weight: 700;
   color: var(--c-primary-700);
   background: var(--c-primary-50);
@@ -755,7 +755,7 @@ const severityLabel: Record<string, string> = { critical: '毁灭性', high: '�
 .ql__result-sub {
   display: block;
   margin-top: 2px;
-  font-size: 10.5px;
+  font-size: 11.5px;
   color: var(--c-text-4);
   line-height: 1.5;
 }

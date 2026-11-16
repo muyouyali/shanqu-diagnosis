@@ -1,5 +1,6 @@
 import { CROPS_EXT, DISEASES_EXT, PESTICIDE_SAFETY_EXT } from './diseases-ext.js'
 import { CROPS_EXT2, DISEASES_EXT2, PESTICIDE_SAFETY_EXT2 } from './diseases-ext2.js'
+import { CROPS_EXT3, DISEASES_EXT3, PESTICIDE_SAFETY_EXT3 } from './diseases-ext3.js'
 
 /**
  * 云南山地特色作物病害知识库
@@ -13,6 +14,7 @@ import { CROPS_EXT2, DISEASES_EXT2, PESTICIDE_SAFETY_EXT2 } from './diseases-ext
 export const CROPS = [
   ...CROPS_EXT,
   ...CROPS_EXT2,
+  ...CROPS_EXT3,
   {
     id: 'sanqi',
     name: '文山三七',
@@ -34,11 +36,12 @@ export const CROPS = [
   },
   {
     id: 'blueberry',
-    name: '高原蓝莓',
-    alias: '蓝莓、越橘',
+    name: '蓝莓',
+    alias: '越橘、笃斯越橘',
     emoji: '🫐',
     latin: 'Vaccinium spp.',
     tagline: '云南高原特色水果 · 高海拔冷凉区优势产业',
+    taglineGeneral: '高海拔冷凉区优势产业 · 喜酸性土壤',
     color: '#4f6bd8',
     altitude: '1500–2200m',
     season: '2–10月',
@@ -58,6 +61,7 @@ export const CROPS = [
     emoji: '🍊',
     latin: 'Citrus reticulata',
     tagline: '云南低热河谷传统优势产业',
+    taglineGeneral: '南方丘陵低热河谷传统优势产业',
     color: '#e08a2e',
     altitude: '800–1600m',
     season: '全年',
@@ -79,6 +83,7 @@ export const CROPS = [
 export const DISEASES = [
   ...DISEASES_EXT,
   ...DISEASES_EXT2,
+  ...DISEASES_EXT3,
   // ==================== 三七 ====================
   {
     id: 'sq-root-rot',
@@ -591,6 +596,7 @@ export const DISEASES = [
 export const PESTICIDE_SAFETY = [
   ...PESTICIDE_SAFETY_EXT,
   ...PESTICIDE_SAFETY_EXT2,
+  ...PESTICIDE_SAFETY_EXT3,
   {
     cropId: 'sanqi',
     cropName: '三七',

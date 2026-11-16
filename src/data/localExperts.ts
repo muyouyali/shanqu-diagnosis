@@ -110,7 +110,7 @@ export const SEED_EXPERTS: LocalExpert[] = [
     region: '红河州',
     title: '红河州植保植检站 · 农艺师',
     specialty: ['石榴', '柑橘', '实蝇'],
-    intro: '蒙自石榴产区虫害监测与绿色防控技术负责人。',
+    intro: '石榴产区虫害监测与绿色防控技术负责人。',
     years: 9,
     consultCount: 428,
     createdAt: '2024-01-11T00:00:00.000Z',

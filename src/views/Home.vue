@@ -3,6 +3,7 @@ import { ref, onMounted, onBeforeUnmount, computed, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { useAppStore } from '@/stores/app'
 import AppIcon from '@/components/AppIcon.vue'
+import CropEmoji from '@/components/CropEmoji.vue'
 import WeatherWidget from '@/components/WeatherWidget.vue'
 import RegionPicker from '@/components/RegionPicker.vue'
 import AlertDetailModal from '@/components/AlertDetailModal.vue'
@@ -19,6 +20,8 @@ const store = useAppStore()
 
 const alert = ref<AlertResponse | null>(null)
 const loadingAlert = ref(true)
+/** 知识库规模（与登录页、病害图谱共用后端统计，避免各处数字对不上） */
+const kbStat = ref({ crops: 30, diseases: 74 })
 
 const greeting = computed(() => {
   const h = new Date().getHours()
@@ -44,6 +47,8 @@ onMounted(async () => {
   } catch {
     /* 首页不阻断 */
   }
+  // 知识库统计（静默失败，保持默认展示）
+  api.kbStats().then((r) => { kbStat.value = { crops: r.crops, diseases: r.diseases } }).catch(() => {})
   try {
     // 6 秒超时兜底：后端未就绪/网络挂起时不再让骨架屏一直转
     alert.value = await Promise.race([
@@ -88,11 +93,9 @@ const badges = ['多模态识图', 'RAG 检索增强', '双 Agent 协作', '流�
 
 // ===== Hero 图片轮播 =====
 const banners = [
-  { img: '/media/banners/b39452374.jpg', title: '云端梯田 · 山地作物的家园' },
-  { img: '/media/banners/b35872964.jpg', title: '雾绕山间 · 云岭特色作物带' },
-  { img: '/media/banners/b36813325.jpg', title: '梯田农舍 · 传统耕作的智慧' },
-  { img: '/media/banners/b39686331.jpg', title: '晨雾群山 · 生态种植屏障' },
-  { img: '/media/banners/b32742909.jpg', title: '高山云雾 · 天然病害防线' },
+  { img: '/media/banner-mist.jpg', title: '青雾群山 · 天然生态屏障' },
+  { img: '/media/banner-terrace.jpg', title: '云上梯田 · 山地农业核心' },
+  { img: '/media/banner-snow.jpg', title: '雪山草甸 · 高原种植摇篮' },
 ]
 const bannerCur = ref(0)
 let bannerTimer: ReturnType<typeof setInterval> | null = null
@@ -389,7 +392,7 @@ const hueOf = (name: string) => {
             >
               <span class="atlas-card__glow" />
               <span class="atlas-card__top">
-                <span class="atlas-card__emoji">{{ c.emoji }}</span>
+                <CropEmoji class="atlas-card__emoji" :emoji="c.emoji" :name="c.name" :size="30" />
                 <span v-if="isCityFeatured(c.id)" class="atlas-card__badge atlas-card__badge--city">主推</span>
                 <span class="atlas-card__badge">可诊断</span>
               </span>
@@ -419,7 +422,7 @@ const hueOf = (name: string) => {
             >
               <span class="atlas-card__glow" />
               <span class="atlas-card__top">
-                <span class="atlas-card__emoji">{{ c.emoji }}</span>
+                <CropEmoji class="atlas-card__emoji" :emoji="c.emoji" :name="c.name" :size="30" />
                 <span v-if="c.source === 'community'" class="atlas-card__badge atlas-card__badge--cm">共建</span>
                 <span v-else class="atlas-card__badge atlas-card__badge--atlas">百科</span>
               </span>
@@ -448,7 +451,7 @@ const hueOf = (name: string) => {
           </div>
           <div class="crop-mini-grid">
             <button v-for="c in otherCrops" :key="c.id" class="crop-mini" @click="openCrop(c)">
-              <span class="crop-mini__emoji">{{ c.emoji }}</span>
+              <CropEmoji class="crop-mini__emoji" :emoji="c.emoji" :name="c.name" :size="26" />
               <span class="crop-mini__name">{{ c.name }}</span>
               <span class="crop-mini__meta">{{ c.diseaseCount }} 病</span>
             </button>
@@ -469,7 +472,7 @@ const hueOf = (name: string) => {
           >
             <span class="atlas-card__glow" />
             <span class="atlas-card__top">
-              <span class="atlas-card__emoji">{{ c.emoji }}</span>
+              <CropEmoji class="atlas-card__emoji" :emoji="c.emoji" :name="c.name" :size="30" />
               <span v-if="isLocalCrop(c)" class="atlas-card__badge">本地</span>
               <span v-else class="atlas-card__badge atlas-card__badge--atlas">
                 {{ c.source === 'community' ? '共建' : c.diagnosable ? '可诊断' : '百科' }}
@@ -541,7 +544,7 @@ const hueOf = (name: string) => {
           </span>
           <span class="feature__body">
             <strong>病害图谱</strong>
-            <small>34 种特色作物病害，覆盖 10 种山地作物，图文对照</small>
+            <small>{{ kbStat.diseases }} 种病害图谱，覆盖 {{ kbStat.crops }} 种山地作物，图文对照</small>
           </span>
           <AppIcon name="arrow-right" :size="16" class="feature__arrow" />
         </button>
@@ -644,12 +647,16 @@ const hueOf = (name: string) => {
   display: flex;
   align-items: center;
   gap: 12px;
-  padding: 12px 18px 14px;
+  padding: 26px 20px 16px;
+  /* 柔和渐变衬底：说明文字不再直接压在画面上，更透气易读 */
+  background: linear-gradient(180deg, rgba(8, 26, 18, 0) 0%, rgba(8, 26, 18, 0.38) 100%);
 }
 .hero__cap {
   flex: 1;
-  font-size: 13px;
-  color: rgba(255, 255, 255, 0.88);
+  font-size: 13.5px;
+  letter-spacing: 0.4px;
+  line-height: 1.6;
+  color: rgba(255, 255, 255, 0.92);
   text-shadow: 0 1px 4px rgba(0, 0, 0, 0.5);
   white-space: nowrap;
   overflow: hidden;
@@ -726,6 +733,8 @@ const hueOf = (name: string) => {
   position: relative;
   z-index: 1;
   padding-top: max(14px, env(safe-area-inset-top, 0px));
+  /* 预留出与底部轮播说明条之间的呼吸空间，避免徽标与说明文字拥挤 */
+  padding-bottom: 60px;
   color: #fff;
 }
 
@@ -812,7 +821,7 @@ const hueOf = (name: string) => {
   align-items: center;
   gap: 13px;
   padding: 15px 17px;
-  border-radius: 18px;
+  border-radius: var(--r-lg);
   background: rgba(255, 255, 255, 0.97);
   box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);
   text-align: left;
@@ -863,19 +872,20 @@ const hueOf = (name: string) => {
 .hero__badges {
   display: flex;
   flex-wrap: wrap;
-  gap: 7px;
-  margin-top: 14px;
+  gap: 9px;
+  margin-top: 18px;
 }
 
 .hero__badge {
-  padding: 4px 11px;
+  padding: 5px 13px;
   border-radius: var(--r-full);
-  font-size: 11px;
+  font-size: 13px;
   font-weight: 600;
+  line-height: 1.5;
   letter-spacing: 0.3px;
-  color: rgba(255, 255, 255, 0.88);
-  background: rgba(255, 255, 255, 0.10);
-  border: 1px solid rgba(255, 255, 255, 0.16);
+  color: rgba(255, 255, 255, 0.92);
+  background: rgba(255, 255, 255, 0.12);
+  border: 1px solid rgba(255, 255, 255, 0.2);
   backdrop-filter: blur(6px);
 }
 
@@ -926,7 +936,7 @@ const hueOf = (name: string) => {
   display: inline-flex;
   align-items: center;
   gap: 8px;
-  font-size: 10px;
+  font-size: 11.5px;
   font-weight: 600;
   letter-spacing: 2.5px;
   color: var(--c-text-4);
@@ -1047,13 +1057,13 @@ const hueOf = (name: string) => {
   border-radius: var(--r-full);
   background: var(--tone-bg);
   color: var(--tone);
-  font-size: 11px;
+  font-size: 12.5px;
   font-weight: 700;
   letter-spacing: 0.2px;
 }
 
 .alert-card__days {
-  font-size: 11px;
+  font-size: 12.5px;
   color: var(--c-text-4);
 }
 
@@ -1105,7 +1115,7 @@ const hueOf = (name: string) => {
   padding-top: 9px;
   border-top: 1px dashed var(--c-line);
   width: 100%;
-  font-size: 11px;
+  font-size: 12.5px;
   font-weight: 700;
   color: var(--tone);
 }
@@ -1148,7 +1158,7 @@ const hueOf = (name: string) => {
 }
 
 .section__local {
-  font-size: 10.5px;
+  font-size: 11.5px;
   font-weight: 600;
   color: var(--c-primary-600);
   background: var(--c-primary-50);
@@ -1189,7 +1199,7 @@ const hueOf = (name: string) => {
 
 .crop-tab em {
   font-style: normal;
-  font-size: 10px;
+  font-size: 11.5px;
   font-weight: 700;
   padding: 1px 5px;
   border-radius: var(--r-full);
@@ -1250,7 +1260,7 @@ const hueOf = (name: string) => {
 }
 
 .crop-group__hint {
-  font-size: 10.5px;
+  font-size: 11.5px;
   color: var(--c-text-4);
   margin-left: auto;
   white-space: nowrap;
@@ -1271,7 +1281,7 @@ const hueOf = (name: string) => {
   flex-direction: column;
   gap: 4px;
   padding: 13px 13px 12px;
-  border-radius: 16px;
+  border-radius: var(--r-lg);
   text-align: left;
   overflow: hidden;
   background: var(--c-bg-card);
@@ -1331,7 +1341,7 @@ const hueOf = (name: string) => {
 }
 
 .atlas-card__badge {
-  font-size: 9px;
+  font-size: 11.5px;
   font-weight: 800;
   letter-spacing: 0.3px;
   padding: 2px 7px;
@@ -1365,14 +1375,14 @@ const hueOf = (name: string) => {
 }
 
 .atlas-card__desc {
-  font-size: 11px;
-  line-height: 1.55;
+  font-size: 13px;
+  line-height: 1.6;
   color: var(--c-text-3);
   display: -webkit-box;
   -webkit-line-clamp: 2;
   -webkit-box-orient: vertical;
   overflow: hidden;
-  min-height: 34px;
+  min-height: 42px;
 }
 
 .atlas-card__foot {
@@ -1384,7 +1394,7 @@ const hueOf = (name: string) => {
 }
 
 .atlas-card__chip {
-  font-size: 9.5px;
+  font-size: 11.5px;
   font-weight: 700;
   padding: 2px 7px;
   border-radius: var(--r-full);
@@ -1421,7 +1431,7 @@ const hueOf = (name: string) => {
 }
 
 .atlas-card--add .atlas-card__desc {
-  font-size: 10.5px;
+  font-size: 11.5px;
   color: var(--c-primary-600);
   opacity: 0.75;
   min-height: 0;
@@ -1480,7 +1490,7 @@ const hueOf = (name: string) => {
 }
 
 .crop-mini__meta {
-  font-size: 9.5px;
+  font-size: 11.5px;
   color: var(--c-text-4);
   flex-shrink: 0;
 }
@@ -1634,7 +1644,7 @@ const hueOf = (name: string) => {
 }
 
 .foot__brand-txt small {
-  font-size: 11px;
+  font-size: 12.5px;
   color: var(--c-text-3);
 }
 
@@ -1671,13 +1681,13 @@ const hueOf = (name: string) => {
   background: var(--c-bg-muted);
   border: 1px solid var(--c-line-soft);
   color: var(--c-text-3);
-  font-size: 11px;
+  font-size: 12.5px;
   line-height: 1.5;
   margin-bottom: 12px;
 }
 
 .foot__text {
-  font-size: 10.5px;
+  font-size: 11.5px;
   color: var(--c-text-4);
   letter-spacing: 0.3px;
 }

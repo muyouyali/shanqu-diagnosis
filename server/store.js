@@ -11,6 +11,30 @@ import path from 'node:path'
 import crypto from 'node:crypto'
 import { fileURLToPath } from 'node:url'
 import { seedRecords } from './seed.js'
+import { provinceOf } from './kb/regions.js'
+
+/**
+ * 地区过滤（多级回退）：州市 → 同省 → 全局。
+ * 农技站按地区服务，所选地区应有对应数据；冷门地区回退到同省，避免空列表。
+ * fullList 可选：时间窗口内无同省数据时，回退到同省的全量记录（忽略时段）。
+ */
+const inRegion = (list, region, fullList) => {
+  if (!region) return list
+  const key = String(region).replace(/(市|州|县|区|盟|地区)$/g, '')
+  const prov = provinceOf(region) || ''
+  const match = (r) => {
+    const rr = r.region || ''
+    if (key && rr.includes(key)) return true
+    return prov && provinceOf(rr) === prov
+  }
+  const scoped = list.filter(match)
+  if (scoped.length) return scoped
+  if (Array.isArray(fullList)) {
+    const scopedAll = fullList.filter(match)
+    if (scopedAll.length) return scopedAll
+  }
+  return list
+}
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 const DATA_DIR = path.join(__dirname, '../../.data')
@@ -45,6 +69,9 @@ const load = () => {
   if (!Array.isArray(cache.messages)) cache.messages = seedMessages()
   if (!Array.isArray(cache.consults)) cache.consults = []
   if (!Array.isArray(cache.reviewRequests)) cache.reviewRequests = []
+  if (!Array.isArray(cache.diseaseSamples)) cache.diseaseSamples = []
+  if (!Array.isArray(cache.aiKbEntries)) cache.aiKbEntries = []
+  if (!Array.isArray(cache.reviewReports)) cache.reviewReports = []
   if (!cache.sessions) cache.sessions = {}
   if (typeof cache.nextId !== 'number') cache.nextId = 1
   ensureExperts(cache)
@@ -56,7 +83,7 @@ export const EXPERT_SEEDS = [
   { id: 9001, account: '13800000001', nickname: '张启铭', title: '高级农艺师', specialty: ['三七', '重楼', '黄精'], region: '文山市' },
   { id: 9003, account: '13800000003', nickname: '李春兰', title: '植保专家', specialty: ['蓝莓', '草莓', '树莓'], region: '曲靖市' },
   { id: 9004, account: '13800000004', nickname: '王建国', title: '果树专家', specialty: ['柑橘', '芒果', '柠檬'], region: '保山市' },
-  { id: 9005, account: '13800000005', nickname: '杨茶花', title: '茶叶专家', specialty: ['普洱茶树', '滇红', '白茶'], region: '普洱市' },
+  { id: 9005, account: '13800000005', nickname: '杨茶花', title: '茶叶专家', specialty: ['茶树', '滇红', '白茶'], region: '普洱市' },
   { id: 9006, account: '13800000006', nickname: '赵天禄', title: '经济林专家', specialty: ['核桃', '花椒', '天麻'], region: '昭通市' }
 ]
 
@@ -323,6 +350,23 @@ export const clearMessages = (userId, ids) => {
   return before - db.messages.length
 }
 
+/** 专家已发送消息列表（私信 + 全员公告） */
+export const listSentMessages = () => {
+  const db = load()
+  const items = db.messages.filter((m) => m.from === 'expert')
+  return { total: items.length, items }
+}
+
+/** 删除一条已发送消息（含各用户收件箱中的副本） */
+export const deleteSentMessage = (id) => {
+  const db = load()
+  const idx = db.messages.findIndex((m) => m.id === Number(id) && m.from === 'expert')
+  if (idx === -1) return false
+  db.messages.splice(idx, 1)
+  persist()
+  return true
+}
+
 export const unreadCount = (userId) => {
   const db = load()
   return db.messages.filter((m) => !m.read && (m.userId === Number(userId) || m.userId === 'all')).length
@@ -393,7 +437,17 @@ export const updateConsult = (id, patch) => {
   return c
 }
 
-/** 农户对诊断结果发起人工复核 */
+/** 删除一条农户咨询（管理端清理用） */
+export const deleteConsult = (id) => {
+  const db = load()
+  const idx = db.consults.findIndex((x) => x.id === Number(id))
+  if (idx === -1) return false
+  db.consults.splice(idx, 1)
+  persist()
+  return true
+}
+
+/** 农户对诊断结果发起人工复核（复核工单表） */
 export const saveReviewRequest = (item) => {
   const db = load()
   const full = {
@@ -401,6 +455,14 @@ export const saveReviewRequest = (item) => {
     status: 'pending',
     opinion: '',
     expertId: null,
+    // 工单扩展字段：图片 / AI 初诊结论 / 置信度 / 专家复核结果 / 完成时间
+    image: '',
+    aiDisease: '',
+    aiConfidence: null,
+    outcome: null,
+    finalDisease: '',
+    expertName: '',
+    completedAt: null,
     createdAt: new Date().toISOString(),
     ...item
   }
@@ -425,6 +487,14 @@ export const updateReviewRequest = (id, patch) => {
   Object.assign(r, patch)
   persist()
   return r
+}
+
+export const deleteReviewRequest = (id) => {
+  const db = load()
+  const before = db.reviewRequests.length
+  db.reviewRequests = db.reviewRequests.filter((x) => x.id !== Number(id))
+  persist()
+  return before - db.reviewRequests.length
 }
 
 const seedMessages = () => [
@@ -552,7 +622,7 @@ export const createRecord = (record) => {
   return full
 }
 
-export const listRecords = ({ cropId, limit = 50, offset = 0, userId, days } = {}) => {
+export const listRecords = ({ cropId, limit = 50, offset = 0, userId, days, region } = {}) => {
   const db = load()
   let list = db.records
   if (cropId) list = list.filter((r) => r.cropId === cropId)
@@ -561,6 +631,7 @@ export const listRecords = ({ cropId, limit = 50, offset = 0, userId, days } = {
     const since = Date.now() - days * 24 * 3600 * 1000
     list = list.filter((r) => new Date(r.createdAt).getTime() >= since)
   }
+  list = inRegion(list, region, db.records)
   return {
     total: list.length,
     items: list.slice(offset, offset + limit)
@@ -590,19 +661,24 @@ export const deleteRecord = (id) => {
   return true
 }
 
+/** 一键清空全部诊断记录（管理后台用） */
+export const clearRecords = () => {
+  const db = load()
+  const n = db.records.length
+  db.records = []
+  persist()
+  return n
+}
+
 // ==================== 统计聚合 ====================
 export const getStats = ({ days = 30, cropId, region } = {}) => {
   const db = load()
   const since = Date.now() - days * 24 * 3600 * 1000
-  let records = db.records.filter((r) => new Date(r.createdAt).getTime() >= since)
+  const all = db.records
+  let records = all.filter((r) => new Date(r.createdAt).getTime() >= since)
   if (cropId) records = records.filter((r) => r.cropId === cropId)
-  // 区域过滤：州市名模糊匹配（红河州 → 记录.region 含「红河」）
-  if (region) {
-    const key = String(region).replace(/(市|州|县|区|盟|地区)$/g, '')
-    const scoped = records.filter((r) => (r.region || '').includes(key))
-    // 该地区有数据才收窄，避免冷门地区预警空转
-    if (scoped.length) records = scoped
-  }
+  // 区域过滤：州市 → 同省（时段内）→ 同省（全量）→ 全局
+  records = inRegion(records, region, all)
 
   // 病害排行
   const diseaseCount = new Map()
@@ -690,6 +766,12 @@ export const listConsultations = (limit = 20) => {
   return db.consultations.slice(0, limit)
 }
 
+/** 按用户查询历史问答（登录用户的"历史问答记录"标签页） */
+export const listConsultationsByUser = (userId, limit = 50) => {
+  const db = load()
+  return db.consultations.filter((c) => c.userId === userId).slice(0, limit)
+}
+
 // ==================== 作物百科：用户提交与专家审核 ====================
 export const createCropSubmission = (item) => {
   const db = load()
@@ -755,11 +837,143 @@ export const listApprovedCrops = (province) => {
   )
 }
 
+// ==================== 病害样本共建（农户提交 → 专家审核 → 并入知识库） ====================
+
+/**
+ * 农户提交病害样本（待审核样本记录）
+ * 图片以压缩 dataURL 存储，最多 3 张；审核通过后据此生成知识库社区条目
+ */
+export const createDiseaseSample = (item) => {
+  const db = load()
+  const full = {
+    id: nextId(),
+    status: 'pending',
+    // 审核结果字段
+    note: '',
+    reviewer: '',
+    reviewedAt: '',
+    // 审核通过后专家确认的病害定名与防治建议
+    diseaseName: '',
+    diseaseType: '',
+    treatment: '',
+    // 通过后生成的知识库条目（随样本快照持久化，重启可重新注册）
+    entry: null,
+    createdAt: new Date().toISOString(),
+    ...item
+  }
+  db.diseaseSamples.unshift(full)
+  persist()
+  return full
+}
+
+export const listDiseaseSamples = ({ status, userId, limit = 100 } = {}) => {
+  const db = load()
+  let list = db.diseaseSamples
+  if (status && status !== 'all') list = list.filter((s) => s.status === status)
+  if (userId) list = list.filter((s) => s.userId === Number(userId))
+  return { total: list.length, items: list.slice(0, limit) }
+}
+
+export const getDiseaseSample = (id) => {
+  const db = load()
+  return db.diseaseSamples.find((s) => s.id === Number(id)) || null
+}
+
+export const updateDiseaseSample = (id, patch) => {
+  const db = load()
+  const idx = db.diseaseSamples.findIndex((s) => s.id === Number(id))
+  if (idx === -1) return null
+  db.diseaseSamples[idx] = { ...db.diseaseSamples[idx], ...patch }
+  persist()
+  return db.diseaseSamples[idx]
+}
+
+/** 已通过审核的样本（含生成的知识库条目，供图谱/检索使用） */
+export const listApprovedDiseaseSamples = () => {
+  const db = load()
+  return db.diseaseSamples.filter((s) => s.status === 'approved' && s.entry)
+}
+
+/* ==================== AI 动态补全的病害知识条目 ==================== */
+
+export const saveAiKbEntry = (item) => {
+  const db = load()
+  if (!Array.isArray(db.aiKbEntries)) db.aiKbEntries = []
+  const full = {
+    id: nextId(),
+    createdAt: new Date().toISOString(),
+    ...item
+  }
+  db.aiKbEntries.unshift(full)
+  persist()
+  return full
+}
+
+/** AI 复盘报告：农户可保存复盘结果，在档案里单独回看 */
+export const saveReviewReport = (item) => {
+  const db = load()
+  if (!Array.isArray(db.reviewReports)) db.reviewReports = []
+  const full = {
+    id: nextId(),
+    createdAt: new Date().toISOString(),
+    ...item
+  }
+  db.reviewReports.unshift(full)
+  persist()
+  return full
+}
+
+export const listReviewReports = (userId) => {
+  const db = load()
+  const list = Array.isArray(db.reviewReports) ? db.reviewReports : []
+  return userId ? list.filter((r) => r.userId === Number(userId)) : list
+}
+
+export const deleteReviewReport = (id) => {
+  const db = load()
+  if (!Array.isArray(db.reviewReports)) return false
+  const before = db.reviewReports.length
+  db.reviewReports = db.reviewReports.filter((x) => x.id !== Number(id))
+  persist()
+  return before > db.reviewReports.length
+}
+
+export const listAiKbEntries = () => {  const db = load()
+  return Array.isArray(db.aiKbEntries) ? db.aiKbEntries : []
+}
+
+export const deleteAiKbEntry = (id) => {
+  const db = load()
+  if (!Array.isArray(db.aiKbEntries)) return false
+  const before = db.aiKbEntries.length
+  db.aiKbEntries = db.aiKbEntries.filter((x) => x.id !== Number(id))
+  persist()
+  return before > db.aiKbEntries.length
+}
+
+/** 重置演示数据：优先恢复 server/demo-seed.json（多样化演示模板），无模板则回退内置种子 */
 export const resetDemoData = () => {
+  const seedPath = path.join(__dirname, 'demo-seed.json')
+  if (fs.existsSync(seedPath)) {
+    try {
+      const seed = JSON.parse(fs.readFileSync(seedPath, 'utf-8'))
+      const db = load()
+      if (Array.isArray(seed.records)) db.records = seed.records
+      if (Array.isArray(seed.reviewRequests)) db.reviewRequests = seed.reviewRequests
+      if (Array.isArray(seed.consults)) db.consults = seed.consults
+      if (Array.isArray(seed.cropSubmissions)) db.cropSubmissions = seed.cropSubmissions
+      persist(true)
+      return true
+    } catch (e) {
+      console.warn('[resetDemo] 模板解析失败，回退内置种子', e?.message)
+    }
+  }
   cache = seedRecords()
   cache.cropSubmissions = seedCropSubmissions()
   cache.users = seedUsers()
   cache.messages = seedMessages()
+  cache.diseaseSamples = []
+  cache.aiKbEntries = []
   persist(true)
   return true
 }

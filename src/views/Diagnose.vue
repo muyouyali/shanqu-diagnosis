@@ -1,8 +1,10 @@
 <script setup lang="ts">
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, nextTick } from 'vue'
 import { useRouter } from 'vue-router'
 import { useAppStore } from '@/stores/app'
 import AppIcon from '@/components/AppIcon.vue'
+import CropEmoji from '@/components/CropEmoji.vue'
+import RegionPicker from '@/components/RegionPicker.vue'
 import PageHero from '@/components/PageHero.vue'
 import api from '@/api'
 import { provinceOfRegion } from '@/data/regions'
@@ -37,6 +39,115 @@ const steps = [
   { key: 'treatment', label: '用药指导 Agent', desc: '检索安全数据生成方案', icon: 'flask' }
 ]
 const activeStep = ref(-1)
+
+/* ==================== AI 多 Agent 推理日志面板 ==================== */
+type AgentLogState = 'loading' | 'done' | 'warn'
+interface AgentLog {
+  icon: string
+  agent: string
+  text: string
+  ts: string
+  state: AgentLogState
+}
+const agentLogs = ref<AgentLog[]>([])
+const agentOpen = ref(true)
+const agentRunning = computed(() => submitting.value)
+/** 低置信度（<85%）→ 显示「提交专家人工复核」蓝色主按钮 */
+const needReview = ref(false)
+const reviewSubmitting = ref(false)
+const reviewDone = ref(false)
+const lastRecord = ref<{ recordId: number; cropId: string; confidencePct: number; aiDisease: string; image: string } | null>(null)
+const logListRef = ref<HTMLElement | null>(null)
+
+const nowTs = () => new Date().toLocaleTimeString('zh-CN', { hour12: false })
+const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms))
+
+/** 追加一条 Agent 日志（默认进行中，带 loading 动画） */
+const pushLog = (icon: string, agent: string, text: string, state: AgentLogState = 'loading') => {
+  agentLogs.value.push({ icon, agent, text, ts: nowTs(), state })
+  nextTick(() => logListRef.value?.scrollTo({ top: logListRef.value.scrollHeight, behavior: 'smooth' }))
+}
+
+/** 完成最后一条日志：更新文本 + 状态 */
+const finishLog = (text: string, state: AgentLogState = 'done') => {
+  const last = agentLogs.value[agentLogs.value.length - 1]
+  if (!last) return
+  last.text = text
+  last.state = state
+  last.ts = nowTs()
+}
+
+/** 结果到达后，把三个 Agent 的结论按顺序流式点亮（模拟真实推理时序）；返回置信度百分比 */
+const streamAgentLogs = async (result: any): Promise<number> => {
+  const top = result.diagnosis?.results?.[0]
+  const kbCount = result.kbSources?.length || 0
+  const similar = result.diagnosis?.results?.[1]?.name
+  const lesion =
+    result.diagnosis?.noticed?.[0] || top?.symptomMatch?.[0] || '病斑特征区域'
+
+  finishLog(`识别作物：${result.cropName}；检测病灶部位：${lesion}`)
+  await sleep(650)
+  pushLog('📚', 'RAG 检索 Agent', '基于作物与病灶，检索本地植保知识库…')
+  await sleep(550)
+  finishLog(`检索得到 ${kbCount} 条相关植保知识库片段`)
+  await sleep(650)
+  pushLog('✅', '置信复核 Agent', '正在计算病害置信分数，校验相似病害…')
+  await sleep(550)
+  const pct = Math.round((top?.confidence ?? 0) * 100)
+  finishLog(`识别置信度：${pct}%；排除相似病害：${similar || '无高相似干扰项'}`)
+
+  // 置信度 ≥85% 直接出报告；<85% 日志末尾黄色警告 + 蓝色复核按钮
+  needReview.value = pct < 85
+  lastRecord.value = {
+    recordId: result.recordId,
+    cropId: result.cropId,
+    confidencePct: pct,
+    aiDisease: top?.name || '',
+    image: image.value || ''
+  }
+  if (needReview.value) {
+    await sleep(420)
+    pushLog('⚠️', '置信复核 Agent', '置信度偏低，建议提交农技专家人工复核', 'warn')
+  }
+  return pct
+}
+
+/** 提交专家人工复核（低置信度路径，先弹确认弹窗） */
+const reviewConfirmOpen = ref(false)
+const openReviewConfirm = () => {
+  if (!lastRecord.value) return
+  reviewConfirmOpen.value = true
+}
+
+const submitReview = async () => {
+  if (!lastRecord.value || reviewSubmitting.value || reviewDone.value) return
+  reviewConfirmOpen.value = false
+  reviewSubmitting.value = true
+  try {
+    await api.createReviewRequest({
+      recordId: lastRecord.value.recordId,
+      cropId: lastRecord.value.cropId,
+      region: store.region,
+      question: `AI 置信度偏低（${lastRecord.value.confidencePct}%），请人工复核本次诊断结论`,
+      image: lastRecord.value.image || undefined,
+      aiDisease: lastRecord.value.aiDisease || undefined,
+      aiConfidence: lastRecord.value.confidencePct / 100
+    })
+    reviewDone.value = true
+    pushLog('📨', '复核调度 Agent', '复核工单已推送至专家端，专家意见将通过消息通知您', 'done')
+    store.showToast('工单已提交成功，请等待专家处理', 'success')
+    setTimeout(() => router.replace(`/result/${lastRecord.value!.recordId}`), 1100)
+  } catch (e) {
+    store.showToast((e as Error).message || '提交复核失败，请重试', 'error')
+  } finally {
+    reviewSubmitting.value = false
+  }
+}
+
+/** 低置信度时也可直接查看完整诊断报告 */
+const gotoReport = () => {
+  if (lastRecord.value) router.replace(`/result/${lastRecord.value.recordId}`)
+}
 
 /** 多 Agent 协作说明弹窗 */
 const flowOpen = ref(false)
@@ -98,12 +209,19 @@ const handleFile = async (e: Event) => {
   const file = target.files?.[0]
   if (!file) return
 
-  if (!file.type.startsWith('image/')) {
-    store.showToast('请选择图片文件', 'error')
+  // 前置校验①：文件类型（只允许 jpg/png/jpeg，拦截 heic/gif 等）
+  const okType =
+    ['image/jpeg', 'image/png'].includes(file.type) ||
+    /\.(jpe?g|png)$/i.test(file.name || '')
+  if (!okType) {
+    store.showToast('仅支持jpg/png图片格式', 'error')
+    target.value = ''
     return
   }
-  if (file.size > 12 * 1024 * 1024) {
-    store.showToast('图片过大，请选择 12MB 以内的照片', 'error')
+  // 前置校验②：文件大小（>10MB 直接拦截，不进 AI 流程）
+  if (file.size > 10 * 1024 * 1024) {
+    store.showToast('图片不能超过10MB，请压缩后重新上传', 'error')
+    target.value = ''
     return
   }
 
@@ -131,6 +249,10 @@ const resetForm = () => {
   stage.value = ''
   area.value = ''
   activeStep.value = -1
+  agentLogs.value = []
+  needReview.value = false
+  reviewDone.value = false
+  lastRecord.value = null
 }
 
 const submit = async () => {
@@ -146,6 +268,13 @@ const submit = async () => {
 
   submitting.value = true
   activeStep.value = 0
+  // 复位推理日志面板：默认展开并输出第一条 Agent 日志
+  agentLogs.value = []
+  needReview.value = false
+  reviewDone.value = false
+  lastRecord.value = null
+  agentOpen.value = true
+  pushLog('🧠', '视觉识别 Agent', '正在解析图片，识别作物种类，定位病灶区域…')
 
   // 模拟阶段推进（真实耗时由后端返回，此处仅做视觉反馈）
   const stepTimer = setInterval(() => {
@@ -176,25 +305,45 @@ const submit = async () => {
           result = st as any
           break
         }
-        if (st.status === 'error') throw new Error(st.error || '诊断失败，请重试')
+        if (st.status === 'error') {
+          // 业务错误（AI 样例拦截：非植株/无病灶、任务失败等）：标记后直接抛出，禁止降级重试
+          const bizErr = new Error(st.error || '诊断失败，请重试') as Error & { bizError?: boolean }
+          bizErr.bizError = true
+          throw bizErr
+        }
       }
       if (!result) throw new Error('TASK_TIMEOUT')
     } catch (e: any) {
+      if (e?.bizError) throw e
       if (e?.message === 'TASK_TIMEOUT') throw new Error('诊断超时，请稍后重试')
-      // 异步接口不可用（纯静态部署）→ 同步调用兜底
-      if (e?.message?.includes('失败') || e?.message?.includes('超时')) throw e
+      // 限流 / 超时等 HTTP 层错误：直接提示，不降级（降级会造成重复真实诊断）
+      if (e?.httpStatus === 429 || e?.message?.includes('超时')) throw e
+      // 仅当异步接口不可用（纯静态部署 404 / 网络异常）→ 同步调用兜底
+      if (e?.httpStatus && e.httpStatus !== 404) throw e
       result = await api.diagnose(payload)
     }
 
     store.setLastResult(result, image.value)
     clearInterval(stepTimer)
     activeStep.value = steps.length
-    store.showToast('诊断完成', 'success')
-    setTimeout(() => router.replace(`/result/${result.recordId}`), 320)
+
+    // 三个 Agent 结论依次流式点亮（视觉识别 → RAG 检索 → 置信复核）
+    const pct = await streamAgentLogs(result)
+
+    if (needReview.value) {
+      // 低置信度：停留本页，展示「提交专家人工复核」蓝色按钮，由用户决定
+      submitting.value = false
+      store.showToast(`诊断完成，置信度 ${pct}%，建议人工复核`, 'info')
+    } else {
+      // 高置信度：直接进入完整诊断报告（不出现复核按钮）
+      store.showToast('诊断完成', 'success')
+      setTimeout(() => router.replace(`/result/${result.recordId}`), 700)
+    }
   } catch (err) {
     clearInterval(stepTimer)
     activeStep.value = -1
     submitting.value = false
+    finishLog(`诊断中断：${(err as Error).message || '未知错误'}`, 'warn')
     store.showToast((err as Error).message, 'error')
   }
 }
@@ -260,6 +409,8 @@ const submit = async () => {
         <label class="block__label">
           1 · 选择作物
           <span class="block__hint">{{ store.region }} · {{ store.cropsProvince }}产区</span>
+          <!-- 点击可自行切换种植地区，作物列表随之刷新 -->
+          <RegionPicker class="diagnose-region" />
         </label>
         <div class="crop-chips">
           <button
@@ -270,7 +421,7 @@ const submit = async () => {
             :style="{ '--crop-color': c.color }"
             @click="store.setCrop(c.id)"
           >
-            <span class="crop-chip__emoji">{{ c.emoji }}</span>
+            <CropEmoji class="crop-chip__emoji" :emoji="c.emoji" :name="c.name" :size="20" />
             <span>{{ c.name }}</span>
             <AppIcon v-if="store.selectedCropId === c.id" name="check" :size="14" class="crop-chip__check" />
           </button>
@@ -292,7 +443,7 @@ const submit = async () => {
               :style="{ '--crop-color': c.color }"
               @click="store.setCrop(c.id)"
             >
-              <span class="crop-chip__emoji">{{ c.emoji }}</span>
+              <CropEmoji class="crop-chip__emoji" :emoji="c.emoji" :name="c.name" :size="20" />
               <span>{{ c.name }}</span>
             </button>
           </div>
@@ -335,7 +486,7 @@ const submit = async () => {
         <input
           ref="inputRef"
           type="file"
-          accept="image/*"
+          accept=".jpg,.jpeg,.png,image/jpeg,image/png"
           capture="environment"
           class="hidden-input"
           @change="handleFile"
@@ -367,6 +518,61 @@ const submit = async () => {
               <AppIcon name="x" :size="14" /> 删除
             </button>
           </div>
+        </div>
+      </section>
+
+      <!-- 🔍 AI 多 Agent 推理过程日志面板（默认展开） -->
+      <section class="block">
+        <button class="agent-head" @click="agentOpen = !agentOpen">
+          <span class="agent-head__title">🔍 AI 多 Agent 推理过程</span>
+          <span class="agent-head__meta">
+            <i v-if="agentRunning" class="agent-head__live">推理中</i>
+            <AppIcon name="arrow-right" :size="15" class="agent-head__arrow" :class="{ 'is-open': agentOpen }" />
+          </span>
+        </button>
+
+        <div v-show="agentOpen" class="agent-body">
+          <div ref="logListRef" class="agent-logs">
+            <p v-if="!agentLogs.length" class="agent-logs__empty">
+              📡 上传照片并点击「开始 AI 诊断」后，这里将实时展示每个 Agent 的推理过程
+            </p>
+            <div
+              v-for="(l, i) in agentLogs"
+              :key="i"
+              class="alog"
+              :class="'alog--' + l.state"
+            >
+              <span class="alog__icon">{{ l.icon }}</span>
+              <div class="alog__main">
+                <div class="alog__top">
+                  <b>【{{ l.agent }}】</b>
+                  <span class="alog__ts">{{ l.ts }}</span>
+                </div>
+                <p class="alog__text">
+                  <span v-if="l.state === 'loading'" class="alog__spin" aria-hidden="true"></span>
+                  <template v-else>{{ l.state === 'done' ? '✅ ' : '⚠️ ' }}</template>
+                  {{ l.text }}
+                </p>
+              </div>
+            </div>
+          </div>
+
+          <!-- 低置信度分支：蓝色主按钮（置信度 ≥85% 时不渲染） -->
+          <button
+            v-if="needReview && !reviewDone"
+            class="agent-review"
+            :disabled="reviewSubmitting"
+            @click="openReviewConfirm"
+          >
+            <AppIcon name="shield" :size="16" />
+            {{ reviewSubmitting ? '⏳ 正在提交复核…' : '提交专家人工复核' }}
+          </button>
+          <p v-if="reviewDone" class="agent-review__done">
+            ✅ 已提交专家人工复核，专家意见将通过消息通知您
+          </p>
+          <button v-if="needReview" class="agent-report-link" @click="gotoReport">
+            查看完整诊断报告 →
+          </button>
         </div>
       </section>
 
@@ -455,7 +661,7 @@ const submit = async () => {
 
       <div class="notice">
         <AppIcon name="alert" :size="14" />
-        <span>照片越清晰、描述越具体，诊断越准确。AI 结果仅供参考，严重情况请联系当地农技站。</span>
+        <span>拍摄建议：优先拍叶片正反面与病斑特写，避免逆光与模糊；信息填写越完整，AI 识别准确率越高。AI 诊断结果仅作参考，严重病害请及时联系本地农技站。</span>
       </div>
     </div>
 
@@ -471,9 +677,31 @@ const submit = async () => {
       </button>
     </div>
 
-    <!-- 诊断中遮罩 -->
+    <!-- 复核提交确认弹窗 -->
+    <Teleport to="body">
+      <Transition name="fade">
+        <div v-if="reviewConfirmOpen" class="rc-mask" @click.self="reviewConfirmOpen = false">
+          <div class="rc-dialog">
+            <div class="rc-dialog__icon">🧑‍🔬</div>
+            <h3 class="rc-dialog__title">提交专家人工复核</h3>
+            <p class="rc-dialog__text">
+              将把<b>照片、AI 初步诊断结果</b>提交给农技专家复核；提交后可在
+              <b>【我的种植档案】- 专家复核记录</b>查看进度。
+            </p>
+            <div class="rc-dialog__btns">
+              <button class="rc-btn rc-btn--ghost" @click="reviewConfirmOpen = false">取消</button>
+              <button class="rc-btn rc-btn--primary" :disabled="reviewSubmitting" @click="submitReview">
+                {{ reviewSubmitting ? '⏳ 提交中…' : '确认提交' }}
+              </button>
+            </div>
+          </div>
+        </div>
+      </Transition>
+    </Teleport>
+
+    <!-- 诊断中遮罩（日志面板展开时由面板承担进度展示，避免遮挡） -->
     <transition name="fade">
-      <div v-if="submitting" class="progress-mask">
+      <div v-if="submitting && !agentOpen" class="progress-mask">
         <div class="progress-card">
           <div class="progress-card__pulse">
             <AppIcon name="leaf" :size="26" :stroke="1.8" />
@@ -598,9 +826,32 @@ const submit = async () => {
 }
 
 .block__hint {
-  font-size: 11px;
+  font-size: 12.5px;
   font-weight: 400;
   color: var(--c-text-4);
+}
+
+/* 诊断页地区选择按钮（紧凑配色） */
+.diagnose-region {
+  margin-left: 8px;
+}
+
+.diagnose-region :deep(.region-btn) {
+  padding: 5px 12px;
+  font-size: 12px;
+  background: var(--c-primary-50, #eaf5ee);
+  border: 1px solid var(--c-primary-100, #d6ecdf);
+  color: var(--c-primary-700, #256b47);
+}
+
+.diagnose-region :deep(.region-btn:hover) {
+  background: #dcf0e4;
+  border-color: var(--c-primary-600);
+}
+
+.diagnose-region :deep(.region-btn__switch) {
+  background: rgba(37, 107, 71, 0.12);
+  border-color: rgba(37, 107, 71, 0.3);
 }
 
 /* 作物 chip */
@@ -737,7 +988,7 @@ const submit = async () => {
   display: inline-flex;
   align-items: center;
   gap: 3px;
-  font-size: 10.5px;
+  font-size: 11.5px;
   color: var(--c-primary-600);
   font-weight: 500;
 }
@@ -821,7 +1072,7 @@ const submit = async () => {
 }
 
 .textarea__count {
-  font-size: 11px;
+  font-size: 12.5px;
   color: var(--c-text-4);
   font-variant-numeric: tabular-nums;
 }
@@ -918,6 +1169,320 @@ const submit = async () => {
   color: var(--c-accent-600);
   font-size: 11.5px;
   line-height: 1.65;
+}
+
+/* ==================== AI 多 Agent 推理日志面板 ==================== */
+.agent-head {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 11px 14px;
+  border-radius: var(--r-md);
+  background: linear-gradient(118deg, #0f3d22, #17643a 72%, #2f9e5f);
+  color: #fff;
+  box-shadow: var(--sh-xs);
+  transition: transform var(--dur-fast);
+}
+
+.agent-head:active {
+  transform: scale(0.99);
+}
+
+.agent-head__title {
+  font-size: 13px;
+  font-weight: 800;
+  letter-spacing: 0.3px;
+}
+
+.agent-head__meta {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.agent-head__live {
+  font-style: normal;
+  font-size: 11.5px;
+  font-weight: 700;
+  padding: 1px 8px;
+  border-radius: var(--r-full);
+  background: rgba(255, 255, 255, 0.18);
+  animation: agentLive 1.4s ease-in-out infinite;
+}
+
+@keyframes agentLive {
+  0%, 100% { opacity: 0.55; }
+  50% { opacity: 1; }
+}
+
+.agent-head__arrow {
+  color: rgba(255, 255, 255, 0.85);
+  transition: transform var(--dur-base) var(--ease-out);
+}
+
+.agent-head__arrow.is-open {
+  transform: rotate(90deg);
+}
+
+.agent-body {
+  margin-top: 10px;
+  padding: 12px;
+  border-radius: var(--r-md);
+  background: var(--c-bg-card);
+  border: 1px solid var(--c-line-soft);
+  box-shadow: var(--sh-xs);
+}
+
+.agent-logs {
+  display: flex;
+  flex-direction: column;
+  gap: 9px;
+  max-height: 320px;
+  overflow-y: auto;
+}
+
+.agent-logs__empty {
+  font-size: 12px;
+  color: var(--c-text-4);
+  text-align: center;
+  padding: 18px 10px;
+  line-height: 1.7;
+}
+
+.alog {
+  display: flex;
+  gap: 9px;
+  padding: 9px 11px;
+  border-radius: var(--r-sm);
+  background: var(--c-bg-muted);
+  border-left: 3px solid var(--c-line);
+  animation: alogIn 0.25s ease-out;
+}
+
+.alog--loading {
+  border-left-color: #f59e0b;
+}
+
+.alog--done {
+  border-left-color: #10b981;
+}
+
+.alog--warn {
+  border-left-color: #f59e0b;
+  background: #fffbeb;
+}
+
+.alog__icon {
+  font-size: 16px;
+  line-height: 1.3;
+  flex-shrink: 0;
+}
+
+.alog__main {
+  flex: 1;
+  min-width: 0;
+}
+
+.alog__top {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.alog__top b {
+  font-size: 12.5px;
+  font-weight: 700;
+  color: var(--c-text-1);
+}
+
+.alog__ts {
+  font-size: 11.5px;
+  color: var(--c-text-4);
+  font-variant-numeric: tabular-nums;
+  flex-shrink: 0;
+}
+
+.alog__text {
+  font-size: 12px;
+  line-height: 1.65;
+  color: var(--c-text-2);
+  margin-top: 2px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.alog--done .alog__text {
+  color: #065f46;
+}
+
+.alog--warn .alog__text {
+  color: #92400e;
+  font-weight: 600;
+}
+
+.alog__spin {
+  width: 12px;
+  height: 12px;
+  border: 2px solid #fcd34d;
+  border-top-color: #f59e0b;
+  border-radius: 50%;
+  animation: spin 0.7s linear infinite;
+  flex-shrink: 0;
+}
+
+@keyframes alogIn {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+}
+
+/* 低置信度复核按钮（蓝色主按钮） */
+.agent-review {
+  width: 100%;
+  margin-top: 12px;
+  height: 44px;
+  border-radius: var(--r-md);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  background: #2563eb;
+  color: #fff;
+  font-size: 14px;
+  font-weight: 700;
+  letter-spacing: 0.5px;
+  box-shadow: 0 8px 20px rgba(37, 99, 235, 0.3);
+  transition: background var(--dur-fast), transform var(--dur-fast), box-shadow var(--dur-fast);
+}
+
+.agent-review:hover:not(:disabled) {
+  background: #1d4ed8;
+  transform: translateY(-1px);
+  box-shadow: 0 10px 24px rgba(37, 99, 235, 0.38);
+}
+
+.agent-review:active:not(:disabled) {
+  transform: scale(0.98);
+}
+
+.agent-review:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.agent-review__done {
+  margin-top: 10px;
+  font-size: 12px;
+  line-height: 1.6;
+  color: #065f46;
+  background: #ecfdf5;
+  border: 1px solid #a7f3d0;
+  border-radius: var(--r-sm);
+  padding: 8px 11px;
+}
+
+.agent-report-link {
+  width: 100%;
+  margin-top: 8px;
+  font-size: 12.5px;
+  color: var(--c-text-3);
+  text-align: center;
+  text-decoration: underline dashed;
+  text-underline-offset: 3px;
+  transition: color var(--dur-fast);
+}
+
+.agent-report-link:hover {
+  color: var(--c-primary-700);
+}
+
+/* 复核提交确认弹窗 */
+.rc-mask {
+  position: fixed;
+  inset: 0;
+  z-index: 600;
+  background: rgba(12, 22, 18, 0.5);
+  backdrop-filter: blur(5px);
+  display: grid;
+  place-items: center;
+  padding: 24px;
+}
+
+.rc-dialog {
+  width: min(360px, 100%);
+  background: var(--c-bg-card);
+  border-radius: var(--r-lg);
+  padding: 22px 20px 18px;
+  text-align: center;
+  box-shadow: 0 24px 64px rgba(0, 0, 0, 0.28);
+}
+
+.rc-dialog__icon {
+  font-size: 40px;
+  line-height: 1;
+  margin-bottom: 10px;
+}
+
+.rc-dialog__title {
+  font-size: 16px;
+  font-weight: 800;
+  color: var(--c-text-1);
+  margin-bottom: 8px;
+}
+
+.rc-dialog__text {
+  font-size: 12.5px;
+  line-height: 1.8;
+  color: var(--c-text-2);
+  margin-bottom: 16px;
+}
+
+.rc-dialog__text b {
+  color: var(--c-primary-700);
+}
+
+.rc-dialog__btns {
+  display: flex;
+  gap: 10px;
+}
+
+.rc-btn {
+  flex: 1;
+  height: 42px;
+  border-radius: var(--r-full);
+  font-size: 14px;
+  font-weight: 700;
+  transition: transform var(--dur-fast), background var(--dur-fast);
+}
+
+.rc-btn--ghost {
+  color: var(--c-text-2);
+  background: var(--c-bg-muted);
+  border: 1px solid var(--c-line);
+}
+
+.rc-btn--primary {
+  color: #fff;
+  background: #2563eb;
+  box-shadow: 0 8px 20px rgba(37, 99, 235, 0.3);
+}
+
+.rc-btn--primary:hover:not(:disabled) {
+  background: #1d4ed8;
+}
+
+.rc-btn:active:not(:disabled) {
+  transform: scale(0.97);
+}
+
+.rc-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
 }
 
 .notice :deep(.icon) {
@@ -1057,7 +1622,7 @@ const submit = async () => {
 }
 
 .step__body small {
-  font-size: 10.5px;
+  font-size: 11.5px;
   color: var(--c-text-4);
 }
 
@@ -1079,7 +1644,7 @@ const submit = async () => {
 
 .progress-card__hint {
   margin-top: 16px;
-  font-size: 10.5px;
+  font-size: 11.5px;
   color: var(--c-text-4);
 }
 
@@ -1110,7 +1675,7 @@ const submit = async () => {
   max-height: 84vh;
   overflow-y: auto;
   background: var(--c-bg-card);
-  border-radius: 20px;
+  border-radius: var(--r-lg);
   box-shadow: 0 24px 60px rgba(10, 40, 22, 0.28);
 }
 
@@ -1124,7 +1689,7 @@ const submit = async () => {
   background: linear-gradient(118deg, #0f3d22, #17643a 70%, #2f9e5f);
   color: #fff;
   font-size: 14.5px;
-  border-radius: 20px 20px 0 0;
+  border-radius: var(--r-xl) var(--r-xl) 0 0;
 }
 
 .flow__head b {
@@ -1163,7 +1728,7 @@ const submit = async () => {
   border-radius: 50%;
   display: grid;
   place-items: center;
-  font-size: 10.5px;
+  font-size: 11.5px;
   font-weight: 800;
   color: #fff;
   background: var(--c-primary-600);

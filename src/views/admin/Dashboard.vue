@@ -3,6 +3,7 @@ import { ref, onMounted, onBeforeUnmount, computed, watch, nextTick } from 'vue'
 import * as echarts from 'echarts'
 import { useAppStore } from '@/stores/app'
 import AppIcon from '@/components/AppIcon.vue'
+import CropEmoji from '@/components/CropEmoji.vue'
 import api from '@/api'
 import type { StatsResponse, RecordItem } from '@/types'
 import { useRouter } from 'vue-router'
@@ -52,6 +53,7 @@ const openDetail = async (key: Exclude<DetailKey, null>) => {
     const res = await api.records({
       cropId: cropFilter.value || undefined,
       days: days.value,
+      region: store.region || undefined,
       limit: 300
     })
     detailRecords.value = res.items || []
@@ -343,7 +345,7 @@ const handleResize = () => charts.forEach((c) => c.resize())
 const load = async () => {
   loading.value = true
   try {
-    stats.value = await api.stats({ days: days.value, cropId: cropFilter.value || undefined })
+    stats.value = await api.stats({ days: days.value, cropId: cropFilter.value || undefined, region: store.region || undefined })
     await nextTick()
     initCharts()
   } catch (err) {
@@ -358,6 +360,9 @@ onMounted(async () => {
   await load()
   window.addEventListener('resize', handleResize)
 })
+
+// 切换地区后统计与明细同步刷新（三级回退：州市→省→全局）
+watch(() => store.region, () => { load() })
 
 onBeforeUnmount(() => {
   window.removeEventListener('resize', handleResize)
@@ -409,7 +414,8 @@ watch([days, cropFilter], load)
               :class="{ 'is-on': cropFilter === c.id }"
               @click="pickCrop(c.id)"
             >
-              {{ c.emoji }} {{ c.name }} <em>{{ c.diseaseCount }} 病</em>
+              <CropEmoji :emoji="c.emoji" :name="c.name" :size="18" class="ad-crop__emoji" />
+              {{ c.name }} <em>{{ c.diseaseCount }} 病</em>
             </button>
             <p v-if="!cropOptions.length" class="crop-select__empty">未找到匹配作物</p>
           </div>
@@ -768,12 +774,12 @@ watch([days, cropFilter], load)
 }
 
 .kpi__unit {
-  font-size: 11px;
+  font-size: 12.5px;
   color: var(--c-text-4);
 }
 
 .kpi__hint {
-  font-size: 10px;
+  font-size: 11.5px;
   color: var(--c-text-4);
 }
 
@@ -812,7 +818,7 @@ watch([days, cropFilter], load)
 }
 
 .chart-card__sub {
-  font-size: 10.5px;
+  font-size: 11.5px;
   color: var(--c-text-4);
 }
 
@@ -976,7 +982,7 @@ watch([days, cropFilter], load)
 
 .kd__head p {
   margin-top: 3px;
-  font-size: 11px;
+  font-size: 12.5px;
   color: var(--c-text-4);
 }
 
@@ -1050,7 +1056,7 @@ watch([days, cropFilter], load)
 }
 
 .kd-item__conf {
-  font-size: 10.5px;
+  font-size: 11.5px;
   font-weight: 800;
   padding: 2px 8px;
   border-radius: var(--r-full);
@@ -1074,7 +1080,7 @@ watch([days, cropFilter], load)
 }
 
 .kd-item__esc {
-  font-size: 9px;
+  font-size: 11.5px;
   font-weight: 800;
   color: #fff;
   background: var(--c-danger);
@@ -1084,7 +1090,7 @@ watch([days, cropFilter], load)
 }
 
 .kd-item__time {
-  font-size: 10px;
+  font-size: 11.5px;
   color: var(--c-text-4);
   flex-shrink: 0;
 }
@@ -1119,7 +1125,7 @@ watch([days, cropFilter], load)
 }
 
 .kd-bucket span {
-  font-size: 10.5px;
+  font-size: 11.5px;
   color: var(--c-text-4);
 }
 
@@ -1141,7 +1147,7 @@ watch([days, cropFilter], load)
   border-radius: 50%;
   display: grid;
   place-items: center;
-  font-size: 11px;
+  font-size: 12.5px;
   font-weight: 800;
   background: var(--c-primary-50);
   color: var(--c-primary-700);
@@ -1254,7 +1260,7 @@ watch([days, cropFilter], load)
 .crop-select__item em {
   margin-left: auto;
   font-style: normal;
-  font-size: 10.5px;
+  font-size: 11.5px;
   color: var(--c-text-4);
   font-weight: 500;
 }

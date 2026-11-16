@@ -293,3 +293,33 @@ export const ruleBasedDiagnose = (cropId, textFeatures) => {
 export const getDocCount = () => DOCS.length
 export const getById = (id) => getDiseaseById(id)
 export { tokenize, expandQuery }
+
+/**
+ * 社区共建条目动态注册：
+ * 农户提交的病害样本经专家审核通过后，以知识库条目形式并入检索语料，
+ * 让 RAG 问答 / 病害图谱即时可见（闭环：提交 → 审核 → 入库 → 可检索）。
+ * 服务器重启后由 index.js 启动钩子按持久化的样本重新注册。
+ */
+export const registerCommunityDiseases = (entries) => {
+  let added = 0
+  for (const d of entries || []) {
+    if (!d || !d.id || !d.name) continue
+    if (DOCS.some((doc) => doc.id === d.id)) continue // 幂等：重复注册跳过
+    const fields = [
+      { text: `${d.name} ${d.name} ${d.name} ${d.alias || ''} ${d.alias || ''}`, w: 1 },
+      { text: `${d.type || ''} ${d.pathogen || ''}`, w: 1 },
+      { text: (d.symptomKeywords || []).join(' ') + ' ' + (d.symptomKeywords || []).join(' '), w: 1 },
+      { text: (d.symptoms || []).join(' '), w: 1 },
+      { text: (d.causes || []).join(' '), w: 1 },
+      { text: (d.treatment || []).join(' '), w: 1 },
+      { text: (d.prevention || []).join(' '), w: 1 },
+      { text: d.safetyNote || '', w: 1 }
+    ]
+    const fullText = fields.map((f) => f.text).join(' ')
+    const tokens = tokenize(fullText)
+    DOCS.push({ id: d.id, cropId: d.cropId, disease: d, tokens, len: tokens.length, fullText })
+    added++
+  }
+  if (added) stats = buildStats(DOCS)
+  return added
+}

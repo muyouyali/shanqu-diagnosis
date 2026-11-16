@@ -72,7 +72,6 @@ const enterSelect = () => {
   selecting.value = true
   checked.value = new Set()
   confirmClearAll.value = false
-  exitSelect()
 }
 const exitSelect = () => {
   selecting.value = false
@@ -246,7 +245,7 @@ const fmt = (iso: string) => {
                     </span>
                   </span>
                   <span class="msg-item__from">{{ m.fromName }} · {{ tone(m).label }}</span>
-                  <span class="msg-item__preview">{{ m.content.slice(0, 44) }}{{ m.content.length > 44 ? '…' : '' }}</span>
+                  <span class="msg-item__preview">{{ m.content }}</span>
                   <span class="msg-item__detail-btn">
                     查看详情
                     <AppIcon name="arrow-right" :size="11" />
@@ -302,7 +301,7 @@ const fmt = (iso: string) => {
 }
 
 .msg__head p {
-  font-size: 11px;
+  font-size: 12.5px;
   color: var(--c-accent-600);
   margin-top: 2px;
 }
@@ -349,7 +348,7 @@ const fmt = (iso: string) => {
   height: 28px;
   padding: 0 10px;
   border-radius: var(--r-full);
-  font-size: 11px;
+  font-size: 12.5px;
   font-weight: 700;
   color: var(--c-primary-700);
   background: var(--c-primary-50);
@@ -519,19 +518,19 @@ const fmt = (iso: string) => {
 }
 
 .msg-item__time {
-  font-size: 10px;
+  font-size: 11.5px;
   color: var(--c-text-4);
   min-width: 52px;
   text-align: right;
 }
 
 .msg-item__from {
-  font-size: 10.5px;
+  font-size: 11.5px;
   color: var(--c-text-4);
 }
 
 .msg-item__state {
-  font-size: 9px;
+  font-size: 11.5px;
   font-weight: 800;
   padding: 1.5px 7px;
   border-radius: var(--r-full);
@@ -554,18 +553,20 @@ const fmt = (iso: string) => {
   align-items: center;
   gap: 3px;
   margin-top: 5px;
-  font-size: 10.5px;
+  font-size: 11.5px;
   font-weight: 700;
   color: var(--c-primary-600);
 }
 
 .msg-item__preview {
-  font-size: 12px;
+  font-size: 12.5px;
   color: var(--c-text-3);
-  line-height: 1.6;
+  line-height: 1.65;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
   overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  word-break: break-word;
 }
 
 .msg-item__content {

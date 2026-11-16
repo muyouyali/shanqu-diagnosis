@@ -189,15 +189,19 @@ export const fetchRealWeather = async (
   const effectiveCrop = cropId || CITY_SPECIALTY[region]?.[0]
   const cropTip = CROP_NOTE[effectiveCrop || ''] || ''
     const baseActions = [
-      rainyDays >= 3 ? '未来一周有多个降雨日，雨前喷施保护性杀菌剂' : '降雨较少，按常规 schedule 巡园即可',
-      '雨后 24 小时内重点巡查低洼积水处，及时清沟排水',
-      humidDays >= 3 ? '连续高湿天气，加大株行间通风（修剪过密枝叶）' : '保持田间通风，避免过度密植'
+      rainyDays >= 3
+        ? '降雨来临前，喷施保护性杀菌剂，提前预防病害'
+        : '降雨较少，按常规节奏巡园即可',
+      '雨后 24 小时内巡查低洼地块，及时清沟排涝',
+      humidDays >= 3
+        ? '持续高湿时段，修剪过密枝叶，改善田间通风透光'
+        : '保持田间通风，避免过度密植'
     ]
     if (cropTip) baseActions.unshift(cropTip)
 
     const warnings = [
       {
-        type: riskPeak >= 55 ? '病害气象预警' : '天气平稳',
+        type: riskPeak >= 55 ? '病害风险预警' : '天气平稳',
         severity: (riskPeak >= 75 ? 'orange' : riskPeak >= 55 ? 'yellow' : 'green') as
           | 'orange'
           | 'yellow'
@@ -207,10 +211,10 @@ export const fetchRealWeather = async (
           : '未来 7 天',
         desc:
           riskPeak >= 75
-            ? `${region}未来 7 天峰值病害风险指数 ${riskPeak}（偏高）：${rainyDays} 个降雨日、最高湿度 ${Math.max(...days.map((d) => d.humidity))}%，高湿多雨极易诱发病害流行`
-            : riskPeak >= 55
-              ? `${region}未来 7 天峰值病害风险指数 ${riskPeak}（中等）：${riskText(riskPeak)}，注意提前预防`
-              : `${region}未来 7 天天气平稳，峰值风险指数 ${riskPeak}，病害流行风险较低`,
+            ? `${region}未来 7 天峰值病害风险指数 ${riskPeak}（高风险），多降雨高湿环境，极易诱发作物病害流行`
+            : riskPeak >= 60
+              ? `${region}未来 7 天峰值病害风险指数 ${riskPeak}（中风险），${riskText(riskPeak)}，注意提前预防`
+              : `${region}未来 7 天天气平稳，峰值病害风险指数 ${riskPeak}（低风险），病害流行风险较低`,
         content: undefined,
         actions: baseActions
       }

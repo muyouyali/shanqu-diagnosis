@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, onMounted, onBeforeUnmount, computed } from 'vue'
+import { ref, onMounted, onBeforeUnmount, computed, watch } from 'vue'
 import * as echarts from 'echarts'
 import { useAppStore } from '@/stores/app'
 import AppIcon from '@/components/AppIcon.vue'
@@ -97,7 +97,11 @@ const renderMap = () => {
 const load = async () => {
   loading.value = true
   try {
-    const [a, s] = await Promise.all([api.alerts(days.value), api.stats({ days: days.value })])
+    const region = store.region || undefined
+    const [a, s] = await Promise.all([
+      api.alerts(days.value, region),
+      api.stats({ days: days.value, region })
+    ])
     alert.value = a
     stats.value = s
     setTimeout(renderMap, 60)
@@ -114,6 +118,9 @@ onMounted(() => {
   load()
   window.addEventListener('resize', handleResize)
 })
+
+// 切换地区后预警与热力图同步刷新（三级回退：州市→省→全局）
+watch(() => store.region, () => { load() })
 
 onBeforeUnmount(() => {
   window.removeEventListener('resize', handleResize)
@@ -409,7 +416,7 @@ onBeforeUnmount(() => {
 }
 
 .alert-hero__label {
-  font-size: 10.5px;
+  font-size: 11.5px;
   color: var(--c-text-3);
 }
 
@@ -443,7 +450,7 @@ onBeforeUnmount(() => {
 }
 
 .panel__sub {
-  font-size: 10.5px;
+  font-size: 11.5px;
   color: var(--c-text-4);
 }
 
@@ -471,7 +478,7 @@ onBeforeUnmount(() => {
   place-items: center;
   background: var(--c-primary-600);
   color: #fff;
-  font-size: 10.5px;
+  font-size: 11.5px;
   font-weight: 700;
   flex-shrink: 0;
 }
@@ -503,7 +510,7 @@ onBeforeUnmount(() => {
   display: inline-flex;
   align-items: center;
   gap: 5px;
-  font-size: 10.5px;
+  font-size: 11.5px;
   color: var(--c-text-4);
 }
 
@@ -535,7 +542,7 @@ onBeforeUnmount(() => {
   place-items: center;
   background: var(--c-bg-muted);
   color: var(--c-text-4);
-  font-size: 10.5px;
+  font-size: 11.5px;
   font-weight: 700;
   flex-shrink: 0;
 }

@@ -1,7 +1,8 @@
 <script setup lang="ts">
-import { ref, onMounted, computed } from 'vue'
+import { ref, onMounted, computed, watch } from 'vue'
 import { useAppStore } from '@/stores/app'
 import AppIcon from '@/components/AppIcon.vue'
+import CropEmoji from '@/components/CropEmoji.vue'
 import api from '@/api'
 import type { RecordItem } from '@/types'
 
@@ -50,11 +51,17 @@ const load = async () => {
   try {
     const res = await api.records({
       cropId: cropFilter.value || undefined,
+      region: store.region || undefined,
       limit: pageSize,
       offset: page.value * pageSize
     })
     records.value = res.items
     total.value = res.total
+    // 翻页超出总数时回退到第一页（切换地区后 total 变化）
+    if (!records.value.length && page.value > 0) {
+      page.value = 0
+      await load()
+    }
   } catch (err) {
     store.showToast((err as Error).message, 'error')
   } finally {
@@ -66,6 +73,9 @@ onMounted(async () => {
   await store.loadCrops()
   await load()
 })
+
+// 切换地区后重新拉取（服务端按州市→省→全局三级回退过滤）
+watch(() => store.region, () => { page.value = 0; load() })
 
 const fmt = (iso: string) => {
   const d = new Date(iso)
@@ -92,6 +102,23 @@ const removeRecord = async (r: RecordItem) => {
     await load()
   } catch (err) {
     store.showToast((err as Error).message, 'error')
+  }
+}
+
+/** 一键清空全部诊断记录 */
+const clearing = ref(false)
+const clearAll = async () => {
+  if (!confirm(`确定一键删除全部 ${total.value} 条诊断记录吗？删除后不可恢复！`)) return
+  clearing.value = true
+  try {
+    const res = await api.clearRecords()
+    store.showToast(`已清空 ${res.removed} 条记录`, 'success')
+    page.value = 0
+    await load()
+  } catch (err) {
+    store.showToast((err as Error).message, 'error')
+  } finally {
+    clearing.value = false
   }
 }
 
@@ -139,6 +166,11 @@ const changePage = async (delta: number) => {
       </select>
 
       <span class="count-badge">显示 {{ filtered.length }} / {{ total }} 条</span>
+
+      <button class="toggle-btn toggle-btn--danger" :disabled="clearing || !total" @click="clearAll">
+        <AppIcon name="trash" :size="14" />
+        {{ clearing ? '清空中…' : '一键清空' }}
+      </button>
     </div>
 
     <!-- 表格 -->
@@ -168,7 +200,21 @@ const changePage = async (delta: number) => {
             <td class="mono">{{ r.id }}</td>
             <td>
               <span class="crop-cell">
-                {{ store.crops.find((c) => c.id === r.cropId)?.emoji || '🌿' }}
+                <!-- 真实病害实拍缩略图，无图时回退作物 emoji -->
+                <img
+                  v-if="r.imageUrl"
+                  :src="r.imageUrl"
+                  :alt="r.diagnosis?.results?.[0]?.name"
+                  class="crop-cell__photo"
+                  loading="lazy"
+                />
+                <CropEmoji
+                  v-else
+                  :emoji="store.crops.find((c) => c.id === r.cropId)?.emoji || '🌿'"
+                  :name="r.cropName"
+                  :size="22"
+                  class="ad-crop__emoji"
+                />
                 {{ r.cropName }}
               </span>
             </td>
@@ -236,6 +282,13 @@ const changePage = async (delta: number) => {
           </header>
 
           <div class="drawer__body">
+            <!-- 农户上报实拍图 -->
+            <img
+              v-if="selected.imageUrl"
+              :src="selected.imageUrl"
+              :alt="selected.diagnosis?.results?.[0]?.name"
+              class="drawer__photo"
+            />
             <section class="d-section">
               <h4 class="d-section__title">诊断结论</h4>
               <div v-for="(r, i) in selected.diagnosis?.results" :key="i" class="d-result">
@@ -388,6 +441,24 @@ const changePage = async (delta: number) => {
   font-weight: 600;
 }
 
+.toggle-btn--danger {
+  margin-left: auto;
+  background: #fdf3f2;
+  border-color: #f3c1c0;
+  color: #d9534f;
+  font-weight: 600;
+}
+
+.toggle-btn--danger:hover:not(:disabled) {
+  background: #fbeae9;
+  border-color: #e9a9a7;
+}
+
+.toggle-btn--danger:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
 .count-badge {
   font-size: 12px;
   color: var(--c-text-4);
@@ -412,7 +483,7 @@ const changePage = async (delta: number) => {
 .table thead th {
   text-align: left;
   padding: 12px 14px;
-  font-size: 11px;
+  font-size: 12.5px;
   font-weight: 600;
   color: var(--c-text-4);
   background: var(--c-bg-muted);
@@ -457,6 +528,25 @@ const changePage = async (delta: number) => {
   font-size: 12px;
 }
 
+.crop-cell__photo {
+  width: 34px;
+  height: 26px;
+  border-radius: 5px;
+  object-fit: cover;
+  border: 1px solid var(--c-line-soft);
+  flex-shrink: 0;
+}
+
+.drawer__photo {
+  width: 100%;
+  max-height: 240px;
+  object-fit: cover;
+  border-radius: var(--r-md);
+  border: 1px solid var(--c-line-soft);
+  margin-bottom: 16px;
+  display: block;
+}
+
 .disease-cell {
   display: flex;
   align-items: center;
@@ -469,7 +559,7 @@ const changePage = async (delta: number) => {
 }
 
 .alt-count {
-  font-size: 10px;
+  font-size: 11.5px;
   padding: 1px 6px;
   border-radius: 4px;
   background: var(--c-bg-muted);
@@ -480,7 +570,7 @@ const changePage = async (delta: number) => {
   display: inline-block;
   padding: 2px 8px;
   border-radius: 5px;
-  font-size: 11px;
+  font-size: 12.5px;
   font-weight: 700;
   font-variant-numeric: tabular-nums;
 }
@@ -504,7 +594,7 @@ const changePage = async (delta: number) => {
   gap: 3px;
   padding: 3px 8px;
   border-radius: var(--r-full);
-  font-size: 10.5px;
+  font-size: 11.5px;
   font-weight: 600;
   white-space: nowrap;
 }
@@ -609,7 +699,7 @@ const changePage = async (delta: number) => {
 }
 
 .drawer__sub {
-  font-size: 11px;
+  font-size: 12.5px;
   color: var(--c-text-4);
 }
 
@@ -667,7 +757,7 @@ const changePage = async (delta: number) => {
   place-items: center;
   background: var(--c-primary-600);
   color: #fff;
-  font-size: 10px;
+  font-size: 11.5px;
   font-weight: 700;
   flex-shrink: 0;
 }
@@ -722,7 +812,7 @@ const changePage = async (delta: number) => {
 }
 
 .d-grid span {
-  font-size: 10.5px;
+  font-size: 11.5px;
   color: var(--c-text-4);
 }
 
@@ -749,7 +839,7 @@ const changePage = async (delta: number) => {
 }
 
 .d-chem__safe {
-  font-size: 10.5px;
+  font-size: 11.5px;
   padding: 2px 7px;
   border-radius: 4px;
   background: var(--c-primary-50);
@@ -802,7 +892,7 @@ const changePage = async (delta: number) => {
 }
 
 .d-trace__ms {
-  font-size: 10.5px;
+  font-size: 11.5px;
   color: var(--c-text-4);
   font-variant-numeric: tabular-nums;
 }
@@ -830,7 +920,7 @@ const changePage = async (delta: number) => {
 /* 提交来源标签 */
 .src-tag {
   display: inline-block;
-  font-size: 11px;
+  font-size: 12.5px;
   font-weight: 700;
   padding: 2px 8px;
   border-radius: var(--r-full);

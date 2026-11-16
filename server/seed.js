@@ -76,7 +76,7 @@ const buildOne = (daysAgo) => {
     isDemo: true,
     userId: `demo-user-${randInt(1, 12)}`,
     cropId,
-    cropName: { sanqi: '文山三七', blueberry: '高原蓝莓', citrus: '柑橘' }[cropId],
+    cropName: { sanqi: '文山三七', blueberry: '蓝莓', citrus: '柑橘' }[cropId],
     region,
     altitude: `${randInt(altRange[0], altRange[1])}m`,
     weather: rand(['连续降雨', '晴转多云', '高温干旱', '阴雨连绵', '晴']),

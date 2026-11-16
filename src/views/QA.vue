@@ -2,15 +2,27 @@
 import { ref, onMounted, nextTick, computed } from 'vue'
 import { useAppStore } from '@/stores/app'
 import AppIcon from '@/components/AppIcon.vue'
+import CropEmoji from '@/components/CropEmoji.vue'
 import PageHero from '@/components/PageHero.vue'
+import RegionPicker from '@/components/RegionPicker.vue'
 import api from '@/api'
 
 interface Msg {
   id?: number
   role: 'user' | 'assistant'
   content: string
-  sources?: { name: string; score: number; type: string; symptoms: string[] }[]
+  sources?: {
+    name: string
+    score: number
+    type: string
+    symptoms: string[]
+    references?: string[]
+    excerpt?: string
+    cropName?: string
+  }[]
   usedFallback?: boolean
+  /** 空召回：知识库无资料，回答为固定兜底文案（非 AI 编造） */
+  noHit?: boolean
   pending?: boolean
   streaming?: boolean
 }
@@ -21,6 +33,15 @@ const messages = ref<Msg[]>([])
 const sending = ref(false)
 const listRef = ref<HTMLElement | null>(null)
 
+/** 输入框自适应高度：单行起，最多 4 行，长文本输入更舒适 */
+const inputEl = ref<HTMLTextAreaElement | null>(null)
+const autoGrow = () => {
+  const el = inputEl.value
+  if (!el) return
+  el.style.height = 'auto'
+  el.style.height = `${Math.min(el.scrollHeight, 112)}px`
+}
+
 /** 当前地区可问的作物：优先显示所选区域对应的本地作物，跨区作物折叠 */
 const regionCrops = computed(() => store.localCrops.filter((c) => c.diagnosable !== false))
 const remoteCrops = computed(() => store.otherCrops.filter((c) => c.diagnosable !== false))
@@ -30,15 +51,20 @@ const showRemote = ref(false)
 const customCropMode = ref(false)
 const customCropName = ref('')
 
+const QUICK_MAP: Record<string, string[]> = {
+  sanqi: ['三七根腐病怎么防？', '三七叶子发黄是缺素还是病了？', '雨季三七要注意什么？'],
+  blueberry: ['蓝莓新叶发黄怎么办？', '蓝莓灰霉病用什么药？', '蓝莓土壤 pH 怎么调？'],
+  citrus: ['柑橘黄龙病能治吗？', '柑橘红蜘蛛怎么防治？', '溃疡病和疮痂病怎么区分？'],
+  tea: ['茶饼病什么时候预防最好？', '小绿叶蝉打什么药不伤茶？', '茶叶采摘前多久不能打药？'],
+  tianma: ['天麻烂麻是什么原因？', '天麻窖里积水怎么处理？', '麻种下地前怎么消毒？'],
+  walnut: ['核桃黑果是病还是虫？', '核桃枯枝是什么病？', '举肢蛾什么时候打药？'],
+  huajiao: ['花椒锈病怎么防治？', '花椒蚜虫用什么药？', '椒树流胶是什么病？'],
+  moyu: ['魔芋软腐病怎么防？', '魔芋叶枯是什么原因？', '魔芋种芋怎么消毒？'],
+  shiliu: ['石榴干腐病怎么防治？', '石榴裂果是什么原因？', '石榴蚧壳虫怎么治？'],
+  coffee: ['咖啡锈病怎么防治？', '咖啡天牛怎么防？', '咖啡豆壳变黑是什么病？']
+}
+
 const quickQuestions = computed(() => {
-  const map: Record<string, string[]> = {
-    sanqi: ['三七根腐病怎么防？', '三七叶子发黄是缺素还是病了？', '雨季三七要注意什么？'],
-    blueberry: ['蓝莓新叶发黄怎么办？', '蓝莓灰霉病用什么药？', '蓝莓土壤 pH 怎么调？'],
-    citrus: ['柑橘黄龙病能治吗？', '柑橘红蜘蛛怎么防治？', '溃疡病和疮痂病怎么区分？'],
-    tea: ['茶饼病什么时候预防最好？', '小绿叶蝉打什么药不伤茶？', '茶叶采摘前多久不能打药？'],
-    tianma: ['天麻烂麻是什么原因？', '天麻窖里积水怎么处理？', '麻种下地前怎么消毒？'],
-    walnut: ['核桃黑果是病还是虫？', '核桃枯枝是什么病？', '举肢蛾什么时候打药？']
-  }
   // 自定义作物 → 通用植保建议，并把作物名带进去
   if (customCropMode.value) {
     const name = customCropName.value.trim()
@@ -48,7 +74,12 @@ const quickQuestions = computed(() => {
       name ? `${name}打什么药，安全间隔期多久？` : '雨季病害防控要注意什么？'
     ]
   }
-  return map[store.selectedCropId] || map.sanqi
+  const id = store.selectedCropId
+  if (QUICK_MAP[id]) return QUICK_MAP[id]
+  // 其他作物（图谱扩充/服务器新增）：按作物名生成对应推荐
+  const crop = store.crops.find((c) => c.id === id)
+  const name = crop?.name?.replace(/^(云南|高原|昭通|普洱|富源|蒙自)/, '') || '作物'
+  return [`${name}常见病虫害有哪些？`, `${name}叶子发黄是什么原因？`, `雨季${name}要注意什么？`]
 })
 
 const scrollToBottom = async () => {
@@ -58,8 +89,11 @@ const scrollToBottom = async () => {
   }
 }
 
-const WELCOME =
-  '您好！我是云岭农诊的农技问答助手。\n\n关于三七、蓝莓、柑橘、茶叶、天麻、核桃的病虫害、用药、施肥问题，您都可以用大白话问我。其他作物（如辣椒、玉米、百合等）也能问——点上方「✏️ 其他作物」填一下作物名即可。回答都来自植保手册和技术资料，不会乱编，回答过程逐字流式呈现。'
+const welcomeText = computed(() => {
+  const crop = store.crops.find((c) => c.id === store.selectedCropId)
+  const name = crop?.name?.replace(/^(云南|高原|昭通|普洱|富源|蒙自)/, '') || '作物'
+  return `您好！我是云岭农诊的农技问答助手。\n\n当前选中「${name}」，关于${name}的病虫害、用药、施肥问题，您都可以用大白话问我，也可以直接点下方推荐问题。其他作物也能问——点上方「✏️ 其他作物」填一下作物名即可。回答都来自植保手册和技术资料，不会乱编，回答过程逐字流式呈现。`
+})
 
 const HISTORY_KEY = 'ylnz_qa_history'
 const saveHistory = () => {
@@ -68,7 +102,7 @@ const saveHistory = () => {
   } catch { /* 忽略 */ }
 }
 const clearChat = () => {
-  messages.value = [{ role: 'assistant', content: WELCOME }]
+  messages.value = [{ role: 'assistant', content: welcomeText.value }]
   localStorage.removeItem(HISTORY_KEY)
   store.showToast('会话已清空', 'success')
 }
@@ -99,7 +133,7 @@ onMounted(async () => {
       return
     }
   } catch { /* 损坏则重置 */ }
-  messages.value.push({ role: 'assistant', content: WELCOME })
+  messages.value.push({ role: 'assistant', content: welcomeText.value })
 })
 
 const send = async (text?: string) => {
@@ -107,6 +141,7 @@ const send = async (text?: string) => {
   if (!q || sending.value) return
 
   input.value = ''
+  nextTick(autoGrow)
   messages.value.push({ role: 'user', content: q })
   await scrollToBottom()
 
@@ -136,7 +171,7 @@ const send = async (text?: string) => {
           placeholder.content = full
           scrollToBottom()
         } else if (type === 'done') {
-          finalize({ usedFallback: data.usedFallback, streaming: false })
+          finalize({ usedFallback: data.usedFallback, noHit: !!data.noHit, streaming: false })
         }
       }
     )
@@ -174,7 +209,7 @@ const toggleSpeak = (m: any) => {
   window.speechSynthesis.cancel()
   const u = new SpeechSynthesisUtterance(m.content.replace(/[*#]/g, ''))
   u.lang = 'zh-CN'
-  u.rate = 0.94
+  u.rate = 1.15
   const zh = window.speechSynthesis.getVoices().find((v) => v.lang.includes('zh'))
   if (zh) u.voice = zh
   u.onend = () => (speakingId.value = null)
@@ -188,6 +223,18 @@ const kbOpenId = ref<number | null>(null)
 const toggleKb = (m: any) => {
   kbOpenId.value = kbOpenId.value === (m.id ?? -1) ? null : (m.id ?? -1)
   if (kbOpenId.value !== null) stopSpeak()
+}
+
+/** 引用溯源区块：每条 AI 回答底部的折叠"资料来源" */
+const citeOpenId = ref<number | null>(null)
+const toggleCite = (m: any) => {
+  citeOpenId.value = citeOpenId.value === (m.id ?? -1) ? null : (m.id ?? -1)
+}
+
+/** 引用条目的出处文案：手册名 ・ 病害名（匹配度） */
+const citeRef = (s: any) => {
+  const book = s.references?.[0] || (s.cropName ? `${s.cropName}植保知识库` : '平台植保知识库')
+  return `${book} ・ ${s.name}`
 }
 
 /** RAG 检索增强面板：徽章点击打开，实时演示知识库检索 */
@@ -206,6 +253,14 @@ const ragHits = ref<RagHit[]>([])
 const ragBusy = ref(false)
 const ragDone = ref(false)
 const ragTotal = ref({ docs: 0, diseases: 0, crops: 0 })
+/** 面板一打开就展示真实知识库规模（不能等用户检索后才从 0 变成真实值） */
+const loadRagTotal = async () => {
+  try {
+    const r = await api.kbStats()
+    ragTotal.value = { docs: r.docs, diseases: r.diseases, crops: r.crops }
+  } catch { /* 静默失败 */ }
+}
+loadRagTotal()
 const ragDemo = async (q?: string) => {
   const text = (q ?? ragQuery.value).trim()
   if (!text || ragBusy.value) return
@@ -254,6 +309,7 @@ const RAG_STEPS = [
       desc="基于本地植保知识库，大白话提问 · 有据可查 · 流式呈现"
       badge="RAG 检索增强"
       badge-icon="book"
+      badge-tip="基于本地植保知识库检索，回答可溯源"
       image="/media/banners/b36813325_wide.jpg"
       :tags="['引用来源可展开', '支持语音朗读', '一键转问专家']"
       @badge-click="ragOpen = true"
@@ -297,7 +353,7 @@ const RAG_STEPS = [
             <input
               v-model="ragQuery"
               class="rag-demo__input"
-              placeholder="输入问题试检索，如：三七叶片有白霜状霉层…"
+              placeholder="输入问题检索，如：三七叶片有白霜状霉层怎么防治？"
               maxlength="40"
               @keyup.enter="ragDemo()"
             />
@@ -337,7 +393,7 @@ const RAG_STEPS = [
     <!-- 作物切换：跟随所选地区 -->
     <div class="crop-switch-bar">
       <div class="crop-switch">
-        <span class="crop-switch__label">{{ store.cropsProvince }}</span>
+        <RegionPicker class="qa-region" />
         <button
           v-for="c in regionCrops"
           :key="c.id"
@@ -345,7 +401,8 @@ const RAG_STEPS = [
           :class="{ 'is-active': store.selectedCropId === c.id }"
           @click="store.setCrop(c.id)"
         >
-          {{ c.emoji }} {{ c.name }}
+          <CropEmoji :emoji="c.emoji" :name="c.name" :size="18" class="qa-crop__emoji" />
+          {{ c.name }}
         </button>
         <button
           v-if="remoteCrops.length"
@@ -389,7 +446,8 @@ const RAG_STEPS = [
         :class="{ 'is-active': store.selectedCropId === c.id }"
         @click="store.setCrop(c.id)"
       >
-        {{ c.emoji }} {{ c.name }}
+        <CropEmoji :emoji="c.emoji" :name="c.name" :size="18" class="qa-crop__emoji" />
+        {{ c.name }}
       </button>
     </div>
 
@@ -412,23 +470,49 @@ const RAG_STEPS = [
           </div>
 
           <template v-else>
-            <div class="msg__bubble" :class="{ 'typing-caret': m.streaming }">
+            <div class="msg__bubble" :class="{ 'typing-caret': m.streaming, 'msg__bubble--nohit': m.noHit }">
               <p v-for="(line, j) in m.content.split('\n')" :key="j" :class="{ 'is-empty': !line.trim() }">
                 {{ line }}
               </p>
             </div>
 
-            <!-- 引用来源 -->
-            <div v-if="m.sources?.length" class="msg__sources">
-              <p class="msg__sources-label">
-                <AppIcon name="database" :size="11" />
-                参考知识库
-              </p>
-              <div class="msg__sources-list">
-                <span v-for="s in m.sources" :key="s.name" class="src-chip">
-                  {{ s.name }}
-                  <i>{{ Math.round(s.score * 100) }}%</i>
-                </span>
+            <!-- 空召回兜底：知识库无资料时的行动引导（答案为固定文案，非模型生成） -->
+            <div v-if="m.noHit && !m.pending" class="nohit-actions">
+              <button class="nohit-actions__btn" @click="$router.push('/diagnose')">
+                <AppIcon name="camera" :size="13" /> 去提交病害样本
+              </button>
+              <button class="nohit-actions__btn" @click="$router.push('/ask')">
+                <AppIcon name="shield" :size="13" /> 申请专家复核咨询
+              </button>
+            </div>
+
+            <!-- 📑 引用溯源区块（每条 AI 回答底部固定展示，点击展开原始片段） -->
+            <div v-if="m.sources?.length" class="msg__cite">
+              <button class="msg__cite-toggle" @click="toggleCite(m)">
+                <AppIcon name="book" :size="12" />
+                资料来源（{{ m.sources.length }} 条，点击{{ citeOpenId === (m.id ?? -1) ? '收起' : '展开' }}）
+                <i class="msg__cite-arrow" :class="{ 'is-open': citeOpenId === (m.id ?? -1) }">▶</i>
+              </button>
+              <div v-if="citeOpenId === (m.id ?? -1)" class="msg__cite-body">
+                <div v-for="s in m.sources" :key="s.name" class="cite-item">
+                  <p class="cite-item__ref">▶ {{ citeRef(s) }}</p>
+                  <pre class="cite-item__excerpt">{{ s.excerpt || s.symptoms?.join('；') || '（暂无原文片段）' }}</pre>
+                  <p class="cite-item__score">
+                    匹配度 {{ Math.round(s.score * 100) }}%<template v-if="s.cropName"> · {{ s.cropName }}</template>
+                  </p>
+                  <!-- 跳转外部检索：百度 / 百度文库 -->
+                  <div class="cite-item__links">
+                    <a
+                      :href="`https://www.baidu.com/s?wd=${encodeURIComponent((s.cropName ? s.cropName + ' ' : '') + (s.name || citeRef(s)))}`"
+                      target="_blank" rel="noopener" class="cite-link cite-link--baidu"
+                    >🔍 百度搜索</a>
+                    <a
+                      :href="`https://wenku.baidu.com/search?word=${encodeURIComponent((s.name || citeRef(s)).replace(/[《》]/g, ''))}`"
+                      target="_blank" rel="noopener" class="cite-link cite-link--wenku"
+                    >📄 百度文库</a>
+                  </div>
+                </div>
+                <p class="msg__cite-note">以上为知识库原文片段，回答内容均据此生成，可对照核查。点击「百度搜索 / 百度文库」可跳转外部资料延伸阅读。</p>
               </div>
             </div>
 
@@ -442,7 +526,7 @@ const RAG_STEPS = [
                 {{ speakingId === (m.id ?? -1) ? '停止' : '朗读' }}
               </button>
               <button
-                v-if="m.usedFallback"
+                v-if="m.usedFallback && !m.noHit"
                 class="msg__fallback"
                 :class="{ 'is-open': kbOpenId === (m.id ?? -1) }"
                 @click="toggleKb(m)"
@@ -485,14 +569,17 @@ const RAG_STEPS = [
     <!-- 输入栏 -->
     <div class="composer">
       <div class="composer__box">
-        <input
+        <textarea
+          ref="inputEl"
           v-model="input"
           class="composer__input"
-          placeholder="用大白话描述您的问题…"
+          rows="1"
+          placeholder="用大白话描述您的问题…（Enter 发送，Shift+Enter 换行）"
           maxlength="200"
           :disabled="sending"
-          @keyup.enter="send()"
-        />
+          @input="autoGrow"
+          @keydown.enter.exact.prevent="send()"
+        ></textarea>
         <button class="composer__send" :disabled="!input.trim() || sending" @click="send()">
           <AppIcon name="arrow-right" :size="17" :stroke="2.2" />
         </button>
@@ -559,7 +646,7 @@ const RAG_STEPS = [
 }
 
 .page-head__sub {
-  font-size: 10.5px;
+  font-size: 11.5px;
   color: var(--c-text-4);
 }
 
@@ -568,6 +655,8 @@ const RAG_STEPS = [
   display: flex;
   align-items: center;
   gap: 10px;
+  min-width: 0;
+  max-width: 100%;
 }
 
 .crop-switch-bar__clear {
@@ -595,41 +684,77 @@ const RAG_STEPS = [
 .crop-switch {
   display: flex;
   align-items: center;
-  gap: 6px;
-  padding: 9px 16px;
+  flex-wrap: wrap;
+  min-width: 0;
+  flex: 1;
+  gap: 8px;
+  padding: 11px 20px;
   background: var(--c-bg-card);
   border-bottom: 1px solid var(--c-line-soft);
-  overflow-x: auto;
-  flex-shrink: 0;
   scrollbar-width: none;
+}
+
+/* 地区选择按钮（白色条上的配色适配） */
+.qa-region {
+  flex-shrink: 0;
+}
+
+.qa-region :deep(.region-btn) {
+  background: var(--c-primary-50, #eaf5ee);
+  border: 1px solid var(--c-primary-100, #d6ecdf);
+  color: var(--c-primary-700, #256b47);
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 0.5px;
+}
+
+.qa-region :deep(.region-btn:hover) {
+  background: #dcf0e4;
+  border-color: var(--c-primary-600);
+}
+
+.qa-region :deep(.region-btn__switch) {
+  background: rgba(37, 107, 71, 0.12);
+  border-color: rgba(37, 107, 71, 0.3);
 }
 
 .crop-switch__label {
   flex-shrink: 0;
-  padding: 3px 8px;
+  padding: 4px 10px;
   border-radius: 6px;
   background: var(--c-primary-50, #eaf5ee);
   color: var(--c-primary-700, #256b47);
-  font-size: 10.5px;
+  font-size: 13px;
   font-weight: 700;
   letter-spacing: 0.5px;
 }
 
 .crop-switch--remote {
-  padding-top: 7px;
+  flex: 0 0 auto;
+  padding: 7px 20px;
   background: var(--c-bg-muted);
+}
+
+/* 自定义作物输入：紧凑单行 */
+.crop-switch--remote .input {
+  flex: 1;
+  min-width: 0;
+  height: 36px;
+  padding: 0 12px;
+  border-radius: 18px;
+  font-size: 13px;
 }
 
 .crop-switch__more {
   display: inline-flex;
   align-items: center;
-  gap: 3px;
+  gap: 4px;
   flex-shrink: 0;
-  padding: 5px 10px;
+  padding: 6px 12px;
   border-radius: var(--r-full);
   border: 1px dashed var(--c-line);
   background: transparent;
-  font-size: 11px;
+  font-size: 13px;
   color: var(--c-text-4);
   white-space: nowrap;
   transition: all var(--dur-fast);
@@ -646,11 +771,11 @@ const RAG_STEPS = [
 }
 
 .crop-switch__item {
-  padding: 5px 12px;
+  padding: 7px 14px;
   border-radius: var(--r-full);
   background: var(--c-bg-muted);
   border: 1px solid var(--c-line-soft);
-  font-size: 11.5px;
+  font-size: 13px;
   color: var(--c-text-3);
   white-space: nowrap;
   transition: all var(--dur-fast);
@@ -667,16 +792,16 @@ const RAG_STEPS = [
 .msg-list {
   flex: 1;
   overflow-y: auto;
-  padding: 16px 16px 8px;
+  padding: 20px 20px 10px;
   display: flex;
   flex-direction: column;
-  gap: 16px;
+  gap: 20px;
   -webkit-overflow-scrolling: touch;
 }
 
 .msg {
   display: flex;
-  gap: 9px;
+  gap: 11px;
   max-width: 100%;
 }
 
@@ -685,9 +810,9 @@ const RAG_STEPS = [
 }
 
 .msg__avatar {
-  width: 28px;
-  height: 28px;
-  border-radius: 9px;
+  width: 34px;
+  height: 34px;
+  border-radius: 10px;
   display: grid;
   place-items: center;
   background: linear-gradient(140deg, var(--c-primary-100), var(--c-primary-200));
@@ -699,8 +824,8 @@ const RAG_STEPS = [
 .msg__content {
   display: flex;
   flex-direction: column;
-  gap: 7px;
-  max-width: 82%;
+  gap: 8px;
+  max-width: 80%;
 }
 
 .msg--user .msg__content {
@@ -708,10 +833,10 @@ const RAG_STEPS = [
 }
 
 .msg__bubble {
-  padding: 11px 14px;
-  border-radius: 16px;
-  font-size: 13.5px;
-  line-height: 1.75;
+  padding: 14px 18px;
+  border-radius: var(--r-lg);
+  font-size: 15px;
+  line-height: 1.8;
   word-break: break-word;
 }
 
@@ -739,7 +864,7 @@ const RAG_STEPS = [
   display: flex;
   gap: 4px;
   align-items: center;
-  padding: 15px 16px;
+  padding: 17px 18px;
 }
 
 .msg__searching {
@@ -793,45 +918,169 @@ const RAG_STEPS = [
 }
 
 /* 来源 */
-.msg__sources {
-  padding: 9px 11px;
-  border-radius: var(--r-sm);
+/* ===== 空召回兜底卡片 ===== */
+.msg__bubble--nohit {
+  background: #fffbeb;
+  border: 1px solid #fcd34d;
+}
+
+.nohit-actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.nohit-actions__btn {
+  flex: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  padding: 8px 10px;
+  border-radius: var(--r-full);
+  font-size: 11.5px;
+  font-weight: 600;
+  color: #1d4ed8;
+  background: #eff6ff;
+  border: 1px solid #bfdbfe;
+  transition: all var(--dur-base) var(--ease-out);
+}
+
+.nohit-actions__btn:hover {
+  background: #dbeafe;
+}
+
+/* ===== 📑 引用溯源区块（折叠可展开） ===== */
+.msg__cite {
+  margin-top: 10px;
+}
+
+.msg__cite-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 14px;
+  border-radius: var(--r-full);
   background: var(--c-bg-muted);
   border: 1px dashed var(--c-line);
+  font-size: 13.5px;
+  font-weight: 600;
+  color: var(--c-text-2);
+  transition: background var(--dur-base) var(--ease-out);
 }
 
-.msg__sources-label {
-  display: flex;
-  align-items: center;
-  gap: 4px;
-  font-size: 10px;
+.msg__cite-toggle:hover {
+  background: var(--c-accent-100);
+}
+
+.msg__cite-arrow {
+  font-style: normal;
+  font-size: 11.5px;
   color: var(--c-text-4);
-  margin-bottom: 6px;
+  transition: transform var(--dur-base) var(--ease-out);
 }
 
-.msg__sources-list {
+.msg__cite-arrow.is-open {
+  transform: rotate(90deg);
+}
+
+.msg__cite-body {
+  margin-top: 9px;
+  padding: 13px 15px;
+  border-radius: var(--r-sm);
+  background: var(--c-bg-muted);
+  border: 1px solid var(--c-line-soft);
+  animation: citeIn 0.22s var(--ease-out);
+}
+
+@keyframes citeIn {
+  from {
+    opacity: 0;
+    transform: translateY(-4px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+.cite-item + .cite-item {
+  margin-top: 11px;
+  padding-top: 11px;
+  border-top: 1px dashed var(--c-line-soft);
+}
+
+.cite-item__ref {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--c-primary-700);
+  line-height: 1.55;
+}
+
+.cite-item__excerpt {
+  margin: 6px 0 0;
+  padding: 10px 12px;
+  border-radius: 8px;
+  background: var(--c-bg-card);
+  border-left: 3px solid var(--c-primary-600);
+  font-size: 13px;
+  line-height: 1.75;
+  color: var(--c-text-2);
+  white-space: pre-wrap;
+  word-break: break-word;
+  font-family: inherit;
+}
+
+.cite-item__score {
+  margin-top: 5px;
+  font-size: 12.5px;
+  color: var(--c-text-4);
+}
+
+.cite-item__links {
   display: flex;
-  flex-wrap: wrap;
-  gap: 5px;
+  gap: 8px;
+  margin-top: 8px;
 }
 
-.src-chip {
+.cite-link {
   display: inline-flex;
   align-items: center;
   gap: 4px;
-  padding: 3px 8px;
+  padding: 4px 11px;
   border-radius: var(--r-full);
-  background: var(--c-bg-card);
+  font-size: 12px;
+  font-weight: 600;
+  text-decoration: none;
   border: 1px solid var(--c-line);
-  font-size: 10.5px;
+  background: var(--c-bg-card);
   color: var(--c-text-2);
+  transition: all var(--dur-fast);
 }
 
-.src-chip i {
-  font-style: normal;
-  font-size: 9px;
-  color: var(--c-primary-600);
-  font-weight: 700;
+.cite-link:hover {
+  border-color: var(--c-primary-600);
+  color: var(--c-primary-700);
+  background: var(--c-primary-50, #eaf5ee);
+}
+
+.cite-link--baidu:hover {
+  border-color: #2b6bd6;
+  color: #2b6bd6;
+  background: #eef4fe;
+}
+
+.cite-link--wenku:hover {
+  border-color: #c2802b;
+  color: #c2802b;
+  background: #fdf6ec;
+}
+
+.msg__cite-note {
+  margin-top: 9px;
+  font-size: 12.5px;
+  color: var(--c-text-4);
+  line-height: 1.65;
 }
 
 /* 工具栏 */
@@ -844,12 +1093,12 @@ const RAG_STEPS = [
 .msg__tool {
   display: inline-flex;
   align-items: center;
-  gap: 3px;
-  padding: 3px 9px;
+  gap: 4px;
+  padding: 4px 11px;
   border-radius: var(--r-full);
   background: var(--c-bg-muted);
   border: 1px solid var(--c-line-soft);
-  font-size: 10.5px;
+  font-size: 12.5px;
   color: var(--c-text-3);
 }
 
@@ -859,7 +1108,7 @@ const RAG_STEPS = [
 }
 
 .msg__fallback {
-  font-size: 9.5px;
+  font-size: 11.5px;
   padding: 2px 7px;
   border-radius: 4px;
   background: var(--c-warning-bg);
@@ -898,7 +1147,7 @@ const RAG_STEPS = [
   display: flex;
   align-items: center;
   gap: 6px;
-  font-size: 11.5px;
+  font-size: 12.5px;
   font-weight: 800;
   color: #92400e;
   margin-bottom: 9px;
@@ -914,27 +1163,27 @@ const RAG_STEPS = [
   align-items: center;
   justify-content: space-between;
   gap: 8px;
-  font-size: 12px;
+  font-size: 13px;
   color: var(--c-text-1);
 }
 
 .kb-panel__score {
-  font-size: 10px;
+  font-size: 12.5px;
   font-weight: 700;
   color: #b45309;
   flex-shrink: 0;
 }
 
 .kb-panel__sym {
-  margin-top: 3px;
-  font-size: 11px;
-  line-height: 1.6;
+  margin-top: 4px;
+  font-size: 13.5px;
+  line-height: 1.65;
   color: var(--c-text-3);
 }
 
 .kb-panel__note {
   margin-top: 8px;
-  font-size: 10px;
+  font-size: 12.5px;
   color: var(--c-text-4);
 }
 
@@ -945,7 +1194,7 @@ const RAG_STEPS = [
 }
 
 .quick__title {
-  font-size: 11px;
+  font-size: 13px;
   color: var(--c-text-4);
   margin-bottom: 8px;
 }
@@ -953,7 +1202,7 @@ const RAG_STEPS = [
 .quick__list {
   display: flex;
   flex-direction: column;
-  gap: 7px;
+  gap: 8px;
 }
 
 .quick__item {
@@ -961,11 +1210,11 @@ const RAG_STEPS = [
   align-items: center;
   justify-content: space-between;
   gap: 8px;
-  padding: 11px 14px;
+  padding: 13px 16px;
   border-radius: var(--r-md);
   background: var(--c-bg-card);
   border: 1px solid var(--c-line-soft);
-  font-size: 12.5px;
+  font-size: 13.5px;
   color: var(--c-text-2);
   text-align: left;
   transition: all var(--dur-fast);
@@ -992,10 +1241,10 @@ const RAG_STEPS = [
 
 .composer__box {
   display: flex;
-  align-items: center;
+  align-items: flex-end;
   gap: 8px;
-  padding: 5px 5px 5px 15px;
-  border-radius: var(--r-full);
+  padding: 6px 6px 6px 15px;
+  border-radius: var(--r-lg);
   background: var(--c-bg-muted);
   border: 1.5px solid var(--c-line);
   transition: border-color var(--dur-fast);
@@ -1008,9 +1257,19 @@ const RAG_STEPS = [
 
 .composer__input {
   flex: 1;
-  height: 36px;
-  font-size: 13.5px;
+  min-height: 44px;
+  max-height: 112px;
+  padding: 11px 0;
+  font-size: 15px;
+  line-height: 1.5;
   min-width: 0;
+  resize: none;
+  overflow-y: auto;
+  background: transparent;
+  border: none;
+  outline: none;
+  font-family: inherit;
+  color: var(--c-text-1);
 }
 
 .composer__input::placeholder {
@@ -1018,8 +1277,9 @@ const RAG_STEPS = [
 }
 
 .composer__send {
-  width: 36px;
-  height: 36px;
+  width: 40px;
+  height: 40px;
+  margin-bottom: 2px;
   border-radius: 50%;
   display: grid;
   place-items: center;
@@ -1037,7 +1297,7 @@ const RAG_STEPS = [
 .composer__tip {
   margin-top: 7px;
   text-align: center;
-  font-size: 9.5px;
+  font-size: 12.5px;
   color: var(--c-text-4);
 }
 </style>
@@ -1045,24 +1305,29 @@ const RAG_STEPS = [
 <style scoped>
 @media (min-width: 960px) {
   .msg-list {
-    max-width: 820px;
+    max-width: 1020px;
     margin: 0 auto;
     width: 100%;
   }
   .crop-switch {
-    justify-content: center;
+    justify-content: flex-start;
+    max-width: 1020px;
+    margin: 0 auto;
+    width: 100%;
+    border-radius: var(--r-lg);
+    border: 1px solid var(--c-line-soft);
   }
   .quick {
-    max-width: 820px;
+    max-width: 1020px;
     margin: 0 auto;
     width: 100%;
   }
   .composer__box {
-    max-width: 820px;
+    max-width: 1020px;
     margin: 0 auto;
   }
   .msg--assistant .msg__bubble {
-    font-size: 14.5px;
+    font-size: 15.5px;
   }
 }
 
@@ -1088,7 +1353,7 @@ const RAG_STEPS = [
   padding: 11px 13px;
   border-radius: 12px;
   background: var(--c-primary-50);
-  font-size: 11.5px;
+  font-size: 13px;
   line-height: 1.8;
   color: var(--c-primary-800);
 }
@@ -1158,7 +1423,7 @@ const RAG_STEPS = [
   position: absolute;
   top: 7px;
   left: 8px;
-  font-size: 9.5px;
+  font-size: 11.5px;
   font-weight: 700;
   color: var(--c-primary-300);
 }
@@ -1181,7 +1446,7 @@ const RAG_STEPS = [
 }
 
 .rag-step small {
-  font-size: 10.5px;
+  font-size: 11.5px;
   line-height: 1.5;
   color: var(--c-text-3);
 }
@@ -1214,7 +1479,7 @@ const RAG_STEPS = [
 }
 
 .rag-demo__head strong { font-size: 13.5px; }
-.rag-demo__head small { font-size: 11px; color: var(--c-text-4); }
+.rag-demo__head small { font-size: 12.5px; color: var(--c-text-4); }
 
 .rag-demo__bar {
   display: flex;
@@ -1284,7 +1549,7 @@ const RAG_STEPS = [
   flex-shrink: 0;
   padding: 2px 7px;
   border-radius: 7px;
-  font-size: 10px;
+  font-size: 11.5px;
   font-weight: 700;
   letter-spacing: 0.5px;
   color: var(--c-primary-700);
@@ -1305,7 +1570,7 @@ const RAG_STEPS = [
 
 .rag-hit__name em {
   font-style: normal;
-  font-size: 10.5px;
+  font-size: 11.5px;
   font-weight: 500;
   color: var(--c-text-3);
   padding: 1px 6px;
@@ -1357,7 +1622,7 @@ const RAG_STEPS = [
   align-items: center;
   gap: 5px;
   margin-top: 2px;
-  font-size: 11px;
+  font-size: 12.5px;
   color: var(--c-primary-700);
 }
 

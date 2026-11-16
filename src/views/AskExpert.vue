@@ -486,7 +486,7 @@ watch(selRegion, () => reload())
 }
 
 .ex-card__title {
-  font-size: 10px;
+  font-size: 11.5px;
   color: var(--c-text-4);
 }
 
@@ -495,7 +495,7 @@ watch(selRegion, () => reload())
 }
 
 .ex-card__match {
-  font-size: 9px;
+  font-size: 11.5px;
   font-weight: 800;
   color: #fff;
   background: var(--c-primary-600);
@@ -511,7 +511,7 @@ watch(selRegion, () => reload())
 }
 
 .ex-card__tag {
-  font-size: 10px;
+  font-size: 11.5px;
   color: var(--c-primary-700);
   background: var(--c-primary-50);
   border: 1px solid var(--c-primary-200);
@@ -524,7 +524,7 @@ watch(selRegion, () => reload())
   align-items: center;
   gap: 4px;
   margin-top: 5px;
-  font-size: 10.5px;
+  font-size: 11.5px;
   color: var(--c-text-4);
 }
 
@@ -596,7 +596,7 @@ watch(selRegion, () => reload())
 }
 
 .ax-sheet__expert span {
-  font-size: 11px;
+  font-size: 12.5px;
   color: var(--c-text-3);
 }
 
@@ -640,7 +640,7 @@ watch(selRegion, () => reload())
 
 .ax-sheet__note {
   margin-top: 9px;
-  font-size: 10.5px;
+  font-size: 11.5px;
   color: var(--c-text-4);
   text-align: center;
 }
