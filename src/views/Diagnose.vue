@@ -204,24 +204,19 @@ const compressImage = (file: File): Promise<string> =>
     reader.readAsDataURL(file)
   })
 
-const handleFile = async (e: Event) => {
-  const target = e.target as HTMLInputElement
-  const file = target.files?.[0]
-  if (!file) return
-
+/** 文件接入统一入口：点击选择 / 拖拽放入共用（类型与大小前置校验 + 压缩） */
+const acceptFile = async (file: File) => {
   // 前置校验①：文件类型（只允许 jpg/png/jpeg，拦截 heic/gif 等）
   const okType =
     ['image/jpeg', 'image/png'].includes(file.type) ||
     /\.(jpe?g|png)$/i.test(file.name || '')
   if (!okType) {
     store.showToast('仅支持jpg/png图片格式', 'error')
-    target.value = ''
     return
   }
   // 前置校验②：文件大小（>10MB 直接拦截，不进 AI 流程）
   if (file.size > 10 * 1024 * 1024) {
     store.showToast('图片不能超过10MB，请压缩后重新上传', 'error')
-    target.value = ''
     return
   }
 
@@ -231,7 +226,24 @@ const handleFile = async (e: Event) => {
   } catch (err) {
     store.showToast((err as Error).message, 'error')
   }
+}
+
+const handleFile = async (e: Event) => {
+  const target = e.target as HTMLInputElement
+  const file = target.files?.[0]
+  if (!file) return
+  await acceptFile(file)
   target.value = ''
+}
+
+/* ---- 拖拽上传：图片可直接从文件夹拖进上传区 ---- */
+const dragOver = ref(false)
+
+const onDrop = async (e: DragEvent) => {
+  dragOver.value = false
+  const file = e.dataTransfer?.files?.[0]
+  if (!file) return
+  await acceptFile(file)
 }
 
 const pickImage = () => inputRef.value?.click()
@@ -492,12 +504,20 @@ const submit = async () => {
           @change="handleFile"
         />
 
-        <div v-if="!image" class="uploader" @click="pickImage">
+        <div
+          v-if="!image"
+          class="uploader"
+          :class="{ 'is-drag': dragOver }"
+          @click="pickImage"
+          @dragover.prevent="dragOver = true"
+          @dragleave.prevent="dragOver = false"
+          @drop.prevent="onDrop"
+        >
           <div class="uploader__icon">
             <AppIcon name="camera" :size="30" :stroke="1.6" />
           </div>
-          <p class="uploader__title">点击拍照或从相册选择</p>
-          <p class="uploader__sub">支持叶片、果实、根茎部照片</p>
+          <p class="uploader__title">点击拍照、从相册选择或拖入图片</p>
+          <p class="uploader__sub">支持叶片、果实、根茎部照片（可直接把图片文件拖进来）</p>
           <div class="uploader__tips">
             <span><AppIcon name="check" :size="11" /> 顺光拍摄</span>
             <span><AppIcon name="check" :size="11" /> 病部居中</span>
@@ -505,7 +525,14 @@ const submit = async () => {
           </div>
         </div>
 
-        <div v-else class="preview">
+        <div
+          v-else
+          class="preview"
+          :class="{ 'is-drag': dragOver }"
+          @dragover.prevent="dragOver = true"
+          @dragleave.prevent="dragOver = false"
+          @drop.prevent="onDrop"
+        >
           <img :src="image" alt="待诊断照片" class="preview__img" />
           <div class="preview__overlay">
             <span class="preview__name">{{ fileName || '已选择照片' }}</span>
@@ -947,6 +974,15 @@ const submit = async () => {
   background: linear-gradient(180deg, var(--c-primary-50), rgba(255, 255, 255, 0.6));
   transition: all var(--dur-base) var(--ease-out);
   cursor: pointer;
+}
+
+/* 拖拽悬停高亮（空态与已选图两种状态共用） */
+.uploader.is-drag,
+.preview.is-drag {
+  border: 2px dashed var(--c-primary-500);
+  background: var(--c-primary-50);
+  box-shadow: 0 0 0 4px rgba(47, 152, 104, 0.15);
+  transform: scale(1.01);
 }
 
 .uploader:active {
