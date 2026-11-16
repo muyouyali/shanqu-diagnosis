@@ -3,7 +3,7 @@
   "private": true,
   "version": "1.0.0",
   "type": "module",
-  "description": "山地特色经济作物病虫害多Agent诊断系统 - 全国高校AI Web开发挑战赛",
+  "description": "山地特色经济作物病虫害多Agent诊断系统 - 传智杯AI Web网页开发挑战赛",
   "scripts": {
     "dev": "concurrently -n \"WEB,API\" -c \"cyan,magenta\" \"vite\" \"node --watch server/index.js\"",
     "dev:web": "vite",
