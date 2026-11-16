@@ -7,6 +7,7 @@
 
 export const CITY_CROPS = {
   // 云南
+  '文山州': ['sanqi', 'pepper', 'maize', 'rice', 'ginger', 'tobacco', 'peanut'],
   '文山市': ['sanqi', 'pepper', 'maize', 'rice', 'ginger', 'tobacco', 'peanut'],
   '昭通市': ['tianma', 'walnut', 'potato', 'maize', 'tobacco', 'huajiao', 'moyu', 'rice'],
   '普洱市': ['tea', 'coffee', 'walnut', 'maize', 'rice', 'sugarcane', 'banana', 'tobacco', 'moyu'],
