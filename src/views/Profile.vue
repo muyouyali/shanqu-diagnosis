@@ -140,7 +140,8 @@ const doLogout = async () => {
   await store.logout()
   dangerText.value = ''
   store.showToast('已退出登录', 'success')
-  router.push('/')
+  // 回到最开始的登录页
+  router.push('/login')
 }
 
 const doDelete = async () => {
@@ -149,7 +150,7 @@ const doDelete = async () => {
     await store.logout()
     dangerText.value = ''
     store.showToast('账号已注销', 'success')
-    router.push('/')
+    router.push('/login')
   } catch (e: any) {
     store.showToast(e?.message || '注销失败', 'error')
   }
@@ -158,7 +159,7 @@ const doDelete = async () => {
 const logoutOnly = async () => {
   await store.logout()
   store.showToast('已退出登录', 'success')
-  router.push('/')
+  router.push('/login')
 }
 
 const avatarInitial = computed(() => (store.user?.nickname || '农')[0])
@@ -173,7 +174,8 @@ const loadStats = async () => {
   try {
     const [r, c] = await Promise.all([
       api.records({ userId: store.recordsUserId, limit: 60 }).catch(() => ({ items: [] as RecordItem[], total: 0 })),
-      api.consults().catch(() => ({ items: [] as Consult[] }))
+      // /consults 为专家专用接口，农户端调用必然 403，按角色跳过避免无谓报错
+      store.isExpert ? api.consults().catch(() => ({ items: [] as Consult[] })) : Promise.resolve({ items: [] as Consult[] })
     ])
     records.value = r.items || []
     consults.value = c.items || []
@@ -291,7 +293,7 @@ onMounted(async () => {
     <template v-else>
       <!-- 头部横幅 -->
       <div class="pf-hero">
-        <SceneryBanner :province="provinceOfRegion(store.user.region || store.region)" :region="store.user.region || store.region" compact />
+        <SceneryBanner :province="provinceOfRegion(store.user.region || store.region)" :region="store.user.region || store.region" compact align="right" />
         <div class="pf-hero__row">
           <label class="pf-avatar">
             <img v-if="avatarFile" :src="avatarFile" alt="头像" />
@@ -404,7 +406,7 @@ onMounted(async () => {
 
           <div class="pf-contrib__list">
             <div v-for="s in mySubs" :key="s.id" class="pf-sub">
-              <CropEmoji class="pf-sub__emoji" :emoji="s.emoji" :size="22" />
+              <CropEmoji class="pf-sub__emoji" :emoji="s.emoji" :name="s.name" :size="22" />
               <div class="pf-sub__body">
                 <strong>
                   {{ s.name }}
@@ -580,7 +582,7 @@ onMounted(async () => {
 .pf-login__card {
   text-align: center;
   padding: 40px 34px;
-  border-radius: 22px;
+  border-radius: var(--r-lg);
   background: var(--c-bg-card);
   border: 1px solid var(--c-line-soft);
   box-shadow: var(--sh-md);
@@ -591,7 +593,7 @@ onMounted(async () => {
   place-items: center;
   width: 64px;
   height: 64px;
-  border-radius: 20px;
+  border-radius: var(--r-lg);
   background: var(--c-primary-50);
   color: var(--c-primary-600);
   margin-bottom: 14px;
@@ -644,7 +646,7 @@ onMounted(async () => {
   position: relative;
   width: 84px;
   height: 84px;
-  border-radius: 26px;
+  border-radius: var(--r-lg);
   overflow: visible;
   cursor: pointer;
   flex-shrink: 0;
@@ -657,7 +659,7 @@ onMounted(async () => {
 .pf-avatar__fallback {
   width: 100%;
   height: 100%;
-  border-radius: 23px;
+  border-radius: var(--r-lg);
   object-fit: cover;
   display: block;
 }
@@ -696,7 +698,7 @@ onMounted(async () => {
 }
 
 .pf-role {
-  font-size: 10px;
+  font-size: 11.5px;
   font-weight: 800;
   padding: 2px 9px;
   border-radius: var(--r-full);
@@ -713,7 +715,7 @@ onMounted(async () => {
   display: flex;
   align-items: center;
   gap: 4px;
-  font-size: 11px;
+  font-size: 12.5px;
   color: var(--c-text-4);
   margin-top: 3px;
 }
@@ -743,7 +745,7 @@ onMounted(async () => {
 .pf-overview {
   margin: 16px 16px 0;
   padding: 15px 15px 14px;
-  border-radius: 18px;
+  border-radius: var(--r-lg);
   background: var(--c-bg-card);
   border: 1px solid var(--c-line-soft);
   box-shadow: var(--sh-xs);
@@ -777,7 +779,7 @@ onMounted(async () => {
   display: inline-flex;
   align-items: center;
   gap: 3px;
-  font-size: 11px;
+  font-size: 12.5px;
   font-weight: 600;
   color: var(--c-primary-700);
 }
@@ -823,14 +825,14 @@ onMounted(async () => {
 
 .pf-stat__value em {
   font-style: normal;
-  font-size: 10px;
+  font-size: 11.5px;
   font-weight: 600;
   color: var(--c-text-4);
   margin-left: 2px;
 }
 
 .pf-stat__label {
-  font-size: 10.5px;
+  font-size: 11.5px;
   color: var(--c-text-4);
 }
 
@@ -874,13 +876,13 @@ onMounted(async () => {
 
 .pf-latest__top em {
   font-style: normal;
-  font-size: 11px;
+  font-size: 12.5px;
   font-weight: 600;
   color: var(--c-primary-700);
 }
 
 .pf-latest__body small {
-  font-size: 10.5px;
+  font-size: 11.5px;
   color: var(--c-text-4);
 }
 
@@ -900,7 +902,7 @@ onMounted(async () => {
   align-items: center;
   gap: 8px;
   margin-top: 12px;
-  font-size: 11px;
+  font-size: 12.5px;
   color: var(--c-text-3);
 }
 
@@ -931,7 +933,7 @@ onMounted(async () => {
 }
 
 .pf-recover small {
-  font-size: 10px;
+  font-size: 11.5px;
   color: var(--c-text-4);
 }
 
@@ -980,7 +982,7 @@ onMounted(async () => {
 /* 卡片 */
 .pf-card {  margin: 16px 16px 0;
   padding: 16px 16px 18px;
-  border-radius: 18px;
+  border-radius: var(--r-lg);
   background: var(--c-bg-card);
   border: 1px solid var(--c-line-soft);
   box-shadow: var(--sh-xs);
@@ -1004,7 +1006,7 @@ onMounted(async () => {
 }
 
 .pf-field span {
-  font-size: 11px;
+  font-size: 12.5px;
   font-weight: 700;
   color: var(--c-text-3);
 }
@@ -1105,13 +1107,13 @@ onMounted(async () => {
 }
 
 .pf-row__body small {
-  font-size: 10.5px;
+  font-size: 11.5px;
   color: var(--c-text-4);
 }
 
 .pf-row__badge {
   font-style: normal;
-  font-size: 10.5px;
+  font-size: 11.5px;
   font-weight: 800;
   color: #fff;
   background: var(--c-danger);
@@ -1146,7 +1148,7 @@ onMounted(async () => {
 .pf-danger {
   width: min(360px, 100%);
   padding: 26px 22px 20px;
-  border-radius: 20px;
+  border-radius: var(--r-lg);
   background: #fff;
   text-align: center;
 }
@@ -1272,7 +1274,7 @@ onMounted(async () => {
   display: inline-flex;
   align-items: center;
   gap: 3px;
-  font-size: 11px;
+  font-size: 12.5px;
   font-weight: 700;
   color: var(--c-primary-700);
   background: var(--c-primary-50);
@@ -1291,7 +1293,7 @@ onMounted(async () => {
   display: flex;
   flex-wrap: wrap;
   gap: 8px;
-  font-size: 11px;
+  font-size: 12.5px;
   color: var(--c-text-3);
   padding: 9px 11px;
   border-radius: 11px;
@@ -1356,7 +1358,7 @@ onMounted(async () => {
 
 .pf-sub__body em {
   font-style: normal;
-  font-size: 9.5px;
+  font-size: 11.5px;
   font-weight: 600;
   padding: 1px 6px;
   border-radius: var(--r-full);
@@ -1367,7 +1369,7 @@ onMounted(async () => {
 .pf-sub__body small {
   display: block;
   margin-top: 2px;
-  font-size: 10.5px;
+  font-size: 11.5px;
   color: var(--c-text-4);
   line-height: 1.5;
 }
@@ -1396,7 +1398,7 @@ onMounted(async () => {
 
 .pf-sub__status {
   flex-shrink: 0;
-  font-size: 10.5px;
+  font-size: 11.5px;
   font-weight: 700;
   padding: 3px 9px;
   border-radius: var(--r-full);
@@ -1417,7 +1419,7 @@ onMounted(async () => {
 }
 
 .pf-contrib__empty small {
-  font-size: 10.5px;
+  font-size: 11.5px;
   color: var(--c-text-4);
 }
 
@@ -1437,5 +1439,63 @@ onMounted(async () => {
 
 #contrib {
   scroll-margin-top: 12px;
+}
+</style>
+
+<style scoped>
+/* 桌面端：与智能诊断页同宽（--max-w-mobile），整页放大居中 */
+@media (min-width: 960px) {
+  .profile {
+    max-width: var(--max-w-mobile);
+    margin: 0 auto;
+    padding: 0 0 48px;
+  }
+
+  .pf-hero__row {
+    padding: 0 32px;
+    margin-top: -40px;
+    gap: 20px;
+  }
+
+  .pf-avatar {
+    width: 96px;
+    height: 96px;
+  }
+
+  .pf-hero__info h1 {
+    font-size: 22px;
+  }
+
+  .pf-hero__info p {
+    font-size: 13.5px;
+    margin-top: 4px;
+  }
+
+  .pf-role {
+    font-size: 12.5px;
+    padding: 3px 11px;
+  }
+
+  .pf-hero__notice {
+    width: calc(100% - 64px);
+    margin: 16px 32px 0;
+    padding: 11px 16px;
+    font-size: 13.5px;
+  }
+
+  .pf-overview {
+    margin: 18px 28px 0;
+    padding: 18px 20px 16px;
+  }
+
+  .pf-quick,
+  .pf-card {
+    margin-left: 28px;
+    margin-right: 28px;
+  }
+
+  .pf-card {
+    padding: 18px 20px 20px;
+  }
 }
 </style>

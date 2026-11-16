@@ -147,9 +147,10 @@ const locateMe = async () => {
 
 <template>
   <div class="region-picker">
-    <button class="region-btn" @click.stop="open = true">
+    <button class="region-btn" title="点击切换种植地区" @click.stop="open = true">
       <AppIcon name="map-pin" :size="13" />
       {{ store.region }}
+      <span class="region-btn__switch">切换</span>
       <AppIcon name="chevron-down" :size="11" class="region-btn__caret" />
     </button>
 
@@ -274,6 +275,15 @@ const locateMe = async () => {
 
 .region-btn:active {
   background: rgba(255, 255, 255, 0.22);
+}
+
+.region-btn__switch {
+  font-size: 10px;
+  font-weight: 600;
+  padding: 2px 7px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.2);
+  border: 1px solid rgba(255, 255, 255, 0.35);
 }
 
 .region-btn__caret {
@@ -407,7 +417,7 @@ const locateMe = async () => {
 }
 
 .locate-btn__txt small {
-  font-size: 10.5px;
+  font-size: 11.5px;
   color: rgba(255, 255, 255, 0.72);
 }
 
@@ -483,7 +493,7 @@ const locateMe = async () => {
 
 .search-item__prov {
   margin-left: auto;
-  font-size: 11px;
+  font-size: 12.5px;
   color: var(--c-text-4);
 }
 
@@ -544,7 +554,7 @@ const locateMe = async () => {
 
 .prov-tab__badge {
   font-style: normal;
-  font-size: 9px;
+  font-size: 11.5px;
   font-weight: 700;
   padding: 1px 5px;
   border-radius: 4px;
@@ -563,7 +573,7 @@ const locateMe = async () => {
 }
 
 .sheet__group {
-  font-size: 11px;
+  font-size: 12.5px;
   font-weight: 700;
   color: var(--c-text-4);
   letter-spacing: 0.5px;

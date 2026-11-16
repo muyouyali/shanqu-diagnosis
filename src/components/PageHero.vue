@@ -11,6 +11,8 @@ defineProps<{
   desc?: string
   badge?: string
   badgeIcon?: string
+  /** 徽章悬浮说明（如 RAG 的技术方案一句话解释） */
+  badgeTip?: string
   /** 背景实拍图，不传则用渐变色 */
   image?: string
   /** 标签文案（如「多模态识图」等能力点） */
@@ -58,6 +60,7 @@ const emit = defineEmits<{ badgeClick: [] }>()
         <AppIcon v-if="badgeIcon" :name="badgeIcon" :size="16" />
         <span>{{ badge }}</span>
         <i class="ph__badge-arrow">›</i>
+        <span v-if="badgeTip" class="ph__badge-tip">{{ badgeTip }}</span>
       </button>
     </div>
   </header>
@@ -222,7 +225,7 @@ const emit = defineEmits<{ badgeClick: [] }>()
 .ph__tag::before {
   content: '✓';
   margin-right: 5px;
-  font-size: 11px;
+  font-size: 12.5px;
   color: #a9e9c4;
 }
 
@@ -232,6 +235,7 @@ const emit = defineEmits<{ badgeClick: [] }>()
 
 .ph__badge {
   flex-shrink: 0;
+  position: relative;
   display: flex;
   align-items: center;
   gap: 7px;
@@ -275,6 +279,46 @@ const emit = defineEmits<{ badgeClick: [] }>()
 
 .ph__badge:hover .ph__badge-arrow {
   transform: translateX(2px);
+}
+
+/* 悬浮说明：向上弹出（横幅 overflow:hidden，下方会被裁切） */
+.ph__badge-tip {
+  position: absolute;
+  bottom: calc(100% + 10px);
+  right: 0;
+  width: max-content;
+  max-width: 260px;
+  padding: 9px 13px;
+  border-radius: 10px;
+  background: rgba(12, 32, 22, 0.94);
+  color: #fff;
+  font-size: 12px;
+  font-weight: 500;
+  line-height: 1.5;
+  text-align: left;
+  white-space: normal;
+  box-shadow: 0 8px 22px -8px rgba(0, 0, 0, 0.6);
+  opacity: 0;
+  transform: translateY(4px);
+  pointer-events: none;
+  transition:
+    opacity 0.18s,
+    transform 0.18s;
+  z-index: 5;
+}
+
+.ph__badge-tip::after {
+  content: '';
+  position: absolute;
+  top: 100%;
+  right: 26px;
+  border: 5px solid transparent;
+  border-top-color: rgba(12, 32, 22, 0.94);
+}
+
+.ph__badge:hover .ph__badge-tip {
+  opacity: 1;
+  transform: translateY(0);
 }
 
 @media (max-width: 720px) {

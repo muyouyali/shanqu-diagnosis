@@ -355,7 +355,7 @@ const submit = async () => {
   position: absolute;
   right: 10px;
   bottom: 8px;
-  font-size: 10px;
+  font-size: 11.5px;
   color: var(--c-text-4);
 }
 
@@ -402,7 +402,7 @@ const submit = async () => {
 }
 
 .cs__done-track {
-  font-size: 11px;
+  font-size: 12.5px;
   color: var(--c-primary-700);
   margin-top: -8px;
 }

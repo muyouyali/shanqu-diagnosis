@@ -3,6 +3,7 @@ import { ref, computed, onMounted, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { useAppStore } from '@/stores/app'
 import AppIcon from '@/components/AppIcon.vue'
+import CropEmoji from '@/components/CropEmoji.vue'
 import PageHero from '@/components/PageHero.vue'
 import QuickLookup from '@/components/QuickLookup.vue'
 import api from '@/api'
@@ -15,6 +16,8 @@ const diseases = ref<Disease[]>([])
 const loading = ref(true)
 const keyword = ref('')
 const lookupOpen = ref(false)
+/** 🌱 社区共建样本（农户提交 → 专家审核通过 → 自动并入图谱） */
+const community = ref<(Disease & { submitter?: string })[]>([])
 /** 严重度筛选：'' 全部 / high 高发(含毁灭性) / medium 中等 / low 轻微 */
 const severityFilter = ref('')
 /** 跨区作物展开状态 */
@@ -58,11 +61,29 @@ const filtered = computed(() => {
   )
 })
 
+/** 社区共建条目同样支持关键词过滤 */
+const communityFiltered = computed(() => {
+  const k = keyword.value.trim().toLowerCase()
+  let list = community.value
+  if (!k) return list
+  return list.filter(
+    (d) =>
+      d.name.toLowerCase().includes(k) ||
+      d.symptomKeywords.some((s) => s.includes(k)) ||
+      d.symptoms.some((s) => s.includes(k))
+  )
+})
+
 const load = async () => {
   loading.value = true
   try {
     await store.loadCrops()
     diseases.value = await api.diseases(store.selectedCropId)
+    // 社区共建条目独立拉取（不随作物切换变化，始终展示在页面底部区块）
+    api
+      .approvedDiseaseSamples()
+      .then((r) => (community.value = r.items || []))
+      .catch(() => (community.value = []))
   } catch (err) {
     store.showToast((err as Error).message, 'error')
   } finally {
@@ -91,17 +112,17 @@ watch(() => store.selectedCropId, load)
 
     <!-- 共建入口条 -->
     <button class="kb-join" @click="router.push('/atlas')">
-      <span class="kb-join__icon"><AppIcon name="leaf" :size="15" /></span>
+      <span class="kb-join__icon"><AppIcon name="leaf" :size="17" /></span>
       <span class="kb-join__body">
         <strong>病害图谱速查 · 共建</strong>
         <small>按地区查阅全部作物，可补充家乡作物共建图谱</small>
       </span>
-      <AppIcon name="arrow-right" :size="14" class="kb-join__arrow" />
+      <AppIcon name="arrow-right" :size="16" class="kb-join__arrow" />
     </button>
 
     <!-- 搜索 -->
     <div class="search">
-      <AppIcon name="search" :size="16" class="search__icon" />
+      <AppIcon name="search" :size="18" class="search__icon" />
       <input v-model="keyword" class="search__input" placeholder="搜索病害名或症状，如「黄叶」「霉层」" />
       <button v-if="keyword" class="search__clear" @click="keyword = ''">
         <AppIcon name="x" :size="13" />
@@ -131,7 +152,7 @@ watch(() => store.selectedCropId, load)
           :class="{ 'is-active': store.selectedCropId === c.id }"
           @click="store.setCrop(c.id)"
         >
-          <span class="crop-tab__emoji">{{ c.emoji }}</span>
+          <CropEmoji class="crop-tab__emoji" :emoji="c.emoji" :name="c.name" :size="20" />
           <span class="crop-tab__name">{{ c.name }}</span>
           <span class="crop-tab__count">{{ c.diseaseCount }}</span>
         </button>
@@ -154,7 +175,7 @@ watch(() => store.selectedCropId, load)
           :class="{ 'is-active': store.selectedCropId === c.id }"
           @click="store.setCrop(c.id)"
         >
-          <span class="crop-tab__emoji">{{ c.emoji }}</span>
+          <CropEmoji class="crop-tab__emoji" :emoji="c.emoji" :name="c.name" :size="20" />
           <span class="crop-tab__name">{{ c.name }}</span>
           <span class="crop-tab__count">{{ c.diseaseCount }}</span>
         </button>
@@ -164,7 +185,7 @@ watch(() => store.selectedCropId, load)
     <!-- 作物简介 -->
     <div v-if="!keyword && store.selectedCrop" class="crop-intro">
       <div class="crop-intro__head">
-        <span class="crop-intro__emoji">{{ store.selectedCrop.emoji }}</span>
+        <CropEmoji class="crop-intro__emoji" :emoji="store.selectedCrop.emoji" :name="store.selectedCrop.name" :size="38" />
         <div>
           <h2 class="crop-intro__name">{{ store.selectedCrop.name }}</h2>
           <p class="crop-intro__tag">{{ store.selectedCrop.tagline }}</p>
@@ -226,6 +247,32 @@ watch(() => store.selectedCropId, load)
       </button>
     </div>
 
+    <!-- 🌱 社区共建样本（专家审核通过后自动并入） -->
+    <div v-if="!loading && communityFiltered.length" class="community">
+      <h2 class="community__title">
+        <span class="community__icon">🌱</span> 社区共建样本
+        <em>{{ communityFiltered.length }}</em>
+      </h2>
+      <div class="community__grid">
+        <button
+          v-for="d in communityFiltered"
+          :key="d.id"
+          class="community__card"
+          @click="router.push(`/knowledge/${d.id}`)"
+        >
+          <div class="community__head">
+            <h3>{{ d.name }}</h3>
+            <span class="community__tag">共建收录</span>
+          </div>
+          <p class="community__symptom text-clamp-2">{{ d.symptoms[0] }}</p>
+          <div class="community__meta">
+            <span v-if="d.cropId && d.cropId !== 'community'">{{ store.crops.find((c) => c.id === d.cropId)?.name || '' }}</span>
+            <span v-if="d.submitter">提交：{{ d.submitter }}</span>
+          </div>
+        </button>
+      </div>
+    </div>
+
     <p class="kb__foot">
       资料整理自全国农技推广服务中心、云南省植保植检站公开技术资料<br />
       仅供学习参考，实际防治请咨询当地农技部门
@@ -260,11 +307,11 @@ watch(() => store.selectedCropId, load)
 .kb-join {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 12px;
   width: calc(100% - 40px);
-  margin: 0 20px 14px;
-  padding: 11px 13px;
-  border-radius: 14px;
+  margin: 0 20px 16px;
+  padding: 14px 16px;
+  border-radius: var(--r-md);
   text-align: left;
   background: linear-gradient(100deg, #f1f9f4, #fafdfb);
   border: 1px solid #d9eddf;
@@ -276,9 +323,9 @@ watch(() => store.selectedCropId, load)
 }
 
 .kb-join__icon {
-  width: 32px;
-  height: 32px;
-  border-radius: 11px;
+  width: 38px;
+  height: 38px;
+  border-radius: 12px;
   display: grid;
   place-items: center;
   color: #fff;
@@ -294,13 +341,13 @@ watch(() => store.selectedCropId, load)
 
 .kb-join__body strong {
   display: block;
-  font-size: 12.5px;
+  font-size: 14.5px;
   font-weight: 800;
   color: var(--c-text-1);
 }
 
 .kb-join__body small {
-  font-size: 10.5px;
+  font-size: 13px;
   color: var(--c-text-4);
 }
 
@@ -311,26 +358,26 @@ watch(() => store.selectedCropId, load)
 /* 搜索 */
 .search {
   position: relative;
-  margin: 0 20px 14px;
+  margin: 0 20px 16px;
   display: flex;
   align-items: center;
 }
 
 .search__icon {
   position: absolute;
-  left: 13px;
+  left: 15px;
   color: var(--c-text-4);
   pointer-events: none;
 }
 
 .search__input {
   width: 100%;
-  height: 42px;
-  padding: 0 36px 0 38px;
+  height: 48px;
+  padding: 0 36px 0 42px;
   border-radius: var(--r-full);
   background: var(--c-bg-card);
   border: 1.5px solid var(--c-line);
-  font-size: 13px;
+  font-size: 15px;
   transition: border-color var(--dur-fast);
 }
 
@@ -359,19 +406,19 @@ watch(() => store.selectedCropId, load)
 .sev-bar {
   display: flex;
   flex-wrap: wrap;
-  gap: 8px;
-  margin: 14px 0 2px;
+  gap: 10px;
+  margin: 14px 20px 4px;
 }
 
 .sev-chip {
   display: inline-flex;
   align-items: center;
-  gap: 5px;
-  padding: 7px 14px;
+  gap: 6px;
+  padding: 9px 16px;
   border-radius: var(--r-full);
   background: var(--c-bg-card);
   border: 1.5px solid var(--c-line-soft);
-  font-size: 12.5px;
+  font-size: 14px;
   font-weight: 600;
   color: var(--c-text-3);
   transition: all var(--dur-fast) var(--ease-out);
@@ -379,7 +426,7 @@ watch(() => store.selectedCropId, load)
 
 .sev-chip em {
   font-style: normal;
-  font-size: 10.5px;
+  font-size: 12.5px;
   color: var(--c-text-4);
 }
 
@@ -404,8 +451,8 @@ watch(() => store.selectedCropId, load)
 .crop-tabs {
   display: flex;
   flex-wrap: wrap;
-  gap: 8px;
-  padding: 0 20px 14px;
+  gap: 10px;
+  padding: 0 20px 16px;
 }
 
 .crop-tabs--remote {
@@ -430,8 +477,8 @@ watch(() => store.selectedCropId, load)
 .crop-tab {
   display: flex;
   align-items: center;
-  gap: 6px;
-  padding: 8px 14px;
+  gap: 7px;
+  padding: 10px 16px;
   border-radius: var(--r-md);
   background: var(--c-bg-card);
   border: 1.5px solid var(--c-line);
@@ -445,12 +492,13 @@ watch(() => store.selectedCropId, load)
 }
 
 .crop-tab__emoji {
-  font-size: 16px;
+  font-size: 18px;
   line-height: 1;
+  flex: none;
 }
 
 .crop-tab__name {
-  font-size: 12.5px;
+  font-size: 14px;
   font-weight: 600;
   color: var(--c-text-2);
 }
@@ -460,8 +508,8 @@ watch(() => store.selectedCropId, load)
 }
 
 .crop-tab__count {
-  font-size: 10px;
-  padding: 1px 6px;
+  font-size: 12.5px;
+  padding: 1px 7px;
   border-radius: var(--r-full);
   background: var(--c-bg-muted);
   color: var(--c-text-4);
@@ -475,8 +523,8 @@ watch(() => store.selectedCropId, load)
 
 /* 作物简介 */
 .crop-intro {
-  margin: 0 20px 16px;
-  padding: 16px;
+  margin: 0 20px 18px;
+  padding: 20px 22px;
   border-radius: var(--r-lg);
   background: linear-gradient(160deg, #ffffff, #f7fbf9);
   border: 1px solid var(--c-primary-100);
@@ -486,44 +534,45 @@ watch(() => store.selectedCropId, load)
 .crop-intro__head {
   display: flex;
   align-items: center;
-  gap: 11px;
-  margin-bottom: 11px;
+  gap: 12px;
+  margin-bottom: 12px;
 }
 
 .crop-intro__emoji {
-  font-size: 30px;
+  font-size: 34px;
   line-height: 1;
+  flex: none;
 }
 
 .crop-intro__name {
-  font-size: 17px;
+  font-size: 19px;
   font-weight: 800;
   letter-spacing: -0.2px;
 }
 
 .crop-intro__tag {
-  font-size: 10.5px;
+  font-size: 13px;
   color: var(--c-text-4);
 }
 
 .crop-intro__text {
-  font-size: 12.5px;
+  font-size: 14px;
   line-height: 1.75;
   color: var(--c-text-2);
-  margin-bottom: 11px;
+  margin-bottom: 12px;
 }
 
 .crop-intro__meta {
   display: flex;
-  gap: 14px;
-  margin-bottom: 11px;
+  gap: 16px;
+  margin-bottom: 12px;
 }
 
 .crop-intro__meta span {
   display: inline-flex;
   align-items: center;
-  gap: 4px;
-  font-size: 11px;
+  gap: 5px;
+  font-size: 14px;
   color: var(--c-primary-700);
   font-weight: 600;
 }
@@ -531,15 +580,15 @@ watch(() => store.selectedCropId, load)
 .crop-intro__points {
   display: flex;
   flex-direction: column;
-  gap: 5px;
-  padding-top: 11px;
+  gap: 9px;
+  padding-top: 13px;
   border-top: 1px dashed var(--c-line);
 }
 
 .crop-intro__points li {
   position: relative;
-  padding-left: 13px;
-  font-size: 11.5px;
+  padding-left: 14px;
+  font-size: 14px;
   line-height: 1.65;
   color: var(--c-text-3);
 }
@@ -615,12 +664,12 @@ watch(() => store.selectedCropId, load)
   padding: 0 20px;
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: 14px;
 }
 
 .disease-card {
   position: relative;
-  padding: 14px 40px 14px 15px;
+  padding: 18px 44px 18px 20px;
   border-radius: var(--r-md);
   background: var(--c-bg-card);
   border: 1px solid var(--c-line-soft);
@@ -635,59 +684,61 @@ watch(() => store.selectedCropId, load)
 }
 
 .disease-card__top {
-  margin-bottom: 5px;
+  margin-bottom: 7px;
 }
 
 .disease-card__name-row {
   display: flex;
   align-items: center;
-  gap: 7px;
-  margin-bottom: 3px;
+  gap: 8px;
+  margin-bottom: 4px;
 }
 
 .disease-card__name {
-  font-size: 15px;
+  font-size: 17px;
   font-weight: 700;
   letter-spacing: -0.1px;
 }
 
 .disease-card__severity {
-  padding: 1.5px 7px;
-  border-radius: 5px;
-  font-size: 9.5px;
+  padding: 2px 9px;
+  border-radius: 6px;
+  font-size: 12.5px;
   font-weight: 700;
 }
 
 .disease-card__type {
-  font-size: 10.5px;
+  font-size: 12.5px;
   color: var(--c-text-4);
 }
 
 .disease-card__alias {
-  font-size: 11px;
+  font-size: 13.5px;
+  line-height: 1.6;
   color: var(--c-accent-600);
-  margin-bottom: 6px;
+  margin-bottom: 7px;
 }
 
 .disease-card__symptom {
-  font-size: 12px;
-  line-height: 1.65;
+  font-size: 14.5px;
+  line-height: 1.7;
   color: var(--c-text-3);
-  margin-bottom: 9px;
+  margin-bottom: 11px;
 }
 
 .disease-card__tags {
   display: flex;
   flex-wrap: wrap;
-  gap: 5px;
+  gap: 8px;
 }
 
 .disease-card__tags span {
-  padding: 2px 8px;
+  padding: 4px 11px;
   border-radius: var(--r-full);
   background: var(--c-bg-muted);
   border: 1px solid var(--c-line-soft);
-  font-size: 10px;
+  font-size: 12.5px;
+  line-height: 1.5;
   color: var(--c-text-3);
 }
 
@@ -702,8 +753,96 @@ watch(() => store.selectedCropId, load)
 .kb__foot {
   padding: 26px 20px 10px;
   text-align: center;
-  font-size: 10px;
+  font-size: 11.5px;
   line-height: 1.8;
+  color: var(--c-text-4);
+}
+
+/* 🌱 社区共建样本区块 */
+.community {
+  padding: 0 20px;
+  margin-top: 26px;
+}
+
+.community__title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 15.5px;
+  font-weight: 800;
+  color: #14532d;
+  margin-bottom: 12px;
+}
+
+.community__icon {
+  font-size: 18px;
+  line-height: 1;
+}
+
+.community__title em {
+  font-style: normal;
+  font-size: 12px;
+  font-weight: 800;
+  padding: 2px 9px;
+  border-radius: var(--r-full);
+  background: #dcfce7;
+  color: #15803d;
+}
+
+.community__grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 12px;
+}
+
+.community__card {
+  text-align: left;
+  padding: 16px 18px;
+  border-radius: var(--r-md);
+  background: linear-gradient(150deg, #f4fbf7, #fdfefd);
+  border: 1px solid #cfe9d8;
+  transition: all var(--dur-fast);
+}
+
+.community__card:active {
+  transform: scale(0.99);
+}
+
+.community__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 7px;
+}
+
+.community__head h3 {
+  font-size: 15.5px;
+  font-weight: 800;
+  color: var(--c-text-1);
+}
+
+.community__tag {
+  flex-shrink: 0;
+  font-size: 12px;
+  font-weight: 800;
+  padding: 2px 9px;
+  border-radius: var(--r-full);
+  background: #dcfce7;
+  color: #15803d;
+}
+
+.community__symptom {
+  font-size: 13.5px;
+  line-height: 1.7;
+  color: var(--c-text-3);
+}
+
+.community__meta {
+  display: flex;
+  gap: 12px;
+  margin-top: 8px;
+  font-size: 12.5px;
   color: var(--c-text-4);
 }
 </style>
@@ -713,7 +852,13 @@ watch(() => store.selectedCropId, load)
   .search,
   .crop-tabs,
   .crop-intro {
-    max-width: 1000px;
+    max-width: var(--max-w-mobile);
+    margin-left: auto;
+    margin-right: auto;
+    width: calc(100% - 64px);
+  }
+  .sev-bar {
+    max-width: var(--max-w-mobile);
     margin-left: auto;
     margin-right: auto;
     width: calc(100% - 64px);
@@ -722,19 +867,53 @@ watch(() => store.selectedCropId, load)
     margin-top: 0;
   }
   .disease-list {
-    max-width: 1000px;
+    max-width: var(--max-w-mobile);
     margin: 0 auto;
     padding: 0;
     width: calc(100% - 64px);
     display: grid;
     grid-template-columns: 1fr 1fr;
-    gap: 14px;
+    gap: 20px;
   }
   .skeleton-list {
-    max-width: 1000px;
+    max-width: var(--max-w-mobile);
     margin: 0 auto;
     padding: 0;
     width: calc(100% - 64px);
+  }
+
+  /* 桌面端字号与间距放大 */
+  .search__input {
+    font-size: 15.5px;
+    height: 52px;
+  }
+  .crop-tab {
+    font-size: 14.5px;
+    height: 40px;
+  }
+  .disease-card__name {
+    font-size: 18.5px;
+  }
+  .disease-card__symptom {
+    font-size: 15px;
+    line-height: 1.75;
+  }
+  .disease-card__alias {
+    font-size: 13.5px;
+  }
+  .disease-card__tags :deep(.tag),
+  .disease-card__tags .tag {
+    font-size: 13px;
+  }
+  .crop-intro {
+    padding: 18px 22px;
+  }
+  .crop-intro__name {
+    font-size: 20px;
+  }
+  .crop-intro__text {
+    font-size: 14px;
+    line-height: 1.75;
   }
 }
 </style>

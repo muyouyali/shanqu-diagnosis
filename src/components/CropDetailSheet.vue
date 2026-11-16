@@ -8,6 +8,7 @@
 import { computed } from 'vue'
 import type { Crop } from '@/types'
 import AppIcon from '@/components/AppIcon.vue'
+import CropEmoji from '@/components/CropEmoji.vue'
 import SceneryBanner from '@/components/SceneryBanner.vue'
 import { provinceOfRegion } from '@/data/regions'
 import { useAppStore } from '@/stores/app'
@@ -43,16 +44,18 @@ const keyPoints = computed(() => props.crop?.keyPoints || [])
             <button class="cd__close" @click="emit('close')">
               <AppIcon name="x" :size="15" />
             </button>
+          </div>
+
+          <div class="cd__body">
+            <!-- 标题区：独立于横幅下方，与横幅说明文字互不遮挡 -->
             <div class="cd__title-wrap">
-              <span class="cd__emoji">{{ crop.emoji }}</span>
-              <div>
+              <CropEmoji class="cd__emoji" :emoji="crop.emoji" :name="crop.name" :size="34" />
+              <div class="cd__title-text">
                 <h2 class="cd__name">{{ crop.name }}</h2>
                 <p class="cd__alias">{{ crop.alias || crop.tagline }}</p>
               </div>
             </div>
-          </div>
 
-          <div class="cd__body">
             <div class="cd__tags">
               <span class="cd__tag cd__tag--src">{{ sourceLabel }}</span>
               <span v-if="crop.regions?.includes(province)" class="cd__tag cd__tag--local">
@@ -66,21 +69,21 @@ const keyPoints = computed(() => props.crop?.keyPoints || [])
 
             <div class="cd__facts">
               <div class="cd__fact">
-                <AppIcon name="mountain" :size="14" />
+                <AppIcon name="mountain" :size="16" />
                 <div>
                   <small>适宜海拔</small>
                   <strong>{{ crop.altitude || '待补充' }}</strong>
                 </div>
               </div>
               <div class="cd__fact">
-                <AppIcon name="clock" :size="14" />
+                <AppIcon name="clock" :size="16" />
                 <div>
                   <small>上市 / 采收期</small>
                   <strong>{{ crop.season || '待补充' }}</strong>
                 </div>
               </div>
               <div class="cd__fact">
-                <AppIcon name="shield" :size="14" />
+                <AppIcon name="shield" :size="16" />
                 <div>
                   <small>已收录病害</small>
                   <strong>{{ crop.diseaseCount ? `${crop.diseaseCount} 种` : '暂无' }}</strong>
@@ -132,7 +135,7 @@ const keyPoints = computed(() => props.crop?.keyPoints || [])
 }
 
 .cd {
-  width: min(520px, 100%);
+  width: min(560px, 100%);
   max-height: 88vh;
   display: flex;
   flex-direction: column;
@@ -144,77 +147,80 @@ const keyPoints = computed(() => props.crop?.keyPoints || [])
 
 .cd__banner {
   position: relative;
-  padding-bottom: 46px;
+}
+
+/* 横幅加高：更饱满，风光说明文字独占其上 */
+.cd__banner :deep(.scenery__img) {
+  height: 170px;
 }
 
 .cd__close {
   position: absolute;
   top: 12px;
   right: 12px;
-  width: 30px;
-  height: 30px;
+  width: 32px;
+  height: 32px;
   border-radius: 50%;
   display: grid;
   place-items: center;
   color: #fff;
-  background: rgba(0, 0, 0, 0.28);
+  background: rgba(0, 0, 0, 0.3);
   backdrop-filter: blur(4px);
+  z-index: 2;
 }
 
+/* 标题区：位于正文顶部，横幅下方独立一行 */
 .cd__title-wrap {
-  position: absolute;
-  left: 18px;
-  right: 18px;
-  bottom: 10px;
   display: flex;
   align-items: center;
-  gap: 12px;
-  color: #fff;
+  gap: 14px;
+  margin: 16px 0 14px;
 }
 
 .cd__emoji {
-  width: 52px;
-  height: 52px;
-  border-radius: 16px;
+  width: 58px;
+  height: 58px;
+  border-radius: var(--r-lg);
   display: grid;
   place-items: center;
-  font-size: 27px;
-  background: rgba(255, 255, 255, 0.92);
-  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.18);
+  font-size: 30px;
+  background: linear-gradient(135deg, var(--c-primary-50), #f0faf4);
+  box-shadow: var(--sh-sm);
   flex-shrink: 0;
 }
 
 .cd__name {
-  font-size: 20px;
+  font-size: 22px;
   font-weight: 800;
   letter-spacing: 0.4px;
-  text-shadow: 0 2px 10px rgba(0, 0, 0, 0.35);
+  color: var(--c-text-1);
+  line-height: 1.3;
 }
 
 .cd__alias {
-  font-size: 11.5px;
-  opacity: 0.9;
-  margin-top: 2px;
-  text-shadow: 0 1px 6px rgba(0, 0, 0, 0.3);
+  font-size: 13px;
+  line-height: 1.6;
+  color: var(--c-text-3);
+  margin-top: 3px;
 }
 
 .cd__body {
   flex: 1;
   overflow-y: auto;
-  padding: 14px 18px 6px;
+  padding: 0 20px 8px;
 }
 
 .cd__tags {
   display: flex;
   flex-wrap: wrap;
-  gap: 6px;
-  margin-bottom: 10px;
+  gap: 8px;
+  margin-bottom: 12px;
 }
 
 .cd__tag {
-  font-size: 10.5px;
+  font-size: 12.5px;
   font-weight: 700;
-  padding: 3px 9px;
+  padding: 4px 11px;
   border-radius: var(--r-full);
   background: var(--c-bg-muted);
   color: var(--c-text-3);
@@ -241,7 +247,7 @@ const keyPoints = computed(() => props.crop?.keyPoints || [])
 }
 
 .cd__desc {
-  font-size: 13px;
+  font-size: 14px;
   line-height: 1.75;
   color: var(--c-text-2);
 }
@@ -249,14 +255,14 @@ const keyPoints = computed(() => props.crop?.keyPoints || [])
 .cd__facts {
   display: grid;
   grid-template-columns: repeat(3, 1fr);
-  gap: 8px;
-  margin: 14px 0 4px;
+  gap: 10px;
+  margin: 16px 0 4px;
 }
 
 .cd__fact {
   display: flex;
-  gap: 7px;
-  padding: 10px 9px;
+  gap: 8px;
+  padding: 12px 11px;
   border-radius: var(--r-md);
   background: var(--c-bg-muted);
   color: var(--c-primary-600);
@@ -264,24 +270,25 @@ const keyPoints = computed(() => props.crop?.keyPoints || [])
 
 .cd__fact small {
   display: block;
-  font-size: 9.5px;
+  font-size: 12px;
   color: var(--c-text-4);
-  margin-bottom: 2px;
+  margin-bottom: 3px;
+  line-height: 1.5;
 }
 
 .cd__fact strong {
-  font-size: 11.5px;
+  font-size: 13.5px;
   color: var(--c-text-1);
   font-weight: 700;
-  line-height: 1.35;
+  line-height: 1.4;
   display: block;
 }
 
 .cd__h3 {
-  font-size: 12.5px;
+  font-size: 14.5px;
   font-weight: 800;
   color: var(--c-text-1);
-  margin: 16px 0 8px;
+  margin: 18px 0 9px;
   display: flex;
   align-items: center;
   gap: 6px;
@@ -298,13 +305,13 @@ const keyPoints = computed(() => props.crop?.keyPoints || [])
 .cd__points {
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: 8px;
 }
 
 .cd__points li {
   display: flex;
-  gap: 8px;
-  font-size: 12.5px;
+  gap: 9px;
+  font-size: 14px;
   line-height: 1.65;
   color: var(--c-text-2);
 }
@@ -314,36 +321,36 @@ const keyPoints = computed(() => props.crop?.keyPoints || [])
   height: 5px;
   border-radius: 50%;
   background: var(--c-primary-400);
-  margin-top: 7px;
+  margin-top: 9px;
   flex-shrink: 0;
 }
 
 .cd__pests {
-  font-size: 12.5px;
+  font-size: 14px;
   line-height: 1.7;
   color: var(--c-text-2);
-  padding: 10px 12px;
+  padding: 12px 14px;
   border-radius: var(--r-md);
   background: #fdf6ee;
   border-left: 3px solid var(--c-accent-400);
 }
 
 .cd__footer {
-  padding: 12px 18px calc(14px + env(safe-area-inset-bottom));
+  padding: 13px 20px calc(15px + env(safe-area-inset-bottom));
   border-top: 1px solid var(--c-line-soft);
   background: var(--c-bg-card);
 }
 
 .cd__btn {
   width: 100%;
-  height: 46px;
+  height: 48px;
   border-radius: var(--r-full);
-  font-size: 14px;
+  font-size: 15px;
   font-weight: 700;
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 7px;
+  gap: 8px;
 }
 
 .cd__btn--primary {

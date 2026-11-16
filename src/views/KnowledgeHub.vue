@@ -25,6 +25,7 @@ const keyword = ref('')
 const tab = ref<'all' | 'kb' | 'atlas' | 'community'>('all')
 const detailCrop = ref<Crop | null>(null)
 const submitOpen = ref(false)
+const aiBusy = ref('')
 const submitPreset = ref('')
 
 const mySubmissions = ref<CropSubmission[]>([])
@@ -116,6 +117,21 @@ const tabs = computed(() => [
 ])
 
 const openCrop = (c: Crop) => (detailCrop.value = c)
+
+/** AI 补全病害知识（专家）：调大模型为知识库未收录作物生成常见病害条目并即时入库 */
+const aiExpand = async (c: Crop) => {
+  if (aiBusy.value) return
+  aiBusy.value = c.id
+  try {
+    const r = await api.aiExpand(c.name)
+    store.showToast(`「${c.name}」AI 补全完成，新增 ${r.count} 条病害知识并已入图谱`, 'success')
+    await loadCrops()
+  } catch (e: any) {
+    store.showToast(e?.message || 'AI 补全失败，请稍后重试', 'error')
+  } finally {
+    aiBusy.value = ''
+  }
+}
 const openSubmit = (name = '') => {
   submitPreset.value = name
   submitOpen.value = true
@@ -232,7 +248,7 @@ const hueOf = (s: string) => {
         @click="openCrop(c)"
       >
         <span class="kl-card__top">
-          <CropEmoji class="kl-card__emoji" :emoji="c.emoji" :size="24" />
+          <CropEmoji class="kl-card__emoji" :emoji="c.emoji" :name="c.name" :size="24" />
           <span
             class="kl-card__badge"
             :class="{
@@ -250,6 +266,15 @@ const hueOf = (s: string) => {
           <span v-if="c.diseaseCount" class="kl-card__chip">{{ c.diseaseCount }} 种病害</span>
           <span v-else-if="c.season" class="kl-card__chip">上市 {{ c.season }}</span>
           <span v-if="c.altitude" class="kl-card__chip kl-card__chip--ghost">{{ c.altitude }}</span>
+        </span>
+        <span
+          v-if="store.isExpert && !c.diagnosable"
+          class="kl-card__ai"
+          role="button"
+          :title="`用 AI 为「${c.name}」生成常见病害知识并入库`"
+          @click.stop="aiExpand(c)"
+        >
+          {{ aiBusy === c.id ? '🤖 生成中…' : '🤖 AI 补全病害' }}
         </span>
       </button>
 
@@ -333,7 +358,7 @@ const hueOf = (s: string) => {
   gap: 12px;
   margin-top: 14px;
   padding: 14px 16px;
-  border-radius: 16px;
+  border-radius: var(--r-lg);
   background: linear-gradient(100deg, #f2f9f5, #fbfdfb);
   border: 1px solid #dcece2;
 }
@@ -348,7 +373,7 @@ const hueOf = (s: string) => {
   align-items: center;
   gap: 4px;
   margin-top: 8px;
-  font-size: 11px;
+  font-size: 12.5px;
   color: var(--c-text-4);
 }
 
@@ -384,7 +409,7 @@ const hueOf = (s: string) => {
 }
 
 .kl-stat span {
-  font-size: 10.5px;
+  font-size: 11.5px;
   color: var(--c-text-4);
 }
 
@@ -501,7 +526,7 @@ const hueOf = (s: string) => {
 
 .kl__tab em {
   font-style: normal;
-  font-size: 10px;
+  font-size: 11.5px;
   padding: 1px 5px;
   border-radius: 999px;
   background: var(--c-bg-muted);
@@ -534,7 +559,7 @@ const hueOf = (s: string) => {
   flex-direction: column;
   gap: 5px;
   padding: 13px 13px 12px;
-  border-radius: 16px;
+  border-radius: var(--r-lg);
   text-align: left;
   background: var(--c-bg-card);
   border: 1px solid var(--c-line-soft);
@@ -568,7 +593,7 @@ const hueOf = (s: string) => {
 }
 
 .kl-card__badge {
-  font-size: 9.5px;
+  font-size: 11.5px;
   font-weight: 700;
   padding: 2px 7px;
   border-radius: 999px;
@@ -598,7 +623,7 @@ const hueOf = (s: string) => {
 }
 
 .kl-card__desc {
-  font-size: 11px;
+  font-size: 12.5px;
   line-height: 1.55;
   color: var(--c-text-4);
   display: -webkit-box;
@@ -617,7 +642,7 @@ const hueOf = (s: string) => {
 }
 
 .kl-card__chip {
-  font-size: 9.5px;
+  font-size: 11.5px;
   font-weight: 600;
   padding: 2px 7px;
   border-radius: 6px;
@@ -628,6 +653,29 @@ const hueOf = (s: string) => {
 .kl-card__chip--ghost {
   background: var(--c-bg-muted);
   color: var(--c-text-4);
+}
+
+/* AI 补全按钮（专家可见，覆盖在卡片右下） */
+.kl-card__ai {
+  position: absolute;
+  right: 10px;
+  bottom: 10px;
+  padding: 5px 11px;
+  border-radius: var(--r-full);
+  font-size: 11.5px;
+  font-weight: 700;
+  color: var(--c-primary-700);
+  background: var(--c-primary-50);
+  border: 1px solid var(--c-primary-200);
+  cursor: pointer;
+  transition: all var(--dur-fast);
+  z-index: 1;
+}
+
+.kl-card__ai:hover {
+  background: var(--c-primary-600);
+  color: #fff;
+  border-color: var(--c-primary-600);
 }
 
 .kl-card--add {
@@ -723,7 +771,7 @@ const hueOf = (s: string) => {
 }
 
 .kl__mine-link__txt small {
-  font-size: 10.5px;
+  font-size: 11.5px;
   color: var(--c-text-3);
   line-height: 1.4;
 }
@@ -737,7 +785,7 @@ const hueOf = (s: string) => {
 .kl__flow {
   margin-top: 16px;
   padding: 15px;
-  border-radius: 16px;
+  border-radius: var(--r-lg);
   background: var(--c-bg-card);
   border: 1px solid var(--c-line-soft);
 }
@@ -770,7 +818,7 @@ const hueOf = (s: string) => {
   border-radius: 50%;
   display: grid;
   place-items: center;
-  font-size: 11px;
+  font-size: 12.5px;
   font-weight: 800;
   color: #fff;
   background: linear-gradient(135deg, var(--c-primary-400), var(--c-primary-700));
@@ -784,7 +832,7 @@ const hueOf = (s: string) => {
 }
 
 .kl-flow__item small {
-  font-size: 10px;
+  font-size: 11.5px;
   color: var(--c-text-4);
   line-height: 1.5;
 }
@@ -797,13 +845,14 @@ const hueOf = (s: string) => {
 
 @media (min-width: 960px) {
   .kl {
-    max-width: 1080px;
+    max-width: var(--max-w-mobile);
     margin: 0 auto;
     padding: 0 24px 48px;
   }
 
   .kl__grid {
     grid-template-columns: repeat(4, 1fr);
+    gap: 18px;
   }
 }
 </style>

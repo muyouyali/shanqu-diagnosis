@@ -199,14 +199,26 @@ const runTriageAgent = async ({ cropId, imageBase64, symptomsText, altitude, wea
         maxTokens: 1200
       })
       raw = extractJSON(res.content)
-      // 模型正常返回但没识别到病斑（如健康植株/非病害照片）→ results 为空，走降级而非报错
-      if (raw && (!Array.isArray(raw.results) || !raw.results.length)) {
-        console.warn('[TriageAgent] 视觉模型未识别到病斑，转规则兜底:', raw.observations || '')
-        raw = null
-      }
     } catch (err) {
       aiError = err instanceof AIServiceError ? err.code : 'UNKNOWN'
       console.warn('[TriageAgent] 视觉调用失败，转规则兜底:', err.message)
+    }
+  }
+
+  // 图片内容粗判别（防虚假诊断，PPT 考察的异常边界）：
+  // 1) 非作物植株（人像/风景/截图等）→ 业务错误，不生成诊断报告
+  // 2) 是作物但画面无病灶（且非生理性问题）→ 引导重拍
+  if (raw) {
+    if (raw.imageType === 'not_plant' || (!raw.isPhysiological && /人像|风景|不是作物|非作物|植株以外|屏幕截图/.test(String(raw.observations || '')))) {
+      throw new AIServiceError('识别到图片不是作物植株，请上传作物叶片/病灶照片。不会生成诊断报告。', 'IMAGE_NOT_PLANT')
+    }
+    if (!Array.isArray(raw.results) || !raw.results.length) {
+      if (!raw.isPhysiological) {
+        throw new AIServiceError('图片没有识别到病害病灶，请拍摄明显发病部位。', 'IMAGE_NO_LESION')
+      }
+      // 生理性问题（缺素/药害等）：转规则兜底给出养护建议
+      console.warn('[TriageAgent] 生理性/无病斑，转规则兜底:', raw.observations || '')
+      raw = null
     }
   }
 
@@ -261,8 +273,10 @@ const runTreatmentAgent = async ({ cropId, diagnosis, altitude, weather, stage }
         .join('\n')
     : ''
 
-  // 知识库检索：补充防治措施上下文
+  // 知识库检索：补充防治措施上下文（RAG 环节，单独计时供 AI 过程面板展示）
+  const ragStart = Date.now()
   const kb = buildContext(topDiseases, { cropId, topK: 2 })
+  const ragMs = Date.now() - ragStart
 
   const { system, user } = buildTreatmentPrompt({
     cropId,
@@ -343,6 +357,16 @@ const runTreatmentAgent = async ({ cropId, diagnosis, altitude, weather, stage }
     },
     usedFallback,
     validationViolations: violations,
+    ragMs,
+    // RAG 召回明细：供「AI 过程」面板展示知识库原文片段（可溯源）
+    kbHits: kb.hits.map((h) => ({
+      id: h.disease.id,
+      name: h.disease.name,
+      cropName: CROP_NAME[h.cropId] || '',
+      score: Number((h.scoreNormalized ?? 0).toFixed(3)),
+      type: h.disease.type,
+      snippet: `典型症状：${(h.disease.symptoms || []).slice(0, 2).join('；')}；防治：${(h.disease.treatment || []).slice(0, 1).join('')}`
+    })),
     kbSources: kb.hits.map((h) => ({
       name: h.disease.name,
       score: h.scoreNormalized
@@ -359,15 +383,17 @@ export const runDiagnosisWorkflow = async (input) => {
   const started = Date.now()
   const trace = []
 
-  // ---- Stage 1: 初诊 ----
+  // ---- Stage 1: 视觉识别 ----
   const t1 = Date.now()
   const triage = await runTriageAgent(input)
   trace.push({
     stage: 'triage',
-    agent: '初诊 Agent',
+    agent: '视觉识别 Agent',
     durationMs: Date.now() - t1,
     status: triage.usedFallback ? 'fallback' : 'success',
-    detail: triage.usedFallback ? 'AI 不可用，已降级为规则匹配' : '视觉模型完成识别'
+    detail: triage.usedFallback
+      ? '视觉模型不可用，已降级为症状关键词规则匹配'
+      : `多模态视觉模型完成病斑识别，输出 ${triage.diagnosis.results.length} 个候选病害并给出置信度`
   })
 
   // ---- Stage 2: 安全闸门 ----
@@ -401,12 +427,30 @@ export const runDiagnosisWorkflow = async (input) => {
     weather: input.weather,
     stage: input.stage
   })
+  const treatmentMs = Date.now() - t3
+
+  // ---- Stage 3: RAG 检索（召回知识库原文，作为用药生成的依据） ----
+  if (treatment.kbHits?.length) {
+    const top = treatment.kbHits[0]
+    trace.push({
+      stage: 'rag',
+      agent: 'RAG 检索 Agent',
+      durationMs: treatment.ragMs || 0,
+      status: 'success',
+      detail: `在本地植保知识库召回 ${treatment.kbHits.length} 条资料，Top1 命中「${top.name}」（相关度 ${Math.round(top.score * 100)}%）`,
+      sources: treatment.kbHits.slice(0, 3)
+    })
+  }
+
+  // ---- Stage 4: 用药生成 ----
   trace.push({
     stage: 'treatment',
-    agent: '用药指导 Agent',
-    durationMs: Date.now() - t3,
+    agent: '用药生成 Agent',
+    durationMs: treatmentMs,
     status: treatment.usedFallback ? 'fallback' : 'success',
-    detail: treatment.usedFallback ? 'AI 不可用，已降级为知识库直出' : '生成分级防治方案'
+    detail: treatment.usedFallback
+      ? 'AI 不可用，已降级为知识库直出方案'
+      : `结合 ${treatment.kbHits?.length || 0} 条 RAG 资料与农药安全登记数据，生成分级防治方案`
   })
 
   const totalMs = Date.now() - started

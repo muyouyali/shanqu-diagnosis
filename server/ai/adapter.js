@@ -80,7 +80,7 @@ class AIServiceError extends Error {
 /**
  * 底层调用：单次 Chat Completions
  */
-const callOnce = async ({ model, messages, temperature, jsonMode, maxTokens }) => {
+const callOnce = async ({ model, messages, temperature, jsonMode, maxTokens, timeout }) => {
   if (!isConfigured()) {
     throw new AIServiceError(
       'AI 服务未配置，请在 .env 中填写 AI_BASE_URL / AI_API_KEY / 模型名称',
@@ -89,7 +89,7 @@ const callOnce = async ({ model, messages, temperature, jsonMode, maxTokens }) =
   }
 
   const controller = new AbortController()
-  const timer = setTimeout(() => controller.abort(), CONFIG.timeout)
+  const timer = setTimeout(() => controller.abort(), timeout || CONFIG.timeout)
   const started = Date.now()
 
   try {
@@ -238,7 +238,9 @@ export const chatVision = async ({ system, user, imageBase64, temperature, maxTo
     model: CONFIG.visionModel || CONFIG.textModel,
     messages,
     temperature,
-    maxTokens
+    maxTokens,
+    // 视觉识别（含大图 base64）是最慢环节：单独使用更宽裕的超时预算
+    timeout: Number(process.env.AI_VISION_TIMEOUT_MS || 90000)
   })
 }
 

@@ -10,6 +10,7 @@ import { KB_STATIC, ATLAS_STATIC } from '@/data/crops-static'
 const buildStaticCrops = (province: string): Crop[] => {
   const localKb = province ? KB_STATIC.filter((c) => (c.regions || []).includes(province)) : []
   const otherKb = KB_STATIC.filter((c) => !localKb.includes(c))
+  localKb.forEach((c) => { (c as any).local = true })
   const atlasRaw = ((ATLAS_STATIC as Record<string, any[]>)[province] || []).map((a: any) => ({
     ...a,
     source: 'atlas'
@@ -33,6 +34,7 @@ const buildStaticCrops = (province: string): Crop[] => {
       regions: province ? [province] : [],
       diseaseCount: 0,
       diagnosable: false,
+      local: true,
       source: 'atlas'
     }))
   return [...localKb, ...atlas, ...otherKb] as Crop[]
@@ -112,14 +114,15 @@ export const useAppStore = defineStore('app', () => {
     return crops.value
   }
 
-  /** 本地区主推作物（知识库本地作物 + 地区百科/共建作物），顺序即展示顺序 */
+  /** 本地区主推作物（后端 local 标记优先；静态兜底按省份回退），顺序即展示顺序 */
   const localCrops = computed<Crop[]>(() => {
     const province = cropsProvince.value || provinceOf(region.value)
     return crops.value.filter(
       (c) =>
-        (c.regions || []).includes(province) ||
-        c.source === 'atlas' ||
-        c.source === 'community'
+        c.local ??
+        ((c.regions || []).includes(province) ||
+          c.source === 'atlas' ||
+          c.source === 'community')
     )
   })
 

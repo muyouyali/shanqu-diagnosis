@@ -12,9 +12,10 @@ import fs from 'node:fs'
 import { fileURLToPath } from 'node:url'
 
 import { CROPS, DISEASES, PESTICIDE_SAFETY, getDiseasesByCrop } from './kb/diseases.js'
-import { ATLAS } from './kb/crops-atlas.js'
+import { ATLAS, ATLAS_CITY } from './kb/crops-atlas.js'
+import { CITY_CROPS, CITY_CROPS_PROVINCE } from './kb/city-crops.js'
 import { provinceOf } from './kb/regions.js'
-import { retrieve, buildContext, getDocCount } from './kb/retriever.js'
+import { retrieve, buildContext, getDocCount, registerCommunityDiseases } from './kb/retriever.js'
 import { isConfigured, getConfigSummary, metrics, chatText, chatStream, chatRaw, extractJSON } from './ai/adapter.js'
 import { getWeatherForecast, executeTool, runWithTools, TOOL_DEFINITIONS } from './ai/tools.js'
 import { buildQAPrompt, buildReviewPrompt, buildAlertPrompt, CROP_NAME } from './ai/prompts.js'
@@ -48,6 +49,44 @@ const resolveKbContext = (question, cropId, topK = 4) => {
   }
   return kb
 }
+
+/** 检索命中 → 前端溯源结构（含资料出处与知识库原文片段） */
+const toCiteSources = (kb) =>
+  kb.hits.map((h) => {
+    const d = h.disease
+    return {
+      id: h.id,
+      name: d.name,
+      cropId: h.cropId,
+      cropName: CROP_NAME[h.cropId] || '',
+      score: h.scoreNormalized,
+      type: d.type,
+      symptoms: d.symptoms.slice(0, 2),
+      // 溯源引用：植保手册/文献出处
+      references: d.references || [],
+      // 知识库原始文本片段（展开引用区块时展示，防模型幻觉可对照原文）
+      excerpt: [
+        `【${d.name} · ${d.type}】`,
+        `典型症状：${d.symptoms.slice(0, 3).join('；')}`,
+        d.causes?.length ? `发病原因：${d.causes.slice(0, 2).join('；')}` : '',
+        `防治措施：${(d.treatment || []).slice(0, 3).join('；')}`,
+        `安全提示：${d.safetyNote}`
+      ]
+        .filter(Boolean)
+        .join('\n')
+    }
+  })
+
+/** 空召回固定兜底文案（防止模型在无知识库依据时自由发挥编造植保知识） */
+const NO_HIT_ANSWER = '当前本地知识库暂无该问题相关资料，你可以前往提交病害样本或者申请专家复核咨询。'
+
+/**
+ * 有效召回过滤：BM25 绝对分 < 10 的命中属于弱相关噪声
+ * （实测分布：真实植保问题顶部命中 ≥14，无关问题 ≤8.4），
+ * 不清除会把"榴莲什么时候熟"这类问题当成"有依据"，触发模型自由发挥。
+ */
+const MIN_VALID_SCORE = 10
+const filterValidHits = (kb) => ({ ...kb, hits: kb.hits.filter((h) => h.score >= MIN_VALID_SCORE) })
 
 app.use(cors())
 app.use(express.json({ limit: '20mb' }))
@@ -135,27 +174,40 @@ app.get('/api/crops', (req, res) => {
   const keyword = String(req.query.keyword || '').trim()
 
   // 本地知识库作物：带完整病害知识，可走诊断流程
+  // 州市级白名单优先（确保当地真实种植），未配置州市回退省级 + 省级兜底过滤
+  const isYunnan = province === '云南'
+  const cityWhitelist = CITY_CROPS[region]
+  const provinceFilter = CITY_CROPS_PROVINCE[province]
+  const isInLocal = (c) => {
+    if (cityWhitelist) return cityWhitelist.includes(c.id)
+    if (provinceFilter == null) return true
+    return provinceFilter.includes(c.id)
+  }
   const kbCrops = CROPS.map((c) => ({
     id: c.id,
     name: c.name,
     alias: c.alias || '',
     emoji: c.emoji || '🌱',
-    tagline: c.tagline || '',
-    desc: c.desc || c.tagline || '',
+    tagline: (isYunnan ? c.tagline : c.taglineGeneral || c.tagline) || '',
+    desc: (isYunnan ? c.tagline : c.taglineGeneral || c.tagline) || '',
     season: c.season || '',
     altitude: c.altitude || '',
     regions: c.regions || [],
     diseaseCount: getDiseasesByCrop(c.id).length,
     diagnosable: true,
+    local: false,
     source: 'kb'
   }))
 
-  const localKb = province ? kbCrops.filter((c) => c.regions.includes(province)) : []
+  const localKb = province
+    ? kbCrops.filter((c) => c.regions.includes(province) && isInLocal(c))
+    : []
+  localKb.forEach((c) => { c.local = true })
   const otherKb = kbCrops.filter((c) => !localKb.includes(c))
 
-  // 地区百科作物：知识库未收录，仅作资料展示与问答参考
+  // 地区百科作物：知识库未收录，仅作资料展示与问答参考（州市级条目优先于省级）
   const atlasRaw = [
-    ...(ATLAS[province] || []).map((a) => ({ ...a, source: 'atlas' })),
+    ...((ATLAS_CITY[region] || ATLAS[province]) || []).map((a) => ({ ...a, source: 'atlas' })),
     ...store.listApprovedCrops(province).map((s) => ({
       name: s.name,
       alias: s.alias || '',
@@ -182,35 +234,93 @@ app.get('/api/crops', (req, res) => {
       regions: province ? [province] : [],
       diseaseCount: 0,
       diagnosable: false,
+      local: true,
       source: a.source
     }))
 
   let items = [...localKb, ...atlasCrops, ...otherKb]
-  // 云南州市级特色优先：所选州市的主导作物排到最前（主攻云南，其他省保留省级粒度）
+  // 州市级特色优先：所选州市的主导作物排到最前（id = 知识库作物；名称子串 = 地区百科作物）
   const CITY_SPECIALTY = {
     文山市: ['sanqi'],
-    昭通市: ['tianma', 'walnut'],
+    昭通市: ['tianma', 'walnut', '苹果'],
     普洱市: ['tea', 'coffee'],
-    红河州: ['shiliu'],
-    曲靖市: ['moyu'],
-    昆明市: ['blueberry', 'citrus'],
-    丽江市: ['walnut', 'blueberry'],
-    大理白族自治州: ['walnut'],
-    保山市: ['coffee', 'tea'],
-    临沧市: ['tea'],
-    西双版纳州: ['tea', 'coffee'],
-    德宏州: ['coffee', 'tea'],
-    怒江州: ['walnut'],
-    迪庆州: ['walnut'],
-    楚雄州: ['walnut', 'moyu'],
-    玉溪市: ['citrus', 'blueberry']
+    红河州: ['shiliu', '芒果'],
+    曲靖市: ['moyu', '马铃薯'],
+    昆明市: ['blueberry', 'citrus', '玫瑰'],
+    丽江市: ['walnut', 'blueberry', '苹果'],
+    大理白族自治州: ['walnut', '柑橘'],
+    大理市: ['walnut', '柑橘'],
+    保山市: ['coffee', 'tea', '柑橘'],
+    临沧市: ['tea', '甘蔗'],
+    西双版纳州: ['tea', 'coffee', '香蕉'],
+    德宏州: ['coffee', 'tea', '甘蔗'],
+    怒江州: ['walnut', '草果'],
+    迪庆州: ['walnut', '葡萄'],
+    楚雄州: ['walnut', 'moyu', '核桃'],
+    玉溪市: ['citrus', 'blueberry', '柑橘'],
+    // 四川
+    成都市: ['citrus', '猕猴桃', 'moyu'],
+    乐山市: ['tea', 'citrus', '柠檬'],
+    凉山州: ['苹果', 'potato', '马铃薯', 'walnut'],
+    宜宾市: ['tea', 'citrus', '竹'],
+    泸州市: ['荔枝', '桂圆', 'citrus'],
+    攀枝花市: ['芒果', '石榴', 'walnut'],
+    雅安市: ['tea', '猕猴桃'],
+    绵阳市: ['citrus', 'moyu'],
+    达州市: ['citrus', '茶'],
+    南充市: ['citrus', '蚕桑'],
+    // 贵州
+    贵阳市: ['猕猴桃', 'tea'],
+    遵义市: ['tea', '辣椒', 'pepper'],
+    毕节市: ['potato', '马铃薯', '荞麦', 'moyu'],
+    六盘水市: ['猕猴桃', '茶', '马铃薯'],
+    黔南州: ['tea', '柑橘'],
+    黔东南州: ['tea', '杨梅'],
+    兴义市: ['芒果', '香蕉'],
+    安顺市: ['citrus', '山药'],
+    // 重庆
+    万州区: ['citrus', '柑橘'],
+    重庆市: ['citrus', '柑橘'],
+    涪陵区: ['青菜头', 'citrus'],
+    奉节区: ['脐橙', 'citrus'],
+    巫山县: ['脆李', 'citrus'],
+    // 广西
+    桂林市: ['砂糖橘', '柿子', 'citrus'],
+    百色市: ['芒果', '香蕉'],
+    河池市: ['核桃', 'citrus'],
+    南宁市: ['茉莉花', '香蕉', '芒果'],
+    // 其他省主要市
+    赤峰市: ['maize', '玉米', 'potato', '马铃薯', 'tomato', '番茄'],
+    延边州: ['rice', 'potato', 'tobacco', 'shiitake', 'maize', '玉米'],
+    哈尔滨市: ['rice', 'maize', 'potato', 'tomato', 'cucumber', 'shiitake'],
+    吉林市: ['maize', 'rice', 'potato', 'tomato', 'cucumber', 'shiitake'],
+    丹东市: ['strawberry', 'rice', 'peach', 'grape'],
+    盘锦市: ['rice', 'grape', 'strawberry'],
+    昌都市: ['walnut', '核桃', 'maize', '玉米', 'potato', '马铃薯'],
+    拉萨市: ['potato', '马铃薯'],
+    日喀则市: ['potato', '马铃薯'],
+    林芝市: ['tea', '茶树', 'walnut', '核桃'],
+    山南市: ['walnut', '核桃'],
+    攀枝花: ['芒果', '石榴'],
+    安岳: ['柠檬'],
+    林芝市: ['苹果', '松茸', 'peach'],
+    恩施州: ['tea', '黑木耳', '马铃薯'],
+    秭归县: ['脐橙', 'citrus']
   }
   const specialty = CITY_SPECIALTY[region] || []
   if (specialty.length) {
-    items = [
-      ...items.filter((c) => specialty.includes(c.id)),
-      ...items.filter((c) => !specialty.includes(c.id))
-    ]
+    const score = (c) => {
+      let s = 0
+      if (specialty.includes(c.id)) s += 100
+      for (const k of specialty) {
+        if (k.startsWith('atlas-')) continue
+        if (c.name.includes(k) || (c.alias || '').includes(k) || (c.desc || c.tagline || '').includes(k)) s += 80
+      }
+      if (c.source === 'kb' || c.diagnosable) s += 10
+      return s
+    }
+    items = [...items].sort((a, b) => score(b) - score(a))
+    // 主栽（特色命中）作物的「本地」语义保持：不打乱 local/other 分组之外再无操作
   }
   // 传了 keyword 视为跨区搜索：本地结果置顶，其余保持知识库优先
   if (keyword) {
@@ -291,7 +401,12 @@ app.delete('/api/crops/submissions/:id', (req, res) => {
 app.get('/api/crops/:cropId/diseases', (req, res) => {
   const list = getDiseasesByCrop(req.params.cropId)
   if (!list.length) return res.status(404).json({ error: '作物不存在' })
-  res.json({ items: list })
+  // 并入已审核通过的社区共建条目（农户提交样本 → 专家审核 → 自动进病害图谱）
+  const community = store
+    .listApprovedDiseaseSamples()
+    .map((s) => s.entry)
+    .filter((e) => e && e.cropId === req.params.cropId)
+  res.json({ items: [...list, ...community] })
 })
 
 // ==================== 核心：多 Agent 诊断 ====================
@@ -361,6 +476,7 @@ app.post('/api/diagnose/submit', (req, res) => {
       if (task) {
         task.status = 'error'
         task.error = err.message || '诊断服务异常'
+        task.errorCode = err.code || 'INTERNAL_ERROR'
       }
     }
   })()
@@ -372,7 +488,7 @@ app.get('/api/diagnose/task/:id', (req, res) => {
   const task = diagTasks.get(req.params.id)
   if (!task) return res.status(404).json({ error: '任务不存在或已过期' })
   if (task.status === 'running') return res.json({ status: 'running' })
-  if (task.status === 'error') return res.status(503).json({ status: 'error', error: task.error })
+  if (task.status === 'error') return res.status(503).json({ status: 'error', error: task.error, code: task.errorCode })
   res.json({ status: 'done', ...task.result })
 })
 
@@ -421,7 +537,8 @@ app.post('/api/diagnose', async (req, res) => {
     res.json({ ...result, recordId: record.id })
   } catch (err) {
     console.error('[POST /api/diagnose]', err)
-    const status = err.code === 'DIAGNOSIS_UNAVAILABLE' ? 503 : 500
+    const isImageRejection = err.code === 'IMAGE_NOT_PLANT' || err.code === 'IMAGE_NO_LESION'
+    const status = err.code === 'DIAGNOSIS_UNAVAILABLE' ? 503 : isImageRejection ? 422 : 500
     res.status(status).json({
       error: err.message || '诊断服务异常',
       code: err.code || 'INTERNAL_ERROR',
@@ -462,7 +579,7 @@ app.post('/api/advisory', async (req, res) => {
       ``,
       `今天${d0.cond}，${d0.tempLow}~${d0.tempHigh}℃，空气湿度 ${d0.humidity}%，降水概率 ${d0.rainProb}%。`,
       ``,
-      `**病害风险**：${weather.riskLevel === 'high' ? '偏高' : weather.riskLevel === 'medium' ? '中等' : '较低'}（峰值指数 ${weather.riskPeak}）。`,
+      `**病害风险**：${weather.riskLevel === 'high' ? '高风险' : weather.riskLevel === 'medium' ? '中风险' : '低风险'}（峰值指数 ${weather.riskPeak}）。`,
       `${weather.cropNote}`,
       ``,
       kb.hits.length
@@ -522,21 +639,40 @@ app.post('/api/qa/stream', async (req, res) => {
     res.write(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`)
   }
 
-  const kb = resolveKbContext(String(question), cropId || null)
-  const sources = kb.hits.map((h) => ({
-    id: h.id,
-    name: h.disease.name,
-    cropId: h.cropId,
-    score: h.scoreNormalized,
-    type: h.disease.type,
-    symptoms: h.disease.symptoms.slice(0, 2)
-  }))
+  const kb = filterValidHits(resolveKbContext(String(question), cropId || null))
+  const sources = toCiteSources(kb)
 
   // 先推送检索来源，让用户在等待时就能看到"系统在做什么"
   send('sources', { sources })
 
   let answer = ''
   let usedFallback = false
+  let noHit = false
+
+  // 空召回兜底：知识库无有效片段时禁止交给大模型自由生成（防幻觉编造植保知识）
+  if (!kb.hits.length) {
+    noHit = true
+    answer = NO_HIT_ANSWER
+    for (let i = 0; i < answer.length; i += 3) {
+      send('delta', { delta: answer.slice(i, i + 3) })
+      await new Promise((r) => setTimeout(r, 18))
+    }
+    // 兜底问答同样归档（我的种植档案 - 历史问答记录可追溯）
+    const askerNoHit = store.getUserByToken(extractToken(req))
+    const savedNoHit = store.saveConsultation({
+      question: String(question),
+      answer,
+      cropId: cropId || null,
+      usedFallback: true,
+      noHit: true,
+      userId: askerNoHit?.id ?? null,
+      userName: askerNoHit ? askerNoHit.nickname || askerNoHit.account : '游客',
+      sources: []
+    })
+    send('done', { usedFallback: true, noHit: true, consultationId: savedNoHit.id, length: answer.length })
+    res.end()
+    return
+  }
 
   if (isConfigured()) {
     try {
@@ -588,17 +724,22 @@ app.post('/api/qa/stream', async (req, res) => {
     }
   }
 
+  // 提问人（登录用户则问答记录归档到个人名下，供"历史问答记录"查询）
+  const asker = store.getUserByToken(extractToken(req))
+
   const saved = store.saveConsultation({
     question: String(question),
     answer,
     cropId: cropId || null,
     usedFallback,
+    noHit,
+    userId: asker?.id ?? null,
+    userName: asker ? asker.nickname || asker.account : '游客',
     sources: kb.hits.map((h) => ({ name: h.disease.name, score: h.scoreNormalized }))
   })
 
   // 农户登录状态下提问 → 实时推送到专家端消息中心
   try {
-    const asker = store.getUserByToken(extractToken(req))
     if (asker) {
       store.notifyExpertsAsk({
         user: asker,
@@ -611,7 +752,7 @@ app.post('/api/qa/stream', async (req, res) => {
     console.warn('[qa/stream] 专家通知失败:', err.message)
   }
 
-  send('done', { usedFallback, consultationId: saved.id, length: answer.length })
+  send('done', { usedFallback, noHit, consultationId: saved.id, length: answer.length })
   res.end()
 })
 
@@ -623,7 +764,24 @@ app.post('/api/qa', async (req, res) => {
     return res.status(400).json({ error: '请输入问题' })
   }
 
-  const kb = resolveKbContext(question, cropId || null)
+  const kb = filterValidHits(resolveKbContext(question, cropId || null))
+
+  // 空召回兜底：不调用大模型，直接返回固定文案（防幻觉）
+  if (!kb.hits.length) {
+    const askerNoHit = store.getUserByToken(extractToken(req))
+    const savedNoHit = store.saveConsultation({
+      question,
+      answer: NO_HIT_ANSWER,
+      cropId: cropId || null,
+      usedFallback: true,
+      noHit: true,
+      userId: askerNoHit?.id ?? null,
+      userName: askerNoHit ? askerNoHit.nickname || askerNoHit.account : '游客',
+      sources: []
+    })
+    return res.json({ answer: NO_HIT_ANSWER, sources: [], usedFallback: true, noHit: true, consultationId: savedNoHit.id })
+  }
+
   // 支持自定义作物名（知识库未收录的作物也能咨询，AI 结合通用植保知识作答）
   const cropName = customCrop || (cropId ? CROP_NAME[cropId] : '')
   const { system, user } = buildQAPrompt({
@@ -665,20 +823,23 @@ app.post('/api/qa', async (req, res) => {
     }
   }
 
+  const askerQa = store.getUserByToken(extractToken(req))
+
   const saved = store.saveConsultation({
     question,
     answer,
     cropId: cropId || null,
     usedFallback,
+    userId: askerQa?.id ?? null,
+    userName: askerQa ? askerQa.nickname || askerQa.account : '游客',
     sources: kb.hits.map((h) => ({ name: h.disease.name, score: h.scoreNormalized }))
   })
 
   // 非流式提问同样推送到专家端
   try {
-    const asker = store.getUserByToken(extractToken(req))
-    if (asker) {
+    if (askerQa) {
       store.notifyExpertsAsk({
-        user: asker,
+        user: askerQa,
         question,
         cropName: cropId ? CROP_NAME[cropId] || '' : '',
         region: ''
@@ -690,14 +851,7 @@ app.post('/api/qa', async (req, res) => {
 
   res.json({
     answer,
-    sources: kb.hits.map((h) => ({
-      id: h.id,
-      name: h.disease.name,
-      cropId: h.cropId,
-      score: h.scoreNormalized,
-      type: h.disease.type,
-      symptoms: h.disease.symptoms.slice(0, 2)
-    })),
+    sources: toCiteSources(kb),
     usedFallback,
     consultationId: saved.id
   })
@@ -705,6 +859,13 @@ app.post('/api/qa', async (req, res) => {
 
 app.get('/api/qa/history', (req, res) => {
   res.json({ items: store.listConsultations(Number(req.query.limit) || 20) })
+})
+
+/** 当前登录用户的历史问答记录（我的种植档案 - 📖历史问答记录） */
+app.get('/api/qa/history/mine', (req, res) => {
+  const user = requireUser(req, res)
+  if (!user) return
+  res.json({ items: store.listConsultationsByUser(user.id, 50) })
 })
 
 // ==================== 向专家提问 / 人工复核 ====================
@@ -770,8 +931,17 @@ app.get('/api/consults', (req, res) => {
 })
 
 /** 专家：回复完成咨询（状态置 done） */
-app.patch('/api/consults/:id', (req, res) => {
+// 删除一条农户咨询（管理端清理）
+app.delete('/api/consults/:id', (req, res) => {
   const user = requireUser(req, res)
+  if (!user) return
+  if (user.role !== 'expert') return res.status(403).json({ error: '仅专家可操作' })
+  const ok = store.deleteConsult(req.params.id)
+  if (!ok) return res.status(404).json({ error: '咨询不存在' })
+  res.json({ ok: true })
+})
+
+app.patch('/api/consults/:id', (req, res) => {  const user = requireUser(req, res)
   if (!user) return
   if (user.role !== 'expert') return res.status(403).json({ error: '仅专家可操作' })
   const c = store.updateConsult(req.params.id, {
@@ -783,11 +953,11 @@ app.patch('/api/consults/:id', (req, res) => {
   res.json({ ok: true, item: c })
 })
 
-/** 农户：对诊断记录发起人工复核（推送给全部专家） */
+/** 农户：对诊断记录发起人工复核（创建复核工单，推送给全部专家） */
 app.post('/api/review-requests', (req, res) => {
   const user = requireUser(req, res)
   if (!user) return
-  const { recordId, cropId, region, question } = req.body || {}
+  const { recordId, cropId, region, question, image, aiDisease, aiConfidence } = req.body || {}
   if (!recordId) return res.status(400).json({ error: '缺少诊断记录' })
   const r = store.saveReviewRequest({
     userId: user.id,
@@ -795,7 +965,11 @@ app.post('/api/review-requests', (req, res) => {
     recordId: Number(recordId),
     cropId: cropId || null,
     region: region || '',
-    question: String(question || '').trim().slice(0, 300)
+    question: String(question || '').trim().slice(0, 300),
+    // 工单核心字段：上传图片（压缩 dataURL）、AI 初诊病害、AI 置信度
+    image: typeof image === 'string' && image.length <= 900000 ? image : '',
+    aiDisease: String(aiDisease || '').slice(0, 60),
+    aiConfidence: Number.isFinite(Number(aiConfidence)) ? Number(aiConfidence) : null
   })
 
   const cropName = cropId ? CROP_NAME[cropId] || '作物' : '作物'
@@ -812,25 +986,44 @@ app.post('/api/review-requests', (req, res) => {
   res.json({ ok: true, requestId: r.id })
 })
 
-/** 专家：复核请求队列 */
+/** 农户：我的复核工单记录（种植档案-专家复核记录页使用） */
+app.get('/api/review-requests/mine', (req, res) => {
+  const user = requireUser(req, res)
+  if (!user) return
+  res.json({ items: store.listReviewRequests({ userId: user.id }) })
+})
+
+/** 专家：复核请求队列（待复核的全部队列 + 本人已复核的记录） */
 app.get('/api/review-requests', (req, res) => {
   const user = requireUser(req, res)
   if (!user) return
   if (user.role !== 'expert') return res.status(403).json({ error: '仅专家可查看' })
-  res.json({ items: store.listReviewRequests() })
+  const items = store
+    .listReviewRequests()
+    .filter((r) => r.status === 'pending' || r.expertId === user.id)
+  res.json({ items })
 })
 
-/** 专家：完成复核 → 意见自动私信农户 */
+/** 专家：处理复核工单（确认诊断 / 驳回）→ 更新工单 + 写消息通知农户 */
 app.patch('/api/review-requests/:id', (req, res) => {
   const user = requireUser(req, res)
   if (!user) return
   if (user.role !== 'expert') return res.status(403).json({ error: '仅专家可操作' })
-  const { opinion } = req.body || {}
+  const { opinion, decision, finalDisease } = req.body || {}
   if (!opinion || !String(opinion).trim()) return res.status(400).json({ error: '请填写复核意见' })
+  const isReject = decision === 'reject'
+  const finalText = isReject
+    ? '样本质量差，建议重新拍照'
+    : String(finalDisease || '').trim()
+  if (!isReject && !finalText) return res.status(400).json({ error: '请选择最终确诊病害' })
   const r = store.updateReviewRequest(req.params.id, {
     status: 'done',
+    outcome: isReject ? 'rejected' : 'confirmed',
     opinion: String(opinion).trim().slice(0, 600),
-    expertId: user.id
+    finalDisease: finalText.slice(0, 60),
+    expertId: user.id,
+    expertName: user.nickname || '专家',
+    completedAt: new Date().toISOString()
   })
   if (!r) return res.status(404).json({ error: '复核请求不存在' })
 
@@ -839,10 +1032,208 @@ app.patch('/api/review-requests/:id', (req, res) => {
     from: 'expert',
     fromId: user.id,
     fromName: user.nickname || '专家',
-    title: `人工复核结果：${CROP_NAME[r.cropId] || '诊断'} #${r.recordId}`,
-    content: String(opinion).trim()
+    title: '您提交的病害复核工单已处理完成',
+    content: `复核专家已处理您的工单（AI 初诊：${r.aiDisease || '—'}）。\n复核意见：${String(opinion).trim()}\n最终诊断结论：${finalText}`
   })
   res.json({ ok: true, item: r })
+})
+
+/** 专家：删除复核工单（仅本人已处理的工单可删，队列清理用） */
+app.delete('/api/review-requests/:id', (req, res) => {
+  const user = requireUser(req, res)
+  if (!user) return
+  if (user.role !== 'expert') return res.status(403).json({ error: '仅专家可操作' })
+  const target = store.listReviewRequests().find((x) => x.id === Number(req.params.id))
+  if (!target) return res.status(404).json({ error: '复核请求不存在' })
+  if (target.status !== 'pending' && target.expertId !== user.id) {
+    return res.status(403).json({ error: '只能删除自己已复核的工单' })
+  }
+  store.deleteReviewRequest(req.params.id)
+  res.json({ ok: true })
+})
+
+// ==================== 病害样本共建（农户提交 → 专家审核 → 并入知识库） ====================
+
+/**
+ * 审核通过 → 由样本生成知识库社区条目：
+ * 作物为系统已知作物时挂到该作物名下（图谱按作物可见），
+ * 手动输入的新作物挂在 community 名下（图谱"社区共建"区块展示）。
+ */
+const buildCommunityEntry = (s) => {
+  // 从农户描述中粗提症状关键词：按标点切分，保留 2–8 字短语
+  const keywords = String(s.description || '')
+    .split(/[，。；、,.;\s]+/)
+    .map((x) => x.trim())
+    .filter((x) => x.length >= 2 && x.length <= 8)
+    .slice(0, 4)
+  return {
+    id: `cm-${s.id}`,
+    cropId: s.cropId || 'community',
+    name: s.diseaseName || `${s.cropName}疑似新病害`,
+    alias: '',
+    type: s.diseaseType || '社区共建样本',
+    severity: 'medium',
+    pathogen: '待专业鉴定',
+    symptomKeywords: keywords.length ? keywords : [s.cropName || '共建样本'],
+    symptoms: [String(s.description || '').slice(0, 400)],
+    causes: [],
+    treatment: s.treatment
+      ? [String(s.treatment).slice(0, 300)]
+      : ['防治方案待专家补充，可参考相近病害或咨询当地农技站'],
+    prevention: [],
+    safetyNote: '本条目由农户共建样本经专家审核后收录，防治措施仅供参考。',
+    references: [`农户共建样本 #${s.id}（${s.userName} 提交 · ${s.reviewer || '专家'} 审核）`],
+    community: true,
+    sampleImages: (s.images || []).slice(0, 3)
+  }
+}
+
+/** 服务器启动时把历史已通过的社区条目重新注册进检索器（重启不丢共建数据） */
+let communityRegistered = 0
+try {
+  communityRegistered = registerCommunityDiseases([
+    ...store.listApprovedDiseaseSamples().map((s) => s.entry),
+    ...store.listAiKbEntries().flatMap((e) => e.diseases || [])
+  ])
+  if (communityRegistered) console.log(`[kb] 已并入 ${communityRegistered} 条社区共建/AI 补全病害条目`)
+} catch (e) {
+  console.warn('[kb] 社区条目注册失败:', e.message)
+}
+
+/** 农户提交病害样本（1–3 张图片 + 描述）→ 生成待审核记录并通知全部专家 */
+app.post('/api/samples', (req, res) => {
+  const user = requireUser(req, res)
+  if (!user) return
+  const { cropId, cropName, description, images, altitude, weather, region } = req.body || {}
+
+  const crop = cropId ? CROPS.find((c) => c.id === cropId) : null
+  const name = String(cropName || (crop ? crop.name : '')).trim()
+  if (!name) return res.status(400).json({ error: '请选择或填写作物名称' })
+  if (!description || String(description).trim().length < 8) {
+    return res.status(400).json({ error: '请填写作物病害现象描述（至少 8 个字）' })
+  }
+  if (!Array.isArray(images) || images.length < 1 || images.length > 3) {
+    return res.status(400).json({ error: '请上传 1–3 张病害样本图片' })
+  }
+  if (images.some((img) => typeof img !== 'string' || !img.startsWith('data:image/'))) {
+    return res.status(400).json({ error: '图片格式不正确' })
+  }
+  if (images.some((img) => img.length > 1_200_000)) {
+    return res.status(413).json({ error: '单张图片过大，请压缩后重新上传' })
+  }
+
+  const s = store.createDiseaseSample({
+    userId: user.id,
+    userName: user.nickname || user.account,
+    cropId: crop ? crop.id : '',
+    cropName: name,
+    description: String(description).trim().slice(0, 500),
+    images,
+    altitude: String(altitude || '').trim().slice(0, 60),
+    weather: String(weather || '').trim().slice(0, 60),
+    region: String(region || '').trim().slice(0, 30)
+  })
+
+  // 通知全部专家进入审核待办
+  try {
+    store.listExpertIds().forEach((id) => {
+      store.createMessage({
+        userId: id,
+        from: 'user',
+        fromId: user.id,
+        fromName: user.nickname || user.account,
+        title: `共建样本待审核：${name}`,
+        content: `农户 ${user.nickname || user.account} 提交了 ${name} 病害样本：${String(description).slice(0, 120)}。请前往【作物审核】进行核验。`
+      })
+    })
+  } catch (e) {
+    console.warn('[samples] 专家通知失败:', e.message)
+  }
+
+  res.json({ ok: true, sampleId: s.id })
+})
+
+/** 农户：我提交的共建样本（档案页状态展示） */
+app.get('/api/samples/mine', (req, res) => {
+  const user = requireUser(req, res)
+  if (!user) return
+  res.json(store.listDiseaseSamples({ userId: user.id }))
+})
+
+/** 公开：已审核通过的社区共建条目（病害图谱"社区共建"区块） */
+app.get('/api/samples/approved', (req, res) => {
+  res.json({
+    items: store
+      .listApprovedDiseaseSamples()
+      .map((s) => ({ ...s.entry, approvedAt: s.reviewedAt, submitter: s.userName }))
+  })
+})
+
+/** 专家：样本审核队列 */
+app.get('/api/samples', (req, res) => {
+  const user = requireExpert(req, res)
+  if (!user) return
+  res.json(store.listDiseaseSamples({ status: req.query.status, limit: 200 }))
+})
+
+/** 专家审核：通过（必填确诊病害名 → 入库） / 驳回（必填理由 → 通知农户修改） */
+app.patch('/api/samples/:id', (req, res) => {
+  const user = requireExpert(req, res)
+  if (!user) return
+  const { status, note, diseaseName, diseaseType, treatment } = req.body || {}
+  const s = store.getDiseaseSample(req.params.id)
+  if (!s) return res.status(404).json({ error: '样本不存在' })
+  if (s.status !== 'pending') return res.status(409).json({ error: '该样本已审核过' })
+
+  if (status === 'approved') {
+    const dName = String(diseaseName || '').trim()
+    if (!dName) return res.status(400).json({ error: '请填写确诊病害名称' })
+    const patch = {
+      status: 'approved',
+      note: String(note || '').trim().slice(0, 300),
+      reviewer: user.nickname || '专家',
+      reviewedAt: new Date().toISOString(),
+      diseaseName: dName.slice(0, 40),
+      diseaseType: String(diseaseType || '').trim().slice(0, 20) || '社区共建样本',
+      treatment: String(treatment || '').trim().slice(0, 300)
+    }
+    patch.entry = buildCommunityEntry({ ...s, ...patch })
+    const updated = store.updateDiseaseSample(s.id, patch)
+    // 即时并入检索语料：RAG 问答与 /api/kb/search 立即可检索到
+    registerCommunityDiseases([updated.entry])
+    store.createMessage({
+      userId: s.userId,
+      from: 'expert',
+      fromId: user.id,
+      fromName: user.nickname || '专家',
+      title: '共建样本审核通过 🎉',
+      content: `您提交的「${s.cropName}」病害样本已通过审核，确诊为「${dName}」，已收录进本地病害图谱知识库。感谢共建！`
+    })
+    return res.json({ ok: true, item: updated, entryId: updated.entry.id })
+  }
+
+  if (status === 'rejected') {
+    const reason = String(note || '').trim()
+    if (!reason) return res.status(400).json({ error: '请填写驳回理由' })
+    const updated = store.updateDiseaseSample(s.id, {
+      status: 'rejected',
+      note: reason.slice(0, 300),
+      reviewer: user.nickname || '专家',
+      reviewedAt: new Date().toISOString()
+    })
+    // 驳回 → 按固定模板推送消息通知农户
+    store.createMessage({
+      userId: s.userId,
+      from: 'expert',
+      fromId: user.id,
+      fromName: user.nickname || '专家',
+      title: '共建样本审核结果通知',
+      content: `你提交的共建样本已被驳回，原因：${reason.slice(0, 200)}，请修改后重新提交`
+    })
+    return res.json({ ok: true, item: updated })
+  }
+
+  res.status(400).json({ error: '审核状态不合法' })
 })
 
 // ==================== 用户认证 ====================
@@ -924,6 +1315,109 @@ app.post('/api/auth/login', (req, res) => {
   const user = store.findUserByAccount(account)
   if (!user || !store.verifyPassword(user, password)) {
     return res.status(401).json({ error: '账号或密码错误' })
+  }
+  const token = store.createSession(user.id)
+  res.json({ ok: true, token, user: store.publicUser(user) })
+})
+
+// 知识库统计（登录页动态渲染用；请求失败时前端展示兜底文案）
+app.get('/api/kb/stats', (req, res) => {
+  res.json({ ok: true, crops: CROPS.length, diseases: DISEASES.length, docs: getDocCount() })
+})
+
+// ==================== AI 动态补全：知识库没有的作物由大模型生成病害知识并入库 ====================
+
+/** 专家：AI 生成指定作物的常见病害知识（2–3 条），生成后即时并入检索语料与图谱 */
+app.post('/api/kb/ai-expand', async (req, res) => {
+  const expert = requireExpert(req, res)
+  if (!expert) return
+  const { cropName } = req.body || {}
+  const name = String(cropName || '').trim()
+  if (!name || name.length < 2) return res.status(400).json({ error: '请填写作物名称' })
+  if (!isConfigured()) return res.status(503).json({ error: 'AI 服务未配置' })
+  // 已有同名知识库作物（含别名）时拒绝重复生成
+  const exists = CROPS.some((c) => c.name === name || (c.alias || '').includes(name) || name.includes(c.name))
+  if (exists) return res.status(409).json({ error: '该作物已在知识库中，无需补全' })
+
+  const system =
+    '你是资深植物病理学专家。为山地农业病虫害诊断知识库生成指定作物的常见病害条目。' +
+    '只输出 JSON，不要任何解释。结构：{"crop":{"emoji":"(单个emoji)","tagline":"一句话定位(20字内)","altitude":"适宜海拔区间","season":"种植/采收期","regions":["适合的省名"],"intro":"作物简介(60字内)","keyPoints":["栽培要点3条"]},"diseases":[{"name":"病害名","alias":"别名","type":"真菌病害|细菌病害|病毒病害|生理性病害","severity":"high|medium|low","pathogen":"病原或成因","symptomKeywords":["检索关键词5个"],"symptoms":["症状4条"],"causes":["诱因3条"],"treatment":["防治3条"],"prevention":["预防3条"],"safetyNote":"一句话安全提示"}]}。' +
+    '生成 2 条该作物最常见、最有诊断价值的病害，内容专业准确、可操作。'
+  const user = `作物名称：${name}。请生成 JSON。`
+
+  try {
+    const r = await chatText({ system, user, temperature: 0.3, jsonMode: true, maxTokens: 2500 })
+    const data = extractJSON(r.content)
+    if (!data || !Array.isArray(data.diseases) || !data.diseases.length) {
+      return res.status(502).json({ error: 'AI 返回内容无法解析，请重试' })
+    }
+    const ts = Date.now()
+    const crop = data.crop || {}
+    const diseases = data.diseases.slice(0, 4).map((d, i) => ({
+      id: `ai-${ts}-${i + 1}`,
+      cropId: 'community',
+      cropNameAI: name,
+      name: String(d.name || `${name}病害${i + 1}`).slice(0, 40),
+      alias: String(d.alias || '').slice(0, 40),
+      type: String(d.type || '真菌病害').slice(0, 20),
+      severity: ['high', 'medium', 'low'].includes(d.severity) ? d.severity : 'medium',
+      pathogen: String(d.pathogen || '待专业鉴定').slice(0, 80),
+      symptomKeywords: (d.symptomKeywords || []).map((s) => String(s).slice(0, 20)).slice(0, 8),
+      symptoms: (d.symptoms || []).map((s) => String(s).slice(0, 200)).slice(0, 6),
+      causes: (d.causes || []).map((s) => String(s).slice(0, 200)).slice(0, 5),
+      treatment: (d.treatment || []).map((s) => String(s).slice(0, 200)).slice(0, 5),
+      prevention: (d.prevention || []).map((s) => String(s).slice(0, 200)).slice(0, 5),
+      safetyNote: String(d.safetyNote || '').slice(0, 200),
+      references: [`AI 大模型生成（${expert.nickname || '专家'} 发起）· 建议经专家复核后使用`],
+      community: true,
+      aiGenerated: true
+    }))
+    const saved = store.saveAiKbEntry({
+      cropName: name,
+      crop: {
+        emoji: String(crop.emoji || '🌱').slice(0, 4),
+        tagline: String(crop.tagline || '').slice(0, 40),
+        altitude: String(crop.altitude || '').slice(0, 30),
+        season: String(crop.season || '').slice(0, 40),
+        regions: Array.isArray(crop.regions) ? crop.regions.slice(0, 10) : [],
+        intro: String(crop.intro || '').slice(0, 120),
+        keyPoints: (crop.keyPoints || []).map((s) => String(s).slice(0, 80)).slice(0, 4)
+      },
+      diseases
+    })
+    // 即时并入检索语料：图谱社区区块、RAG 问答与 /api/kb/search 立即可见
+    registerCommunityDiseases(diseases)
+    res.json({ ok: true, item: saved, count: diseases.length })
+  } catch (e) {
+    console.error('[kb/ai-expand] 生成失败:', e.message)
+    res.status(502).json({ error: 'AI 生成失败：' + (e.message || '请稍后重试') })
+  }
+})
+
+/** 专家：查看 AI 已补全条目 / 删除单条 */
+app.get('/api/kb/ai-entries', (req, res) => {
+  const user = requireUser(req, res)
+  if (!user) return
+  if (user.role !== 'expert') return res.status(403).json({ error: '仅专家可查看' })
+  res.json({ items: store.listAiKbEntries() })
+})
+
+app.delete('/api/kb/ai-entries/:id', (req, res) => {
+  const expert = requireExpert(req, res)
+  if (!expert) return
+  const ok = store.deleteAiKbEntry(req.params.id)
+  if (!ok) return res.status(404).json({ error: '条目不存在' })
+  res.json({ ok: true })
+})
+
+// 演示账号一键登录：体验账号校验在服务端完成，前端不硬编码任何体验账号
+app.post('/api/auth/demo', (req, res) => {
+  const role = req.body?.role === 'expert' ? 'expert' : 'user'
+  const account = role === 'expert' ? (process.env.DEMO_EXPERT_ACCOUNT || '13800000001') : (process.env.DEMO_USER_ACCOUNT || '13800000002')
+  const password = process.env.DEMO_PASSWORD || 'demo123'
+  const user = store.findUserByAccount(account)
+  if (!user || !store.verifyPassword(user, password)) {
+    return res.status(403).json({ error: '演示账号未初始化，请先运行数据初始化' })
   }
   const token = store.createSession(user.id)
   res.json({ ok: true, token, user: store.publicUser(user) })
@@ -1045,6 +1539,23 @@ app.post('/api/auth/quick', (req, res) => {
   }
   const token = store.createSession(user.id)
   res.json({ ok: true, token, user: store.publicUser(user) })
+})
+
+// 忘记密码：验证码校验通过后重置密码（手机号 / 邮箱均可）
+app.post('/api/auth/reset-password', (req, res) => {
+  const { target, code, password } = req.body || {}
+  const t = String(target || '').trim().toLowerCase()
+  if (!t) return res.status(400).json({ error: '请输入注册时使用的手机号或邮箱' })
+  const rec = codeStore.get(t)
+  if (!rec || rec.exp < Date.now()) return res.status(401).json({ error: '验证码已过期，请重新获取' })
+  if (String(code || '').trim() !== rec.code) return res.status(401).json({ error: '验证码错误' })
+  const pwd = String(password || '')
+  if (pwd.length < 6) return res.status(400).json({ error: '新密码至少 6 位' })
+  const user = store.findUserByAccount(t)
+  if (!user) return res.status(404).json({ error: '该账号尚未注册，请先注册' })
+  codeStore.delete(t)
+  store.updateUser(user.id, { password: pwd })
+  res.json({ ok: true })
 })
 
 // 第三方授权登录（演示环境模拟扫码成功；接入真实开放平台后用 code 换 openid）
@@ -1304,6 +1815,22 @@ app.post('/api/messages/:id/read', (req, res) => {
   res.json({ ok: true, unread: store.unreadCount(user.id) })
 })
 
+// 专家已发送消息列表（管理后台「消息通知」）
+app.get('/api/messages/sent', (req, res) => {
+  const expert = requireExpert(req, res)
+  if (!expert) return
+  res.json(store.listSentMessages())
+})
+
+// 删除一条已发送消息
+app.delete('/api/messages/sent/:id', (req, res) => {
+  const expert = requireExpert(req, res)
+  if (!expert) return
+  const ok = store.deleteSentMessage(req.params.id)
+  if (!ok) return res.status(404).json({ error: '消息不存在' })
+  res.json({ ok: true })
+})
+
 // 专家发送消息（可指定用户或全员公告）
 app.post('/api/messages', (req, res) => {
   const expert = requireExpert(req, res)
@@ -1341,14 +1868,15 @@ app.get('/api/retrieve', (req, res) => {
 // ==================== 诊断记录 ====================
 
 app.get('/api/records', (req, res) => {
-  const { cropId, limit, offset, userId, days } = req.query
+  const { cropId, limit, offset, userId, days, region } = req.query
   res.json(
     store.listRecords({
       cropId: cropId || undefined,
       limit: Number(limit) || 30,
       offset: Number(offset) || 0,
       userId: userId || undefined,
-      days: Number(days) || undefined
+      days: Number(days) || undefined,
+      region: region || undefined
     })
   )
 })
@@ -1371,17 +1899,26 @@ app.delete('/api/records/:id', (req, res) => {
   res.json({ ok: true })
 })
 
+// 一键清空全部诊断记录（管理后台）
+app.delete('/api/records', (req, res) => {
+  const user = requireExpert(req, res)
+  if (!user) return
+  const removed = store.clearRecords()
+  res.json({ ok: true, removed })
+})
+
 // ==================== 统计与预警 ====================
 
 app.get('/api/stats', (req, res) => {
   const days = Number(req.query.days) || 30
   const cropId = req.query.cropId || undefined
-  const stats = store.getStats({ days, cropId })
+  const region = req.query.region || undefined
+  const stats = store.getStats({ days, cropId, region })
   res.json({ ...stats, cropNames: CROP_NAME })
 })
 
-// 预警结果内存缓存：10 分钟内直接复用，AI 刷新放后台
-let alertCache = { at: 0, data: null }
+// 预警结果内存缓存：10 分钟内直接复用，AI 刷新放后台；缓存按地区区分
+let alertCache = { at: 0, region: '', data: null, refreshing: false }
 
 app.get('/api/alerts', async (req, res) => {
   const days = Number(req.query.days) || 14
@@ -1566,7 +2103,78 @@ app.post('/api/review', async (req, res) => {
     }
   }
 
-  res.json({ ...result, recordCount: items.length })
+  // 统计维度：历史病害频次 / 时间规律 / 平均置信度（供前端图表化展示，也是 AI 复盘的数据基础）
+  const countMap = new Map()
+  for (const r of items) {
+    const n = r.diagnosis?.results?.[0]?.name
+    if (n) countMap.set(n, (countMap.get(n) || 0) + 1)
+  }
+  const diseaseCounts = [...countMap.entries()]
+    .sort((a, b) => b[1] - a[1])
+    .map(([name, count]) => ({ name, count, ratio: Number((count / items.length).toFixed(2)) }))
+
+  const monthMap = new Map()
+  for (const r of items) {
+    const d = new Date(r.createdAt)
+    if (Number.isNaN(d.getTime())) continue
+    const key = `${d.getMonth() + 1} 月`
+    monthMap.set(key, (monthMap.get(key) || 0) + 1)
+  }
+  const monthly = [...monthMap.entries()].map(([month, count]) => ({ month, count }))
+
+  const confs = items
+    .map((r) => r.diagnosis?.results?.[0]?.confidence)
+    .filter((c) => typeof c === 'number')
+  const avgConfidence = confs.length
+    ? Number((confs.reduce((s, c) => s + c, 0) / confs.length).toFixed(2))
+    : null
+
+  res.json({
+    ...result,
+    recordCount: items.length,
+    stats: {
+      diseaseCounts,
+      monthly,
+      avgConfidence,
+      cropName,
+      spanDays: (() => {
+        const ts = items.map((r) => new Date(r.createdAt).getTime()).filter(Number.isFinite)
+        if (ts.length < 2) return 0
+        return Math.max(1, Math.round((Math.max(...ts) - Math.min(...ts)) / 86400000))
+      })()
+    }
+  })
+})
+
+// ==================== AI 复盘报告：保存 / 列表 / 删除 ====================
+
+app.post('/api/review/save', (req, res) => {
+  const user = requireUser(req, res)
+  if (!user) return
+  const { cropId, cropName, report } = req.body || {}
+  if (!report || typeof report !== 'object') return res.status(400).json({ error: '复盘内容不能为空' })
+  const item = store.saveReviewReport({
+    userId: user.id,
+    cropId: cropId || '',
+    cropName: cropName || report?.stats?.cropName || '',
+    report
+  })
+  res.json({ ok: true, item })
+})
+
+app.get('/api/review/saved', (req, res) => {
+  const user = requireUser(req, res)
+  if (!user) return
+  res.json({ items: store.listReviewReports(user.id) })
+})
+
+app.delete('/api/review/saved/:id', (req, res) => {
+  const user = requireUser(req, res)
+  if (!user) return
+  const target = store.listReviewReports(user.id).find((x) => x.id === Number(req.params.id))
+  if (!target) return res.status(404).json({ error: '复盘报告不存在' })
+  store.deleteReviewReport(target.id)
+  res.json({ ok: true })
 })
 
 // ==================== AI 运行指标（技术透明度） ====================

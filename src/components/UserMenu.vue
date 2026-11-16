@@ -81,7 +81,8 @@ const onLogout = async () => {
   closeMenu()
   await store.logout()
   store.showToast('已退出登录', 'success')
-  router.push('/')
+  // 回到最开始的登录页（而非游客首页）
+  router.push('/login')
 }
 </script>
 
@@ -216,13 +217,14 @@ const onLogout = async () => {
   position: absolute;
   top: -4px;
   right: -4px;
-  min-width: 16px;
-  height: 16px;
-  padding: 0 4px;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 5px;
   border-radius: var(--r-full);
   background: var(--c-danger);
   color: #fff;
-  font-size: 9px;
+  font-size: 11px;
+  line-height: 1;
   font-weight: 800;
   display: grid;
   place-items: center;
@@ -262,7 +264,7 @@ const onLogout = async () => {
 }
 
 .um__caret {
-  font-size: 9px;
+  font-size: 11.5px;
   color: var(--c-text-3);
   font-style: normal;
   transition: transform var(--dur-fast);
@@ -325,7 +327,7 @@ const onLogout = async () => {
   z-index: 400;
   width: 280px;
   background: #fff;
-  border-radius: 16px;
+  border-radius: var(--r-lg);
   border: 1px solid var(--c-line-soft);
   box-shadow:
     0 18px 50px rgba(20, 60, 35, 0.16),
@@ -391,7 +393,7 @@ const onLogout = async () => {
 
 .u-menu__role {
   align-self: flex-start;
-  font-size: 10.5px;
+  font-size: 11.5px;
   font-weight: 700;
   color: var(--c-primary-700);
   background: var(--c-primary-50);
@@ -429,7 +431,7 @@ const onLogout = async () => {
 }
 
 .u-stat span {
-  font-size: 10.5px;
+  font-size: 11.5px;
   color: var(--c-text-3);
 }
 
@@ -486,7 +488,7 @@ const onLogout = async () => {
   border-radius: 999px;
   background: var(--c-danger);
   color: #fff;
-  font-size: 9.5px;
+  font-size: 11.5px;
   font-weight: 800;
   display: grid;
   place-items: center;

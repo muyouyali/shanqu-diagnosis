@@ -23,8 +23,20 @@ const load = async () => {
   }
 }
 
+const refreshing = ref(false)
+const refreshStatus = async () => {
+  if (refreshing.value) return
+  refreshing.value = true
+  try {
+    await load()
+    store.showToast('状态已刷新', 'success')
+  } finally {
+    refreshing.value = false
+  }
+}
+
 const resetDemo = async () => {
-  if (!confirm('重置演示数据？将恢复为初始的模拟诊断记录。')) return
+  if (!confirm('重置演示数据？将恢复为初始的多样化模拟诊断记录。')) return
   try {
     await api.resetDemo()
     store.showToast('演示数据已重置', 'success')
@@ -191,8 +203,8 @@ onBeforeUnmount(() => {
           运维操作
         </h3>
         <div class="actions-row">
-          <button class="btn btn--outline" @click="load">
-            <AppIcon name="refresh" :size="16" /> 刷新状态
+          <button class="btn btn--outline" :disabled="refreshing" @click="refreshStatus">
+            <AppIcon name="refresh" :size="16" /> {{ refreshing ? '刷新中…' : '刷新状态' }}
           </button>
           <button class="btn btn--outline" @click="resetDemo">
             <AppIcon name="database" :size="16" /> 重置演示数据
@@ -291,7 +303,7 @@ onBeforeUnmount(() => {
   flex-direction: column;
   align-items: flex-end;
   gap: 3px;
-  font-size: 10.5px;
+  font-size: 11.5px;
   color: var(--c-text-4);
   flex-shrink: 0;
 }
@@ -336,7 +348,7 @@ onBeforeUnmount(() => {
 }
 
 .panel__sub {
-  font-size: 10.5px;
+  font-size: 11.5px;
   color: var(--c-text-4);
 }
 
@@ -378,7 +390,7 @@ onBeforeUnmount(() => {
 
 .kv__v.mono {
   font-family: ui-monospace, 'SF Mono', Menlo, monospace;
-  font-size: 11px;
+  font-size: 12.5px;
 }
 
 .kv__v.is-ok {
@@ -417,7 +429,7 @@ onBeforeUnmount(() => {
 }
 
 .stat__label {
-  font-size: 10px;
+  font-size: 11.5px;
   color: var(--c-text-4);
   text-align: center;
 }
@@ -431,7 +443,7 @@ onBeforeUnmount(() => {
   border-radius: var(--r-sm);
   background: var(--c-bg-muted);
   border: 1px dashed var(--c-line);
-  font-size: 11px;
+  font-size: 12.5px;
   line-height: 1.7;
   color: var(--c-text-3);
   align-items: flex-start;
@@ -483,7 +495,7 @@ onBeforeUnmount(() => {
 
 .mono {
   font-family: ui-monospace, 'SF Mono', Menlo, monospace;
-  font-size: 11px;
+  font-size: 12.5px;
 }
 
 .call-item__time {

@@ -208,7 +208,7 @@ const fmt = (iso: string) => {
             </span>
           </span>
           <span class="mp-item__from">{{ m.fromName }} · {{ tone(m).label }}</span>
-          <span class="mp-item__preview">{{ m.content.slice(0, 48) }}{{ m.content.length > 48 ? '…' : '' }}</span>
+          <span class="mp-item__preview">{{ m.content }}</span>
           <span class="mp-item__detail-btn">
             查看详情
             <AppIcon name="arrow-right" :size="11" />
@@ -264,7 +264,7 @@ const fmt = (iso: string) => {
   height: 28px;
   padding: 0 10px;
   border-radius: var(--r-full);
-  font-size: 11px;
+  font-size: 12.5px;
   font-weight: 700;
   color: var(--c-primary-700);
   background: var(--c-primary-50);
@@ -332,7 +332,7 @@ const fmt = (iso: string) => {
   width: 100%;
   padding: 14px 15px;
   margin-bottom: 9px;
-  border-radius: 16px;
+  border-radius: var(--r-lg);
   background: var(--c-bg-card);
   border: 1px solid var(--c-line-soft);
   text-align: left;
@@ -412,19 +412,19 @@ const fmt = (iso: string) => {
 }
 
 .mp-item__time {
-  font-size: 10px;
+  font-size: 11.5px;
   color: var(--c-text-4);
   min-width: 52px;
   text-align: right;
 }
 
 .mp-item__from {
-  font-size: 10.5px;
+  font-size: 11.5px;
   color: var(--c-text-4);
 }
 
 .mp-item__state {
-  font-size: 9px;
+  font-size: 11.5px;
   font-weight: 800;
   padding: 1.5px 7px;
   border-radius: var(--r-full);
@@ -447,7 +447,7 @@ const fmt = (iso: string) => {
   align-items: center;
   gap: 3px;
   margin-top: 5px;
-  font-size: 10.5px;
+  font-size: 11.5px;
   font-weight: 700;
   color: var(--c-primary-600);
 }
@@ -455,10 +455,12 @@ const fmt = (iso: string) => {
 .mp-item__preview {
   font-size: 12.5px;
   color: var(--c-text-3);
-  line-height: 1.6;
+  line-height: 1.65;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
   overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  word-break: break-word;
 }
 
 .mp-item__content {

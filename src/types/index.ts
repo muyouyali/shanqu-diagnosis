@@ -15,6 +15,8 @@ export interface Crop {
   regions?: string[]
   /** 是否可走完整诊断流程（知识库作物为 true） */
   diagnosable?: boolean
+  /** 是否属于当前所选地区主栽（后端按州市白名单判定） */
+  local?: boolean
   /** 数据来源：知识库 / 地区百科 / 用户共建 */
   source?: 'kb' | 'atlas' | 'community'
   /** 百科作物的简介 */
@@ -69,10 +71,19 @@ export interface ReviewRequest {
   cropId: string | null
   region: string
   question: string
+  /** 工单扩展字段（步骤 B：复核工单表） */
+  image?: string
+  aiDisease?: string
+  aiConfidence?: number | null
   status: 'pending' | 'done'
+  /** 复核结论：confirmed 确诊 / rejected 驳回（样本质量差） */
+  outcome?: 'confirmed' | 'rejected' | null
   opinion: string
+  finalDisease?: string
   expertId: number | null
+  expertName?: string
   createdAt: string
+  completedAt?: string | null
 }
 
 /** 站内消息（专家回复 / 系统公告 / 农户提问） */
@@ -109,6 +120,33 @@ export interface CropSubmission {
   reviewer: string
   createdAt: string
   reviewedAt: string
+}
+
+/** 病害样本共建（农户提交 → 专家审核 → 并入知识库） */
+export interface DiseaseSample {
+  id: number
+  userId: number
+  userName: string
+  /** 系统已知作物 id；手动输入的新作物为空字符串 */
+  cropId: string
+  cropName: string
+  description: string
+  /** 压缩 dataURL，1–3 张 */
+  images: string[]
+  altitude: string
+  weather: string
+  region: string
+  status: 'pending' | 'approved' | 'rejected'
+  note: string
+  reviewer: string
+  reviewedAt: string
+  /** 专家确认的病害定名（通过后） */
+  diseaseName?: string
+  diseaseType?: string
+  treatment?: string
+  /** 通过后生成的知识库条目快照 */
+  entry?: Record<string, any> | null
+  createdAt: string
 }
 
 export interface Disease {
@@ -187,6 +225,15 @@ export interface TraceItem {
   durationMs: number
   status: string
   detail: string
+  /** RAG 环节召回的知识库片段（可展开溯源） */
+  sources?: {
+    id: string
+    name: string
+    cropName: string
+    score: number
+    type: string
+    snippet: string
+  }[]
 }
 
 export interface DiagnoseResponse {
@@ -215,9 +262,29 @@ export interface QAResponse {
     score: number
     type: string
     symptoms: string[]
+    /** 溯源引用：植保手册/文献出处 */
+    references?: string[]
+    /** 知识库原始文本片段（展开引用区块时展示） */
+    excerpt?: string
+    cropName?: string
   }[]
   usedFallback: boolean
+  /** 空召回：知识库无有效片段，回答为固定兜底文案（非模型生成） */
+  noHit?: boolean
   consultationId: number
+}
+
+/** 历史问答记录（我的种植档案 - 历史问答记录） */
+export interface QAHistoryItem {
+  id: number
+  question: string
+  answer: string
+  cropId: string | null
+  usedFallback: boolean
+  noHit?: boolean
+  userName: string
+  createdAt: string
+  sources: { name: string; score: number }[]
 }
 
 export interface RecordItem {
@@ -233,6 +300,9 @@ export interface RecordItem {
   area?: string
   symptomsText?: string
   hasImage?: boolean
+  /** 真实病害实拍图（管理后台缩略图/详情用） */
+  imageUrl?: string
+  image?: string
   isDemo?: boolean
   diagnosis: Diagnosis
   gate: Gate
@@ -288,6 +358,14 @@ export interface ReviewResponse {
   suggestions: { title: string; detail: string }[]
   nextSeasonFocus: string
   recordCount?: number
+  /** 统计维度：历史病害频次 / 月份分布 / 平均置信度（AI 复盘可视化用） */
+  stats?: {
+    diseaseCounts: { name: string; count: number; ratio: number }[]
+    monthly: { month: string; count: number }[]
+    avgConfidence: number | null
+    cropName: string
+    spanDays: number
+  }
 }
 
 export interface HealthResponse {

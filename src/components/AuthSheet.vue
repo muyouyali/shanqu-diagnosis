@@ -295,7 +295,7 @@ const fillDemo = (role: 'expert' | 'user') => {
   max-height: 92vh;
   overflow-y: auto;
   background: var(--c-bg-card);
-  border-radius: 22px;
+  border-radius: var(--r-xl);
   box-shadow: 0 24px 60px rgba(0, 0, 0, 0.25);
 }
 
@@ -317,7 +317,7 @@ const fillDemo = (role: 'expert' | 'user') => {
   padding: 28px 24px 18px;
   text-align: center;
   background: linear-gradient(160deg, var(--c-primary-600), var(--c-primary-800));
-  border-radius: 22px 22px 0 0;
+  border-radius: var(--r-xl) var(--r-xl) 0 0;
   color: #fff;
 }
 
@@ -497,7 +497,7 @@ const fillDemo = (role: 'expert' | 'user') => {
 }
 
 .au__hint {
-  font-size: 10.5px;
+  font-size: 11.5px;
   color: var(--c-text-4);
 }
 
@@ -559,7 +559,7 @@ const fillDemo = (role: 'expert' | 'user') => {
   padding: 9px 12px;
   border-radius: var(--r-sm);
   background: var(--c-bg-muted);
-  font-size: 11px;
+  font-size: 12.5px;
   color: var(--c-text-4);
 }
 
@@ -571,7 +571,7 @@ const fillDemo = (role: 'expert' | 'user') => {
   flex: 1;
   height: 28px;
   border-radius: var(--r-full);
-  font-size: 11px;
+  font-size: 12.5px;
   font-weight: 700;
   color: var(--c-primary-700);
   background: #fff;

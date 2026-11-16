@@ -3,6 +3,7 @@ import { ref, computed, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useAppStore } from '@/stores/app'
 import AppIcon from '@/components/AppIcon.vue'
+import CropEmoji from '@/components/CropEmoji.vue'
 import ConfidenceRing from '@/components/ConfidenceRing.vue'
 import api from '@/api'
 import type { RecordItem, DiagnoseResponse } from '@/types'
@@ -18,6 +19,9 @@ const error = ref('')
 const activeTab = ref<'diagnosis' | 'treatment' | 'trace'>('diagnosis')
 const expandedIdx = ref(0)
 const speaking = ref(false)
+/** AI 过程中「检索召回片段」展开状态（按环节索引） */
+const openSources = ref<Record<number, boolean>>({})
+const toggleSources = (i: number) => { openSources.value[i] = !openSources.value[i] }
 
 const top = computed(() => result.value?.diagnosis?.results?.[0] || null)
 const gate = computed(() => result.value?.gate || null)
@@ -49,7 +53,7 @@ const speak = (text: string) => {
   }
   const u = new SpeechSynthesisUtterance(text)
   u.lang = 'zh-CN'
-  u.rate = 0.92
+  u.rate = 1.15
   u.pitch = 1.02
   const voices = window.speechSynthesis.getVoices()
   const zh = voices.find((v) => v.lang.includes('zh'))
@@ -185,7 +189,7 @@ const submitReview = async () => {
 
         <div class="summary__head">
           <div class="summary__crop">
-            <span class="summary__crop-emoji">{{ store.crops.find((c) => c.id === result!.cropId)?.emoji || '🌿' }}</span>
+            <CropEmoji class="summary__crop-emoji" :emoji="store.crops.find((c) => c.id === result!.cropId)?.emoji || '🌿'" :name="result.cropName" :size="36" />
             <div>
               <span class="summary__crop-name">{{ result.cropName }}</span>
               <span class="summary__time">{{ new Date(record?.createdAt || Date.now()).toLocaleString('zh-CN', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' }) }}</span>
@@ -433,6 +437,27 @@ const submitReview = async () => {
                 <span class="tl-item__ms">{{ t.durationMs }}ms</span>
               </div>
               <p class="tl-item__detail">{{ t.detail }}</p>
+
+              <!-- RAG 环节：检索召回的知识库原文片段（可展开，证明链路真实运行） -->
+              <div v-if="t.sources?.length" class="tl-src">
+                <button class="tl-src__toggle" @click="toggleSources(i)">
+                  <AppIcon name="book" :size="13" />
+                  <span>{{ openSources[i] ? '收起检索召回片段' : '查看检索召回片段' }}</span>
+                  <AppIcon :name="openSources[i] ? 'chevron-up' : 'chevron-down'" :size="13" />
+                </button>
+                <div v-if="openSources[i]" class="tl-src__list">
+                  <div v-for="(s, si) in t.sources" :key="s.id || si" class="tl-src__item">
+                    <div class="tl-src__head">
+                      <strong>{{ s.name }}</strong>
+                      <span class="tl-src__meta">
+                        {{ s.cropName ? s.cropName + ' · ' : '' }}相关度 {{ Math.round((s.score || 0) * 100) }}%
+                      </span>
+                    </div>
+                    <p class="tl-src__snip">{{ s.snippet }}</p>
+                  </div>
+                </div>
+              </div>
+
               <span class="tl-item__status" :class="`is-${t.status}`">
                 {{ t.status === 'success' ? '成功' : t.status === 'fallback' ? '降级运行' : t.status === 'escalate' ? '转人工' : t.status }}
               </span>
@@ -443,8 +468,9 @@ const submitReview = async () => {
         <div class="trace-note">
           <AppIcon name="info" :size="13" />
           <span>
-            本系统采用「初诊 Agent → 安全闸门 → 用药指导 Agent」三级工作流。
-            每一环节的结构化输出都会经过规则校验，低置信度结果自动转人工复核。
+            本系统采用「视觉识别 Agent → 安全闸门 → RAG 检索 Agent → 用药生成 Agent」四段式工作流，
+            各 Agent 之间以结构化契约传递结果，不是单条固定返回。
+            RAG 环节会到本地植保知识库召回原文片段（可展开溯源），低置信度结果自动转人工复核。
           </span>
         </div>
       </div>
@@ -616,6 +642,7 @@ const submitReview = async () => {
 .summary__crop-emoji {
   font-size: 22px;
   line-height: 1;
+  flex: none;
 }
 
 .summary__crop > div {
@@ -631,7 +658,7 @@ const submitReview = async () => {
 }
 
 .summary__time {
-  font-size: 10.5px;
+  font-size: 11.5px;
   color: var(--c-text-4);
   font-variant-numeric: tabular-nums;
 }
@@ -639,7 +666,7 @@ const submitReview = async () => {
 .summary__urgency {
   padding: 4px 10px;
   border-radius: var(--r-full);
-  font-size: 11px;
+  font-size: 12.5px;
   font-weight: 700;
   white-space: nowrap;
 }
@@ -658,7 +685,7 @@ const submitReview = async () => {
 }
 
 .summary__label {
-  font-size: 11px;
+  font-size: 12.5px;
   color: var(--c-text-4);
   margin-bottom: 3px;
   letter-spacing: 0.3px;
@@ -823,7 +850,7 @@ const submitReview = async () => {
   border-radius: 4px;
   background: var(--c-warning-bg);
   color: #92400e;
-  font-size: 9.5px;
+  font-size: 11.5px;
   font-weight: 700;
   flex-shrink: 0;
 }
@@ -997,7 +1024,7 @@ const submitReview = async () => {
   display: flex;
   align-items: center;
   gap: 5px;
-  font-size: 11px;
+  font-size: 12.5px;
   font-weight: 600;
   color: var(--c-text-3);
   margin-bottom: 8px;
@@ -1017,13 +1044,13 @@ const submitReview = async () => {
   border-radius: var(--r-full);
   background: var(--c-bg-card);
   border: 1px solid var(--c-line);
-  font-size: 11px;
+  font-size: 12.5px;
   color: var(--c-text-2);
 }
 
 .kb-source__chip i {
   font-style: normal;
-  font-size: 10px;
+  font-size: 11.5px;
   color: var(--c-primary-600);
   font-weight: 700;
 }
@@ -1075,13 +1102,13 @@ const submitReview = async () => {
   place-items: center;
   background: var(--c-primary-600);
   color: #fff;
-  font-size: 11px;
+  font-size: 12.5px;
   font-weight: 700;
   flex-shrink: 0;
 }
 
 .treat-section__hint {
-  font-size: 10.5px;
+  font-size: 11.5px;
   font-weight: 400;
   color: var(--c-primary-600);
   background: var(--c-primary-50);
@@ -1113,7 +1140,7 @@ const submitReview = async () => {
   place-items: center;
   background: var(--c-danger-bg);
   color: var(--c-danger);
-  font-size: 11px;
+  font-size: 12.5px;
   font-weight: 700;
   flex-shrink: 0;
 }
@@ -1153,7 +1180,7 @@ const submitReview = async () => {
   border-radius: 5px;
   background: var(--c-primary-50);
   color: var(--c-primary-700);
-  font-size: 10px;
+  font-size: 11.5px;
   font-weight: 700;
   white-space: nowrap;
   flex-shrink: 0;
@@ -1202,7 +1229,7 @@ const submitReview = async () => {
 }
 
 .chem__target {
-  font-size: 10.5px;
+  font-size: 11.5px;
   padding: 2px 8px;
   border-radius: var(--r-full);
   background: var(--c-accent-100);
@@ -1223,7 +1250,7 @@ const submitReview = async () => {
 }
 
 .chem__grid dt {
-  font-size: 10.5px;
+  font-size: 11.5px;
   color: var(--c-text-4);
   margin-bottom: 1px;
 }
@@ -1273,7 +1300,7 @@ const submitReview = async () => {
   margin-top: 7px;
   padding-top: 7px;
   border-top: 1px dashed var(--c-line);
-  font-size: 11px;
+  font-size: 12.5px;
   line-height: 1.6;
   color: var(--c-text-3);
 }
@@ -1416,7 +1443,7 @@ const submitReview = async () => {
 }
 
 .trace-head__label {
-  font-size: 10px;
+  font-size: 11.5px;
   color: var(--c-text-4);
 }
 
@@ -1489,7 +1516,7 @@ const submitReview = async () => {
 
 .tl-item__ms {
   font-family: var(--font-num);
-  font-size: 11px;
+  font-size: 12.5px;
   color: var(--c-text-4);
 }
 
@@ -1500,11 +1527,75 @@ const submitReview = async () => {
   margin-bottom: 6px;
 }
 
+/* RAG 召回片段 */
+.tl-src {
+  margin: 8px 0 2px;
+}
+
+.tl-src__toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 5px 10px;
+  border: 1px dashed var(--c-primary-200, #bfe0d2);
+  border-radius: 8px;
+  background: var(--c-primary-50, #f2faf6);
+  color: var(--c-primary-700, #1d6b4a);
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.18s, border-color 0.18s;
+}
+
+.tl-src__toggle:hover {
+  background: var(--c-primary-100, #e3f3ea);
+  border-color: var(--c-primary-300, #9ed3ba);
+}
+
+.tl-src__list {
+  margin-top: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.tl-src__item {
+  padding: 10px 12px;
+  border-radius: 10px;
+  background: #f7faf8;
+  border-left: 3px solid var(--c-primary-400, #57b98c);
+}
+
+.tl-src__head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.tl-src__head strong {
+  font-size: 13px;
+  color: var(--c-text, #22352c);
+}
+
+.tl-src__meta {
+  font-size: 11.5px;
+  color: var(--c-text-3, #7d8f86);
+}
+
+.tl-src__snip {
+  margin-top: 4px;
+  font-size: 12.5px;
+  line-height: 1.65;
+  color: var(--c-text-2, #4b6055);
+}
+
 .tl-item__status {
   display: inline-block;
   padding: 1px 7px;
   border-radius: 4px;
-  font-size: 9.5px;
+  font-size: 11.5px;
   font-weight: 700;
   background: var(--c-primary-50);
   color: var(--c-primary-700);
@@ -1527,7 +1618,7 @@ const submitReview = async () => {
   border-radius: var(--r-sm);
   background: var(--c-bg-muted);
   border: 1px dashed var(--c-line);
-  font-size: 11px;
+  font-size: 12.5px;
   line-height: 1.7;
   color: var(--c-text-3);
   margin-top: 6px;
@@ -1551,7 +1642,7 @@ const submitReview = async () => {
   justify-content: center;
   gap: 5px;
   padding: 14px 24px 0;
-  font-size: 10.5px;
+  font-size: 11.5px;
   line-height: 1.6;
   color: var(--c-text-4);
   text-align: center;
@@ -1566,28 +1657,83 @@ const submitReview = async () => {
 <style scoped>
 @media (min-width: 960px) {
   .summary {
-    max-width: 820px;
+    max-width: var(--max-w-mobile);
     margin-left: auto;
     margin-right: auto;
     width: calc(100% - 64px);
+    padding: 24px 28px;
   }
   .tabs {
-    max-width: 820px;
-    margin: 18px auto 0;
+    max-width: var(--max-w-mobile);
+    margin: 20px auto 0;
     width: calc(100% - 64px);
   }
   .panel {
-    max-width: 820px;
+    max-width: var(--max-w-mobile);
     margin: 0 auto;
     padding-left: 0;
     padding-right: 0;
     width: calc(100% - 64px);
   }
   .actions {
-    max-width: 820px;
+    max-width: var(--max-w-mobile);
     margin: 0 auto;
-    padding: 22px 0 0;
+    padding: 24px 0 0;
     width: calc(100% - 64px);
+  }
+
+  /* 桌面端字号与间距放大 */
+  .summary__disease {
+    font-size: 25px;
+  }
+  .summary__label,
+  .summary__crop-name {
+    font-size: 14.5px;
+  }
+  .summary__obs {
+    font-size: 14px;
+    line-height: 1.75;
+  }
+  .tabs__item {
+    font-size: 14.5px;
+    height: 42px;
+  }
+  .diag-item__title strong {
+    font-size: 16.5px;
+  }
+  .diag-item__pct {
+    font-size: 14.5px;
+  }
+  .diag-block__list li,
+  .diag-block__text,
+  .note-card ul li,
+  .note-card__text {
+    font-size: 14px;
+    line-height: 1.85;
+  }
+  .diag-block__label,
+  .note-card__title {
+    font-size: 14px;
+  }
+  .treat-summary p,
+  .treat-section__title {
+    font-size: 14.5px;
+  }
+  .action__body p {
+    font-size: 13.5px;
+    line-height: 1.8;
+  }
+  .action__step {
+    width: 26px;
+    height: 26px;
+    font-size: 13px;
+  }
+  .kb-source__chip {
+    font-size: 13px;
+  }
+  .actions .btn {
+    font-size: 14.5px;
+    height: 46px;
   }
 }
 </style>

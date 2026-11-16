@@ -5,6 +5,7 @@
  * - 专家：收到农户提问时可在底部直接回复
  */
 import { ref, computed, watch } from 'vue'
+import { useRouter } from 'vue-router'
 import api from '@/api'
 import AppIcon from '@/components/AppIcon.vue'
 import { useAppStore } from '@/stores/app'
@@ -14,9 +15,19 @@ const props = defineProps<{ open: boolean; message: Message | null }>()
 const emit = defineEmits<{ (e: 'close'): void }>()
 
 const store = useAppStore()
+const router = useRouter()
 const reply = ref('')
 const sending = ref(false)
 const replied = ref(false)
+
+/** 复核结果消息 → 直达种植档案-专家复核记录 */
+const isReviewMsg = computed(() =>
+  !!props.message && /复核工单|复核结果|人工复核/.test(props.message.title + props.message.content)
+)
+const gotoReviewRecords = () => {
+  emit('close')
+  router.push('/archive?tab=expert')
+}
 
 watch(
   () => [props.open, props.message?.id],
@@ -94,6 +105,11 @@ const sendReply = async () => {
 
             <!-- 正文 -->
             <div class="md__content">{{ message.content }}</div>
+
+            <!-- 复核结果消息：一键直达复核记录 -->
+            <button v-if="isReviewMsg && !store.isExpert" class="md__review-link" @click="gotoReviewRecords">
+              📝 查看复核结果（我的种植档案 - 专家复核记录）→
+            </button>
 
             <p v-if="message.from === 'system'" class="md__note">
               <AppIcon name="info" :size="13" />
@@ -225,12 +241,12 @@ const sendReply = async () => {
 }
 
 .md__sub {
-  font-size: 11px;
+  font-size: 12.5px;
   color: var(--c-text-4);
 }
 
 .md__state {
-  font-size: 9px;
+  font-size: 11.5px;
   font-weight: 800;
   padding: 2px 8px;
   border-radius: var(--r-full);
@@ -261,12 +277,31 @@ const sendReply = async () => {
   word-break: break-word;
 }
 
+/* 复核结果消息：直达复核记录入口 */
+.md__review-link {
+  width: 100%;
+  margin-top: 11px;
+  padding: 11px 14px;
+  border-radius: 12px;
+  background: var(--c-primary-50);
+  border: 1px solid var(--c-primary-200);
+  color: var(--c-primary-700);
+  font-size: 12.5px;
+  font-weight: 700;
+  text-align: left;
+  transition: background 0.15s;
+}
+
+.md__review-link:hover {
+  background: var(--c-primary-100);
+}
+
 .md__note {
   display: flex;
   align-items: center;
   gap: 6px;
   margin-top: 10px;
-  font-size: 11px;
+  font-size: 12.5px;
   color: var(--c-text-4);
 }
 

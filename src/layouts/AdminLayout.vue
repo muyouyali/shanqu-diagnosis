@@ -3,10 +3,13 @@ import { ref, onMounted, computed } from 'vue'
 import { useRoute } from 'vue-router'
 import { useAppStore } from '@/stores/app'
 import AppIcon from '@/components/AppIcon.vue'
+import DemoBanner from '@/components/DemoBanner.vue'
 import { provinceOfRegion } from '@/data/regions'
 
 const route = useRoute()
 const store = useAppStore()
+/** 仅开发环境显示演示提示条（生产构建自动剔除） */
+const isDev = import.meta.env.DEV
 const collapsed = ref(false)
 
 const menu = [
@@ -78,6 +81,9 @@ onMounted(() => {
           </button>
         </div>
       </header>
+
+      <!-- 演示提示条：仅本地开发环境显示，参赛部署版本不渲染 -->
+      <DemoBanner v-if="isDev" />
 
       <section class="content">
         <router-view v-slot="{ Component }">
@@ -151,7 +157,7 @@ onMounted(() => {
 }
 
 .sidebar__brand-text span {
-  font-size: 11px;
+  font-size: 12.5px;
   color: rgba(255, 255, 255, 0.45);
 }
 
@@ -229,7 +235,7 @@ onMounted(() => {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  background: linear-gradient(180deg, rgba(240, 249, 244, 0.88), rgba(255, 255, 255, 0.78));
+  background: linear-gradient(180deg, rgba(253, 254, 253, 0.9), rgba(248, 251, 249, 0.8));
   backdrop-filter: saturate(170%) blur(18px);
   -webkit-backdrop-filter: saturate(170%) blur(18px);
   border-bottom: 1px solid rgba(47, 152, 104, 0.12);

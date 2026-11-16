@@ -105,7 +105,7 @@ const offset = computed(() => circumference.value * (1 - props.modelValue))
 
 .conf__num i {
   font-style: normal;
-  font-size: 10px;
+  font-size: 11.5px;
   font-weight: 600;
   color: var(--c-text-3);
   margin-left: 1px;
@@ -123,7 +123,7 @@ const offset = computed(() => circumference.value * (1 - props.modelValue))
   display: inline-flex;
   align-items: center;
   gap: 3px;
-  font-size: 11px;
+  font-size: 12.5px;
   font-weight: 600;
   color: var(--c-text-3);
 }

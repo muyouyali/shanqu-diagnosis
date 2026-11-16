@@ -7,11 +7,12 @@
 export const CROPS_EXT = [
   {
     id: 'tea',
-    name: '普洱茶树',
-    alias: '茶叶、大叶种茶',
+    name: '茶树',
+    alias: '大叶种茶、茶叶',
     emoji: '🍃',
     latin: 'Camellia sinensis var. assamica',
     tagline: '云南大叶种 · 普洱茶原料核心产区',
+    taglineGeneral: '山地特色经济作物 · 绿茶红茶乌龙茶多类原料',
     color: '#3a7d44',
     altitude: '1000–2100m',
     season: '3–11月（多轮采摘）',
@@ -22,15 +23,16 @@ export const CROPS_EXT = [
       '小绿叶蝉在清晨、傍晚活跃，分批采摘可显著压低虫口',
       '留养采摘结合，茶蓬通风透光是预防真菌病害的基础'
     ],
-    regions: ['云南', '福建', '浙江', '湖南', '湖北', '江西', '安徽', '贵州', '四川', '广东', '广西', '台湾', '江苏']
+    regions: ['云南', '福建', '浙江', '湖南', '湖北', '江西', '安徽', '贵州', '四川', '广东', '广西', '台湾', '江苏', '陕西', '河南', '甘肃', '山东', '重庆', '海南']
   },
   {
     id: 'tianma',
-    name: '昭通天麻',
-    alias: '天麻、赤箭',
+    name: '天麻',
+    alias: '赤箭、乌天麻',
     emoji: '🌱',
     latin: 'Gastrodia elata',
     tagline: '昭通小草坝天麻 · 国家地理标志产品',
+    taglineGeneral: '名贵药食两用药材 · 林下仿野生栽培',
     color: '#8a5fbf',
     altitude: '1800–2800m',
     season: '冬栽/春栽，次年采收',
@@ -41,15 +43,16 @@ export const CROPS_EXT = [
       '高海拔冷凉环境（<22℃）是块茎健康发育的关键',
       '地下病害重在选地与菌材消毒，发病后基本无药可救'
     ],
-    regions: ['云南', '贵州', '四川', '重庆', '湖北', '陕西', '吉林', '黑龙江', '辽宁', '河南', '山东', '山西', '河北', '安徽', '江苏']
+    regions: ['云南', '贵州', '四川', '重庆', '湖北', '陕西']
   },
   {
     id: 'walnut',
-    name: '云南核桃',
-    alias: '核桃、泡核桃',
+    name: '核桃',
+    alias: '泡核桃、胡桃',
     emoji: '🌰',
     latin: 'Juglans sigillata',
     tagline: '云南高原木本油料 · 涉农人口最广的经济林',
+    taglineGeneral: '木本油料与干果兼用 · 山地经济林树种',
     color: '#7d5a3c',
     altitude: '1500–2400m',
     season: '9–10月采收',

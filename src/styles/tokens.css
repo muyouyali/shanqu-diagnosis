@@ -39,12 +39,12 @@
   --c-bg-card: #ffffff;
   --c-bg-muted: #f9fbfa;
 
-  /* ===== 圆角 ===== */
+  /* ===== 圆角（统一：卡片/弹窗 14px，内部控件 12px，标签 10px） ===== */
   --r-xs: 6px;
   --r-sm: 10px;
-  --r-md: 14px;
-  --r-lg: 20px;
-  --r-xl: 28px;
+  --r-md: 12px;
+  --r-lg: 14px;
+  --r-xl: 14px;
   --r-full: 999px;
 
   /* ===== 阴影：多层柔和，避免死黑 ===== */
@@ -92,6 +92,19 @@
   --max-w-mobile: 480px;
   --header-h: 56px;
   --tabbar-h: 60px;
+}
+
+/* 平板/中等宽度窗口：逐步放宽，避免居中留白过大 */
+@media (min-width: 640px) {
+  :root {
+    --max-w-mobile: 700px;
+  }
+}
+
+@media (min-width: 768px) {
+  :root {
+    --max-w-mobile: 880px;
+  }
 }
 
 /* 宽屏（网页版）：内容区放宽铺满，布局更舒展对齐 */
@@ -292,6 +305,7 @@ ol {
   box-shadow: var(--sh-glow);
 }
 .btn--primary:hover:not(:disabled) {
+  filter: brightness(0.94);
   box-shadow: 0 10px 32px rgba(47, 152, 104, 0.36);
 }
 
@@ -432,6 +446,41 @@ ol {
 }
 .hover-glow:hover::after {
   opacity: 1;
+}
+
+/* ===== 弹窗关闭按钮统一：44×44 触控热区 + 图标略放大 =====
+   各弹层容器类名均为 X__close，这里统一接管热区与图标尺寸，
+   避免移动端「点不到 ×」的问题（视觉尺寸不变，仅扩大可点区域） */
+[class$='__close'] {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 32px;
+  min-height: 32px;
+}
+
+[class$='__close']::before {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 44px;
+  height: 44px;
+  transform: translate(-50%, -50%);
+  border-radius: var(--r-md);
+}
+
+[class$='__close'] svg {
+  width: 18px;
+  height: 18px;
+}
+
+/* ===== 绿色主按钮 hover 统一加深（含各页面自定义主按钮） ===== */
+button[class*='--primary']:hover:not(:disabled),
+button[class*='__btn--submit']:hover:not(:disabled),
+button[class*='__submit']:hover:not(:disabled) {
+  filter: brightness(0.94);
 }
 
 @media (prefers-reduced-motion: reduce) {
