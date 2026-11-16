@@ -643,7 +643,7 @@ onBeforeUnmount(() => {
                 {{ sending ? '发送中…' : countdown > 0 ? `${countdown}s 后重发` : '获取验证码' }}
               </button>
             </div>
-            <em v-if="codeHint" class="lg-code-hint">演示环境验证码：<b>{{ codeHint }}</b>（配置邮件服务后真实下发）</em>
+            <em v-if="codeHint" class="lg-code-hint">演示环境验证码：<b>{{ codeHint }}</b>（正式环境对接短信 / 邮件服务后真实下发）</em>
           </label>
 
           <AppInput
@@ -820,9 +820,7 @@ onBeforeUnmount(() => {
                   <div class="qr__scan">{{ scanning ? '✓ 已授权' : '请使用微信扫一扫' }}</div>
                 </div>
                 <p class="om__note">
-                  ⚠️ 未配置微信开放平台网站应用
-                  <template v-if="wechatMissing.length">，缺少：<b style="color: #ffd9a0">{{ wechatMissing.join(' / ') }}</b></template>
-                  。当前为演示模拟；在 <code>.env</code> 填入企业主体的 AppID / Secret / 回调域名后，此处自动切换为微信官方真实二维码。
+                  当前为演示版本，微信登录采用模拟方式，点击下方按钮即可完成登录体验 ✅
                 </p>
                 <AppButton block variant="primary" :loading="scanning" @click="oauthSubmit">
                   {{ scanning ? '✓ 授权成功，正在进入…' : '模拟微信扫码成功' }}
@@ -865,7 +863,7 @@ onBeforeUnmount(() => {
                     {{ sending ? '发送中…' : countdown > 0 ? `${countdown}s 后重发` : '获取验证码' }}
                   </button>
                 </div>
-                <em v-if="codeHint" class="lg-code-hint">演示环境验证码：<b>{{ codeHint }}</b>（配置邮件服务后真实下发）</em>
+                <em v-if="codeHint" class="lg-code-hint">演示环境验证码：<b>{{ codeHint }}</b>（正式环境对接短信 / 邮件服务后真实下发）</em>
               </label>
 
               <div class="lg-roles">
@@ -880,7 +878,7 @@ onBeforeUnmount(() => {
               <AppButton block variant="primary" :loading="quickBusy" :disabled="!canQuick" @click="quickSubmit">
                 {{ quickBusy ? '⏳ 处理中…' : '登录 / 注册' }}
               </AppButton>
-              <p class="om__note">未注册的邮箱将自动创建账号，无需单独注册流程</p>
+              <p class="om__note">未注册的{{ otherOpen === 'email' ? '邮箱' : '手机号' }}将自动创建账号，无需单独注册流程</p>
             </div>
           </div>
         </div>

@@ -342,15 +342,13 @@ const submit = async () => {
     // 三个 Agent 结论依次流式点亮（视觉识别 → RAG 检索 → 置信复核）
     const pct = await streamAgentLogs(result)
 
-    if (needReview.value) {
-      // 低置信度：停留本页，展示「提交专家人工复核」蓝色按钮，由用户决定
-      submitting.value = false
-      store.showToast(`诊断完成，置信度 ${pct}%，建议人工复核`, 'info')
-    } else {
-      // 高置信度：直接进入完整诊断报告（不出现复核按钮）
-      store.showToast('诊断完成', 'success')
-      setTimeout(() => router.replace(`/result/${result.recordId}`), 700)
-    }
+    // 诊断完成后统一进入完整诊断报告；低置信度在报告页内可一键申请人工复核（功能不丢失）
+    submitting.value = false
+    store.showToast(
+      needReview.value ? `诊断完成，置信度 ${pct}%，可在报告中申请人工复核` : '诊断完成',
+      needReview.value ? 'info' : 'success'
+    )
+    setTimeout(() => router.replace(`/result/${result.recordId}`), 700)
   } catch (err) {
     clearInterval(stepTimer)
     activeStep.value = -1
