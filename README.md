@@ -74,6 +74,8 @@ RAG 检索：BM25打分 + 同义词扩展 + 多字段加权
 | GET  | `/api/health` | 服务健康检查 |
 | GET  | `/api/retrieve?q=` | 检索调试（RAG 可观测性） |
 
+知识库检索效果实测报告：[docs/rag-benchmark.md](./docs/rag-benchmark.md)，覆盖 20 条农户真实查询用例，同时内置无命中兜底机制，抑制大模型幻觉。
+
 ---
 
 ## 四、竞品对比
