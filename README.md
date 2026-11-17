@@ -4,7 +4,7 @@
 > 覆盖云南 30 种山地特色经济作物 / 74 种常见病虫害 / 39 条农药安全登记数据，面向山地散户农户与基层农技站的 AI Native Web 诊断系统
 
 **线上体验**：https://aa0fc86c7c38842d0.app.workbuddy.host/?sharecode=GLPAG2O5G2
-**演示视频**：【这里粘贴你的B站/阿里云盘视频链接】
+**演示视频**：作为参赛材料单独提交（5–8 分钟 MP4），不随代码仓库发布
 **技术栈**：Vue 3 + TypeScript + Pinia + Vue Router + Vite · Node.js/Express · 硅基流动（Qwen3-VL-8B 视觉 + DeepSeek-V3.2 文本）· Function Calling · 自研 BM25 RAG
 
 ---
@@ -154,7 +154,7 @@ PORT=3000 node server/index.js   # 生产运行
 │   ├── kb/diseases.js     # 74 种病害知识库
 │   ├── store.js            # JSON 文件持久化
 │   └── __tests__/          # 单元测试（18 例）
-└── docs/                   # 答辩演示 PPT / 截图 / 接入指南 / 演示视频脚本
+└── docs/                   # 答辩演示 PPT / 截图 / 接入指南
 ```
 
 > 技术文档作为参赛材料单独提交，不随代码仓库发布。
@@ -164,6 +164,7 @@ PORT=3000 node server/index.js   # 生产运行
 ## 九、数据与免责说明
 
 - 知识库整理自《全国农业技术推广服务中心防治手册》、云南省植保植检站公开资料等，详见各病害条目的 `references` 字段。
+- 作物与病害展示图片（`public/crops/img/`、`public/diseases/img/`）来自公开图片检索结果，优先选用 Unsplash / Pexels / Pixabay / Wikimedia Commons 等开放授权图库来源，仅用于本作品的非商业学习演示，不作商用。
 - 后台初始数据为**演示种子数据**（标记 `isDemo`），模拟真实流行规律构造，可在「系统状态」页一键重置。
 - ⚠️ 免责声明：本系统为传智杯 AI Web 网页开发作品，**仅作为学习演示、辅助参考工具，不能替代植保站、农技人员线下诊断**；农药使用必须严格遵循农药标签说明、当地农业植保部门指导，严禁直接依靠本系统输出结果施药。作者和赛事主办方不承担任何因使用本系统产生的生产风险。
 
