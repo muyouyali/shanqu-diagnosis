@@ -4,7 +4,6 @@
 > 覆盖云南 30 种山地特色经济作物 / 74 种常见病虫害 / 39 条农药安全登记数据，面向山地散户农户与基层农技站的 AI Native Web 诊断系统
 
 **线上体验**：https://aa0fc86c7c38842d0.app.workbuddy.host/?sharecode=GLPAG2O5G2
-**演示视频**：作为参赛材料单独提交（5–8 分钟 MP4），不随代码仓库发布
 **技术栈**：Vue 3 + TypeScript + Pinia + Vue Router + Vite · Node.js/Express · 硅基流动（Qwen3-VL-8B 视觉 + DeepSeek-V3.2 文本）· Function Calling · 自研 BM25 RAG
 
 ---
