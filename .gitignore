@@ -36,4 +36,3 @@ public/temp-upload
 .playwright-cli/
 *.slide
 .slidep/
-reg.yaml
